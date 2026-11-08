@@ -1,5 +1,12 @@
 # Business Verification
 
+## Purpose
+
+本 capability 定义 Agent 2 的逐字段值校验与要件齐全性判定：值是否合法、是否符合银行内部业务参数、
+必需材料是否齐全。它只报问题不改值，且必须区分"确实没交"（`missing`，可阻断）与
+"交了但没抽出来"（`not_found`，不阻断）；是否阻断由 `requirements.yaml` 的规则声明决定，
+MUST NOT 按 `severity` 推导。范围不含法规适用性判断与跨单据比对（后者属契约级改动）。
+
 ## ADDED Requirements
 
 ### Requirement: 前置条件必须校验

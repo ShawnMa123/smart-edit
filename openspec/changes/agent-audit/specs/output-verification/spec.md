@@ -1,5 +1,12 @@
 # Output Verification
 
+## Purpose
+
+本 capability 定义 Agent 4 对其他 Agent 产出的证据链校验：通过统一注册表执行可判定检查
+（schema、留痕、冲突、覆盖、引用、出处、锚点），产出可复算的可信度比率，并在失败项**可修复**时
+触发一次受控重跑。它只回答"证据链是否成立"，不评业务对错；
+`score` 仅用于展示，MUST NOT 参与阻断或重跑判定。范围不含业务判断、法规适用判断与主观评分。
+
 ## ADDED Requirements
 
 ### Requirement: 检查器注册表

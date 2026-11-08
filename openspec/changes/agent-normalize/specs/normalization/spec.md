@@ -1,5 +1,12 @@
 # Normalization
 
+## Purpose
+
+本 capability 定义 Agent 1 从客户原始材料到结构化字段的转换口径：**只改形式不改事实** ——
+值保留原文大小写与拼写、出处是最小可定位片段、无法确定的必须降级为 `inferred` 或 `missing`，
+且每次对原文的操作都必须留痕。范围不含 OCR、扫描件与表单结构还原；
+`parse` / `extract` / `normalize` 的实现属 `poc-skeleton` 的共享层，本 capability 只约束其行为。
+
 ## ADDED Requirements
 
 ### Requirement: 解析必须保留原文结构
