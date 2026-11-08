@@ -37,19 +37,36 @@ reconciling three overlapping rule implementations later.
   - deterministic rule engine over a closed, typed DSL with three-valued logic (AUD-02…06, §5.1–5.2);
   - field-Schema checks for the six field types the project already has
     (`amount` / `currency` / `date` / `integer` / `string` / `country`);
-  - planned coverage accounting with the six per-unit states and counts that must sum to `planned`
-    (AUD-12, §7.1);
+  - **template-driven audit**: versioned template packs (`app/templates/*.yaml`) per customer and
+    document type, carrying field expectations (`allowed_values`, e.g. "the settlement currency MUST
+    be USD", "the origin country MUST be X"), required / controlled / optional clauses and internal
+    declarations (AUD-08, AUD-11, RULE-03/04);
+  - **template resolution and multi-layer policy combination**, with conflicts that are visible and
+    never resolved by load order — an unresolved conflict makes the affected checks
+    `unable_to_assess` and keeps protected operations from being allowed (AUD-09, §4.3);
+  - clause checks split three ways — presence, exact text, and semantic equivalence — where the third
+    is `unable_to_assess` with reason `semantic_equivalence_not_implemented`, because no model enters
+    the audit path and AT-01 has to stand (AUD-08, §5.3);
+  - the **template baseline** in the report (`template_id` / `version` / `content_sha256` / policy
+    packs / conflicts / resolution reason), and `template_changed` staleness in the gate
+    (AUD-01, AT-17);
+  - planned coverage accounting with the six per-unit states and counts that must sum to `planned`,
+    template units included (AUD-12, §7.1);
   - findings carrying severity **and** `gate_type`, anchors and rule references (AUD-13);
   - an operation gate over the six protected operations, deterministic-only `hard_block`
     (AUD-14, §7.2–7.3);
   - human disposition as append-only events (AUD-16, minimal);
-  - recomputability: same snapshot + same bundle + same engine version ⇒ identical report (AT-01).
+  - recomputability: same snapshot + same bundle + same template + same engine version ⇒ identical
+    report (AT-01).
 - **Deferred, explicitly** (this is the part that keeps the change honest): variables AUD-07;
-  template and internal-policy bundles AUD-08/09/11; semantic checks AUD-10; draft-specific export
-  rules AUD-15; applying suggested edits AUD-17; organisation permissions AUD-18/19; rule governance
-  and management API AUD-20/§11; async jobs, leases and fencing AUD-21; retention AUD-22; audit UI
-  surfaces AUD-23; incremental audits AUD-24. The `/audit/*` HTTP surface of §10 is also deferred —
-  the POC exposes the group as a stage target plus the existing `console-api` envelope.
+  semantic checks AUD-10 — including **semantic clause equivalence**, which this change marks
+  `unable_to_assess` with a reason code instead of judging it; template *authoring and governance*
+  (a template editor, and AUD-20's release/approval workflow); draft-specific export rules AUD-15;
+  applying suggested edits AUD-17; organisation permissions AUD-18/19; rule governance and management
+  API AUD-20/§11; async jobs, leases and fencing AUD-21; retention AUD-22; audit UI surfaces AUD-23;
+  incremental audits AUD-24; repeated-table row instances (`instance_id`). The `/audit/*` HTTP surface
+  of §10 is also deferred — the POC exposes the group as a stage target plus the existing
+  `console-api` envelope.
 - **Boundary with `agent-verify` — decision required.** `AI-audit §1.1` gives the audit group the
   field/Schema checks and the `GateEvaluator`; `agent-verify`'s `business-verification` currently
   claims field-value legality and requirement completeness *plus* blocking. Both cannot implement it.
@@ -77,7 +94,9 @@ reconciling three overlapping rule implementations later.
   that carry `gate_type` and anchors, an operation gate over protected actions, append-only human
   disposition, and the recomputability guarantee. It also retains the evidence-chain check family
   (schema / trail / conflict / coverage / citation / provenance / anchor) that verifies the audit's
-  own inputs.
+  own inputs, and owns **template-driven audit**: versioned template packs per customer/document type,
+  template resolution, multi-layer policy combination with visible conflicts, deterministic
+  clause/declaration checks, and the template baseline the report and gate bind to.
 
 ### Modified Capabilities
 
@@ -88,7 +107,9 @@ None. `openspec/specs/` still holds no archived capability, so this change repla
 
 - **New modules**: `app/rules/` (DSL types, three-valued evaluator, bundle loader + integrity checks),
   `app/audit/` (coverage planner, finding projection, gate evaluator), `app/nodes/audit.py`,
-  `app/rules/bundles/*.yaml`
+  `app/rules/bundles/*.yaml`; for templates: `app/rules/templates.py` (loader + effective-schema merge),
+  `app/audit/clauses.py` (clause/declaration checks), `app/audit/resolve.py` (resolution + policy
+  combination), `app/templates/*.yaml` (the Adidas guarantee example)
 - **Reused**: `app/verifier/*` (evidence family keeps its existing checkers), `app/findings.py`
   numbering, `app/configs/fields.yaml` as the Schema source of truth
 - **Frozen files touched, each needing sign-off**: `app/stages.py` (register the `audit` stage target,
@@ -96,7 +117,9 @@ None. `openspec/specs/` still holds no archived capability, so this change repla
 - **Consumers**: the `gate` node (now has something to read), `editor-shell` (its audit button finally
   has a real target instead of abusing `normalize`), and the future orchestrator routing
 - **Tests**: engine unit tests (AT-01…AT-06 subset), coverage/conservation tests (AT-14),
-  per-operation gate tests (AT-15), snapshot binding (AT-17), disposition rules (AT-18)
+  per-operation gate tests (AT-15), snapshot binding (AT-17), disposition rules (AT-18); for templates:
+  loader/integrity, effective-schema merge, resolution (unique / none / ambiguous), field expectations,
+  the three clause kinds, policy conflicts and the template baseline in report and gate
 - **Risk — duplicate rule ownership.** If `agent-verify` keeps its own field-format checks, two
   engines will disagree on the same document. Mitigation: the boundary table above is a sign-off gate,
   and the first task is to record the decision, not to code around it.
@@ -110,3 +133,16 @@ None. `openspec/specs/` still holds no archived capability, so this change repla
 - **Risk — scope creep into the full `/audit/*` API.** §10 defines ~17 endpoints (reports, citations,
   human tasks, rule governance, gate previews). This change keeps one stage target plus the existing
   envelope; the API is a separate change once the engine is trusted.
+- **Risk — template fields nobody extracts.** A template field such as `origin_country` is not in
+  `fields.yaml`, so it arrives (or not) in `state["extra_fields"]`. If normalization never extracts it,
+  the expectation becomes `absent` and reads like a document defect. Mitigation: template fields are
+  declared in the template, the loader reports them, `python -m app.rules.doctor` lists them, and the
+  report distinguishes "not read" (`needs_input`) from "genuinely missing" (`finding`).
+- **Risk — ambiguous template resolution silently freezing audits.** Two templates for the same
+  document type and counterparty make every template unit `unable_to_assess`. Mitigation: the report
+  lists the candidate `{template_id, version}` pairs, the loader warns, and a host-supplied reference
+  may narrow the set (never to an unpublished version).
+- **Risk — semantic clause equivalence quietly claimed.** The cheap version of AUD-08 is keyword
+  matching and calling it "equivalent". Mitigation: `requirement: semantic_equivalent` is a distinct
+  value that can only produce `unable_to_assess` with reason `semantic_equivalence_not_implemented`,
+  and a test asserts it never returns `pass`.

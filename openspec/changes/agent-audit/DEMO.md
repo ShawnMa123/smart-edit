@@ -170,10 +170,16 @@ Two contract guards run on every audit, so a producer cannot opt out:
 
 - **Semantic checks (AUD-10) are not implemented.** There is no model in the audit path, so no
   `method="semantic"` finding can be produced by this build. The report shape carries `method` so
-  enabling it later is additive, not a rewrite.
-- Variables (AUD-07), template and internal-policy bundles (AUD-08/09/11), draft-export rules
-  (AUD-15), applying suggested edits (AUD-17), organisation permissions (AUD-18/19), rule governance
-  and the management API (AUD-20/§11), async jobs, leases and fencing (AUD-21), retention (AUD-22),
+  enabling it later is additive, not a rewrite. **The same holds for AUD-08's semantic clause
+  equivalence**: a `semantic_equivalent` clause declaration is reported as `unable_to_assess` with reason
+  `semantic_equivalence_not_implemented`, never as a match decided by keywords.
+- **Templates are in this change's scope (tasks 10–15) but not built yet.** Until groups 10–15 land there
+  is no template entity, so every audit runs on the published rule bundle alone (51 units). When they
+  land, the report gains `verification.audit.template` and the gate learns `policy_conflict` /
+  `template_changed`.
+- Variables (AUD-07), draft-export rules (AUD-15), applying suggested edits (AUD-17), organisation
+  permissions (AUD-18/19), rule governance and the management API (AUD-20/§11), template *authoring*
+  (a template editor / release workflow), async jobs, leases and fencing (AUD-21), retention (AUD-22),
   audit UI surfaces (AUD-23), incremental audits (AUD-24), and the `/audit/*` HTTP surface (§10).
 - Evidence checks that need other agents' outputs (citation support, conclusion conflict, coverage
   declaration) report `not_applicable` with reason `requires_agent_regulatory_output` — they are never

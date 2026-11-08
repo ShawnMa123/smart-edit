@@ -3,9 +3,10 @@
 ## Purpose
 
 Defines the standards audit group: it audits one fixed document snapshot against a resolved, versioned
-rule bundle, accounts for every check it planned, and answers whether a specific protected operation
-may proceed. It is deterministic by construction, never judges business merit or legal applicability,
-and makes partial coverage impossible to mistake for a clean result.
+rule bundle **plus the customer's template** (field expectations, required/controlled/optional clauses,
+internal declarations), accounts for every check it planned, and answers whether a specific protected
+operation may proceed. It is deterministic by construction, never judges business merit or legal
+applicability, and makes partial coverage impossible to mistake for a clean result.
 
 ## ADDED Requirements
 
@@ -328,3 +329,145 @@ they are not.
 - **THEN** the audit MUST record a `fail` item for that check with a reason
 - **AND** the remaining checks MUST still run
 - **AND** the run MUST NOT be reported as having no findings
+
+### Requirement: Templates are a versioned audit basis
+
+A template pack SHALL declare `template_id`, `version`, `published`, `content_sha256`, document types, a
+counterparty, field expectations, clauses and internal declarations, plus the policy packs it belongs to.
+Only published template versions take part in an audit, and the report MUST cite the `template_id`,
+`version` and `content_sha256` it actually used.
+
+#### Scenario: Published template is used and cited
+- **WHEN** an audit runs on a published template version
+- **THEN** the report MUST carry that template's `template_id`, `version` and `content_sha256`
+- **AND** every template check MUST reference that version
+
+#### Scenario: Unpublished template never applies
+- **WHEN** the template directory holds a version with `published: false`
+- **THEN** no check MUST use it
+- **AND** if that leaves no usable template, the result MUST be `unable_to_assess` with a reason code
+
+#### Scenario: Template change makes an old report stale
+- **WHEN** the template version or digest differs from the one recorded in an existing report
+- **THEN** the existing report MUST be marked stale with reason `template_changed`
+- **AND** its conclusions MUST NOT be re-bound to the new template
+
+### Requirement: Template resolution is unique or it is unable
+
+The system SHALL resolve exactly one template from the document type, the counterparty and any
+host-supplied template reference. Zero or several candidates MUST yield `unable_to_assess` with reason
+`no_applicable_template` or `ambiguous_template`; the system MUST NOT guess, MUST NOT pick by load order,
+and MUST NOT let a client override a published version.
+
+#### Scenario: One candidate matches
+- **WHEN** exactly one published template matches the document type and counterparty
+- **THEN** the audit MUST use that template
+- **AND** the report MUST record the resolution basis (document type, counterparty field and value)
+
+#### Scenario: No candidate matches
+- **WHEN** no published template matches
+- **THEN** every template unit MUST be `unable_to_assess` with reason `no_applicable_template`
+- **AND** no protected operation MUST be `allowed`
+
+#### Scenario: Several candidates match
+- **WHEN** two or more published templates match
+- **THEN** the result MUST be `unable_to_assess` with reason `ambiguous_template`
+- **AND** the report MUST list the candidate `{template_id, version}` pairs
+
+#### Scenario: Client tries to change the template version
+- **WHEN** a client submits a template reference whose version differs from the resolved one
+- **THEN** the system MUST keep the host-resolved version
+- **AND** MUST NOT change any rule or template version because of the request
+
+### Requirement: Template field expectations are deterministic checks
+
+Template field expectations SHALL be executed as deterministic checks: `allowed_values` (for example
+"the settlement currency MUST be USD", "the origin country MUST be one of the listed values"),
+conditional requirements that only apply when their condition holds, and cross-field consistency. Each
+expectation MUST become its own planned unit referencing the template version, and an undecidable
+expectation MUST NOT count as a pass.
+
+#### Scenario: Currency outside the template's allowed values
+- **WHEN** the template requires `USD` and the document states `EUR`
+- **THEN** the unit MUST be `finding`
+- **AND** its `gate_type` MUST come from the template/policy declaration, never from severity
+
+#### Scenario: Origin country outside the allowed set
+- **WHEN** the template lists allowed origin countries and the document value is not among them
+- **THEN** the unit MUST be `finding` and MUST state the expected and actual values
+- **AND** the anchor MUST point at that field
+
+#### Scenario: Conditional requirement not triggered
+- **WHEN** a field is required only while another condition holds, and that condition does not hold
+- **THEN** the unit MUST be `not_applicable`
+- **AND** MUST NOT produce a required-field finding
+
+#### Scenario: Value not yet confirmed
+- **WHEN** a field the expectation depends on is `unconfirmed`
+- **THEN** the unit MUST be `needs_input`
+- **AND** MUST NOT be `pass`
+
+### Requirement: Policy combination conflicts are visible and block release
+
+The system SHALL combine the base template with bank, customer and department policy packs into one
+resolved policy, recording each pack's owner, version, validity window and source. Disagreements between
+sources MUST be visible as conflicts, MUST NOT be settled by load order, and while a conflict is
+unresolved the affected checks MUST be `unable_to_assess` and protected operations MUST NOT be `allowed`.
+
+#### Scenario: Two sources gate one field differently
+- **WHEN** a bank pack declares a field `hard_block` and a customer pack declares the same field `advisory`
+- **THEN** the conflict MUST appear in the report's conflict list naming both sources
+- **AND** the affected unit MUST be `unable_to_assess`
+- **AND** `start_approval` MUST NOT be `allowed`
+
+#### Scenario: Several rules for one field inside one pack
+- **WHEN** a single pack carries both a hard rule and an advisory rule for one field
+- **THEN** that MUST NOT be reported as a conflict
+- **AND** both checks MUST run independently
+
+#### Scenario: Mandatory policy pack is missing
+- **WHEN** a policy pack the transaction requires is unpublished or absent
+- **THEN** the affected checks MUST be `unable_to_assess` with a reason code
+- **AND** the run MUST NOT read as "no applicable checks, therefore clean"
+
+#### Scenario: Client tries to drop a mandatory rule
+- **WHEN** a request excludes a mandatory rule or an entire policy pack
+- **THEN** the exclusion MUST be ignored
+- **AND** the verdict MUST still be computed from the policy that includes it
+
+### Requirement: Internal-policy checks judge declarations only
+
+Internal-policy checks SHALL decide only whether a declaration, field or controlled process record is
+present and satisfies the template's condition. They MUST NOT conclude that funds are lawful or that the
+transaction is genuine.
+
+#### Scenario: Lawful-source declaration missing
+- **WHEN** the template requires a lawful-source declaration and the document has none
+- **THEN** the unit MUST be `finding` in the internal-policy category
+- **AND** its waivability MUST come from the template, not from severity
+
+#### Scenario: Declaration present
+- **WHEN** the document carries the declaration and it satisfies the condition
+- **THEN** the unit MUST be `pass`
+- **AND** the report MUST NOT claim the funds or the transaction were verified
+
+### Requirement: Template coverage is accounted for and inspectable
+
+Template checks SHALL join the same plan as schema, rule and evidence units, and the plan total MUST be
+conserved. The system SHALL expose a template health check that reports field evaluability, clause
+locatability, vector completeness and conflicts, and whose exit code acts as the gate.
+
+#### Scenario: Plan includes template units
+- **WHEN** an audit runs on a template version
+- **THEN** the plan MUST include that template's field and clause units
+- **AND** the six unit states MUST sum to the planned total
+
+#### Scenario: Template field cannot be evaluated
+- **WHEN** a template declares a field type or expectation that cannot be evaluated
+- **THEN** the health check MUST fail with a non-zero exit code
+- **AND** the template MUST NOT be reported as publishable
+
+#### Scenario: Controlled clause text cannot be located
+- **WHEN** a controlled clause's text cannot be located in the template's own text
+- **THEN** the health check MUST fail and name that clause
+- **AND** the clause MUST NOT be skipped silently

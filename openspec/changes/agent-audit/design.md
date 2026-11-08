@@ -17,7 +17,16 @@ What the repo actually gives us (verified):
 | `app/verifier/` | **does not exist** — `agent-audit` was never implemented (0 tasks) |
 
 Gaps to fill: rule engine, rule bundles, coverage accounting, `gate_type`, gate evaluator, disposition
-events.
+events, and template-driven audit (no template entity exists anywhere in the repo).
+
+Template-specific constraints (verified):
+
+| Fact | Consequence for the template design |
+|---|---|
+| `fields.yaml` is shared with `agent-normalize` and holds only the 15 guarantee fields — no `origin_country`-style fields | customer-specific fields cannot live in the field dictionary; they must come from the template and from `state["extra_fields"]` |
+| `contains_clause` only supports `match_kind=exact_text` and applies to **a field's value**; there is no `clause_set` type | required/controlled clauses are document-level evidence, so they need their own unit family, not a DSL op |
+| `find_conflicts()` already reports same-`rule_id`-two-versions and cross-bundle `gate_type` disagreement; `rule_conflict` blocks the gate | template/policy conflicts extend that machinery instead of inventing a second one |
+| `Unit.family` is `Literal["schema","rule","evidence"]`; `summarise()` counts by status, not by family | adding a `template` family needs no change to the counting/conservation code |
 
 Constraints: POC deadline with three people; no database; runs are process-scoped; no model provider,
 so nothing semantic can be exercised.
@@ -28,15 +37,21 @@ so nothing semantic can be exercised.
 
 - One deterministic engine answering "does this snapshot satisfy the published rules", with every
   planned check accounted for.
+- **Templates as data**: a customer's expectations (settlement currency, origin country, controlled
+  clauses, lawful-source declaration) are a versioned pack the engine compiles onto its existing DSL and
+  unit families — no customer rule may be hard-coded in Python, no customer field may be pushed into
+  `fields.yaml`.
 - A gate answering per protected operation that never allows on uncertainty.
 - Fit the frozen contract with the smallest possible, purely optional additions.
 - Runnable today as a stage target, with no database and no model.
-- Recomputable: same snapshot + bundle + engine version ⇒ identical report.
+- Recomputable: same snapshot + bundle + template + engine version ⇒ identical report.
 
 **Non-Goals** (proposal's deferred list): the §10 HTTP surface, rule governance, async jobs/leases,
-organisation permissions, semantic checks (AUD-10), variables (AUD-07), template and policy bundles
-(AUD-08/09/11), audit UI surfaces (AUD-23), incremental audits (AUD-24), draft-export rules (AUD-15),
-applying suggested edits (AUD-17).
+organisation permissions, semantic checks (AUD-10) — **including semantic clause equivalence, which this
+build marks `unable_to_assess` with a reason code rather than judging** — variables (AUD-07), template
+*authoring and governance* (a template editor, release/approval workflow), audit UI surfaces (AUD-23),
+incremental audits (AUD-24), draft-export rules (AUD-15), applying suggested edits (AUD-17),
+repeated-table row instances (`instance_id`).
 
 ## Decisions
 
@@ -235,6 +250,149 @@ Transport consequences (tasks 6.2/6.3), all additive:
   never asked", never "clean";
 - the node decides a gate **only** when the caller names an operation: an audit alone approves nothing.
 
+### D14. Templates are a separate data pack, compiled onto the existing engine
+
+`app/templates/<template_id>.yaml` sits beside the rule bundles but means something different: a bundle
+is *executable expressions*, a template is *where the expectations come from* (field expectations,
+clauses, internal declarations) plus the policy packs it belongs to. Templates never inline DSL
+expressions — otherwise the template author has to speak the DSL, and template versioning gets tangled
+with rule versioning.
+
+```yaml
+template_id: adidas-guarantee
+version: 1.0.0
+published: true
+synthetic: true                  # demo pack; the report must say so
+document_types: [guarantee]
+counterparty: {name: Adidas AG, match: exact_normalized, field: beneficiary_name}
+fields:
+  - key: currency                # already in fields.yaml: expectation only
+    allowed_values: [USD]        # "the settlement currency MUST be USD"
+    gate_type: hard_block
+  - key: origin_country          # not in fields.yaml → read from extra_fields
+    type: country
+    allowed_values: [VN, TH]     # "the origin country MUST be one of these"
+    gate_type: hard_block
+  - key: guarantee_amount
+    required_when: {field_id: currency, equals: USD}
+clauses:
+  - clause_id: adidas-payment-clause
+    requirement: required        # required | controlled | optional
+    text: "Payment shall be made in USD within 30 days of presentation."
+    gate_type: hard_block
+  - clause_id: adidas-law-clause
+    requirement: controlled
+    text: "This guarantee is governed by the laws of England and Wales."
+    gate_type: hard_block
+internal_policy:
+  - declaration_id: lawful-source
+    text: "We confirm the funds are from lawful sources."
+    waivable: true
+    gate_type: human_review
+policy_packs: [bank-core, adidas-customer]
+```
+
+*Why not put expectations in `fields.yaml`:* that dictionary is the shared input contract with
+`agent-normalize` (and `agent-verify`); a customer's "must be USD" does not belong in the dictionary that
+decides how to read a document. *Why not make the template a rule bundle:* AUD-08 requires the
+required/controlled/optional classification to survive, and `contains_clause.exact_text` cannot express
+"optional" or "semantic equivalence"; folding them into expressions would silently lose the category the
+reviewer needs.
+
+### D15. Field expectations compile to the existing DSL — no new operator
+
+`allowed_values: [USD]` → `compare(currency, eq, literal string "USD")`; several allowed values →
+`any(compare eq v1, compare eq v2 …)`; `required_when` → the rule's `applicability`, with the checked
+field kept in `expression` only (D5's rule: a field being checked must never sit in `required_facts`).
+The compiled rule is indistinguishable from a hand-written one, so `evaluate_rule()`,
+`validate_against_schema()` and the vector gate apply unchanged.
+
+*Alternative:* add an `allowed_values` op to `dsl.py` — shorter, but it puts a second comparison semantics
+next to the typed `compare`, and needs its own three-valued rules and vectors. Compiling adds no semantic
+surface.
+
+### D16. Template fields merge into an effective schema and come from `extra_fields`
+
+`effective_schema = SchemaBundle(fields.yaml) ∪ template-declared fields`; a type conflict on the same
+`field_id` raises `TemplateError` at load time instead of degrading at run time. Template fields are read
+from `state["extra_fields"]` (dictionary fields still come from `state["fields"]`), so neither
+`fields.yaml` nor the frozen `app/state.py` changes, and `compare`'s type compatibility check keeps
+working for them.
+
+*Cost:* whether a template field can be judged depends on whether normalization extracted it into
+`extra_fields`. Not-read stays `absent` (→ `needs_input` or a required finding); the health check lists
+template fields so this is visible, never silently green.
+
+### D17. Clause checks are a new unit family, not a DSL op
+
+`contains_clause` acts on a field value and there is no `clause_set` type, while required/controlled
+clauses are **document-level** evidence. So `app/audit/clauses.py` evaluates them over
+`normalized_full_texts()` (the same normalization the provenance check uses):
+
+| Template declaration | Result |
+|---|---|
+| `required`, text absent | `finding` (clause id + version cited) |
+| `controlled`, text differs after fixed normalization | `finding`, never described as "equivalent" |
+| `optional`, text absent | `not_applicable` |
+| `semantic_equivalent` | `unable_to_assess` + `semantic_equivalence_not_implemented` — never `pass`, never a finding |
+
+Only whitespace / full-half-width differences are normalized away; the original text stays in the report
+for the reviewer.
+
+### D18. Resolution: match, then refuse — never guess
+
+Candidates = `published ∧ document_types ∋ business_type ∧ counterparty match`, where the counterparty
+value comes from the field the template names (`counterparty.field`, default `beneficiary_name`) after
+whitespace/full-width/case normalization.
+
+| Candidates | Outcome |
+|---|---|
+| exactly 1 | use it; report `resolved_from = {document_type, counterparty_field, counterparty_value}` |
+| 0 | every template unit `unable_to_assess`, reason `no_applicable_template` |
+| ≥2 | `unable_to_assess`, reason `ambiguous_template`, report lists `{template_id, version}` pairs |
+
+A host/UI reference may only **narrow** the candidate set; it cannot select an unpublished version and it
+cannot override a version number. Client-supplied version declarations are ignored.
+
+### D19. Policy combination adds a third conflict class
+
+`ResolvedPolicy = base template + bank pack + customer pack + department pack`, each recording
+`{pack_id, owner, version, valid_from, valid_to, source}`. Conflicts extend `find_conflicts()`:
+
+1. same `rule_id` at two versions (exists today);
+2. same `(field_id, category)` gated differently by different bundles (exists today);
+3. **new**: a template expectation contradicting a policy pack's declaration (template says `hard_block`,
+   customer pack says `advisory`), or a mandatory pack missing.
+
+Any of the three: affected units → `unable_to_assess` with `policy_conflict` / `missing_policy_pack`, the
+report gains `policy_conflict` in `reasons`, and the gate takes its existing `rule_conflict` path →
+`blocked`. Load order never decides. Several rules for one field **inside** one pack remain legitimate
+(there is already a test guarding that).
+
+### D20. Report baseline: content digest and template digest stay separate
+
+```json
+"template": {
+  "template_id": "adidas-guarantee",
+  "version": "1.0.0",
+  "content_sha256": "…",
+  "synthetic": true,
+  "counterparty": "Adidas AG",
+  "document_types": ["guarantee"],
+  "resolved_from": {"document_type": "guarantee", "counterparty_field": "beneficiary_name"},
+  "policy_packs": [{"pack_id": "bank-core", "version": "1.0.0"}],
+  "conflicts": [],
+  "candidate_templates": []
+}
+```
+
+`snapshot_digest` keeps hashing only "files + fields" — the template is not content of the candidate, so
+mixing it in would let a template edit masquerade as a document edit. Template change is judged from
+`template.content_sha256`: when the gate sees a report whose template digest no longer matches the
+resolved template, it answers `stale_report` with reason `template_changed`. The baseline lives in
+`verification.audit.template` (the optional key signed off in task 0.2), so `Issue` needs no new field
+and `app/state.py` is untouched again.
+
 ## Risks / Trade-offs
 
 - **[Two engines for one document]** `agent-verify` also claims field-value legality ⇒ split ownership
@@ -254,6 +412,19 @@ Transport consequences (tasks 6.2/6.3), all additive:
   The bundle records the schema version (hash of `fields.yaml` at load) and reports include it.
 - **[Anchor drift]** Findings hold field keys, not character offsets; if a value moves the anchor still
   resolves. → Accepted for the POC; richer anchors are AUD-13's deferred half.
+- **[Template fields nobody extracts]** A template field such as `origin_country` is not in `fields.yaml`,
+  so it arrives (or not) in `state["extra_fields"]`. If normalization never extracts it, the expectation
+  is `absent` and reads like a document defect. → The loader reports template fields, `doctor` lists
+  them, and the report keeps "not read" (`needs_input`) distinct from "genuinely missing" (`finding`).
+- **[Ambiguous resolution freezes the audit]** Two templates for the same document type and counterparty
+  make every template unit `unable_to_assess`. → The report lists the candidate `{template_id, version}`
+  pairs, `doctor` warns, and a host reference may narrow the set (never to an unpublished version).
+- **[Semantic equivalence quietly claimed]** The cheap version of AUD-08 is keyword matching dressed up as
+  "equivalent". → `semantic_equivalent` is a distinct declaration that can only produce
+  `unable_to_assess` + `semantic_equivalence_not_implemented`, and a test asserts it never returns `pass`.
+- **[Template and bundle drift]** A bundle edit can invalidate a template's expectation (e.g. the field's
+  type changes). → `validate_against_schema()` runs on compiled template rules too, so a template that no
+  longer fits the schema is a load-time failure, and `doctor` reports both halves together.
 
 ## Migration Plan
 
@@ -264,7 +435,12 @@ Additive; nothing persisted yet, so no data migration.
    boundary question blocks nothing in code: `agent-verify` authors bundles, this change evaluates them.
 2. `app/rules/` + `app/audit/` + `app/nodes/audit.py`, tested against plain dicts (no transport needed).
 3. Register the `audit` stage target and expose it through the existing envelope.
-4. Rollback: delete the new modules and revert the two frozen-file edits; nothing else references them.
+4. **Templates**: loader + effective-schema merge + `doctor` first (no existing audit result changes), then
+   the `template` unit family with `clauses.py`, then the report baseline and `template_changed`/
+   `policy_conflict` in the gate. With no published template the plan is exactly today's 51 units, so the
+   engine tests stay green throughout.
+5. Rollback: delete the new modules and `app/templates/*.yaml`, and drop the `template` family from
+   `build_plan()`; nothing else references them, and no frozen file gained a required field.
 
 ## Open Questions
 
@@ -285,3 +461,9 @@ Additive; nothing persisted yet, so no data migration.
    unless the document supplies one. Recorded so nobody later "fixes" it by using today's date.
 6. **Semantic checks** — deferred, but the report shape already carries `method`, so enabling AUD-10
    later is additive rather than a rewrite.
+7. **Counterparty field** — which field identifies "the customer side" (`beneficiary_name` by default,
+   `applicant_name` for bank-side templates). Each template declares `counterparty.field`, so the answer
+   is a template edit, not a code change.
+8. **Template body source** — this change keeps controlled-clause text inside the template YAML so the
+   template can validate itself (`doctor`). In production the text should come from the host's template
+   governance service (`EvidenceRef`); the loader is the single place that would change.

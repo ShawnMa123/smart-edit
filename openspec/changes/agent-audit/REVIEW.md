@@ -4,7 +4,7 @@
 > because they are business-acceptance questions, not code questions. Each one changes what the screen
 > will tell an operator, or what the gate will refuse.
 > **Who signs.** Decision 1: C proposes, B accepts. Decision 2: B. Decision 3: C (and business if handy).
-> **Why now.** Everything else in this change is built and tested (30/31 tasks, 281 tests); the tasks
+> **Why now.** Everything else in this change is built and tested (30/55 tasks — groups 10-15 (templates) are planned, not built — 281 tests); the tasks
 > that were waiting on these three answers (`3.3`, `4.1`–`4.3`, `6.1`–`6.3`) are now implemented on the
 > recommended defaults, so a "no" changes one constant or one boolean plus one test — nothing is waiting.
 > **Evidence below is measured**, from `DEMO.md` runs, not estimated.
