@@ -1,10 +1,16 @@
 # Agent Contract
 
+## Purpose
+
+接缝契约定的是两位开发者之间的交接语义，而不是图内节点的实现细节：字段值保持原文形态、
+出处可定位、文档与原文逐字一致、每次自由操作都留痕、阻断与抑制各有唯一依据。
+三人各自实现 Agent 时不看主图，但必须看这一份；改动其中任一条即视为破坏接缝。
+
 ## ADDED Requirements
 
 ### Requirement: 冻结边界
 
-系统 SHALL 明确区分可自由修改的实现细节与不可单方面修改的接缝契约。
+系统 SHALL 明确区分可自由修改的实现细节与不可单方面修改的接缝契约（状态键语义、共享层签名、fixture）。
 
 #### Scenario: 可自由修改
 - **WHEN** 成员调整某 Agent 的内部节点划分、prompt、算法、目录结构、日志粒度
@@ -19,13 +25,45 @@
 - **THEN** MAY 自由调整，但 `parse` / `extract` / `normalize` 三个函数 MUST 仍可独立调用
 - **AND** 其他 Agent 的独立触发能力 MUST NOT 受影响
 
+#### Scenario: 新增字段必须可选
+- **WHEN** 需要给已冻结的子结构加字段
+- **THEN** 该字段 MUST 为可选（`NotRequired`），MUST NOT 修改既有字段含义
+
+### Requirement: 共享层是纯函数
+
+`parse` / `extract` / `normalize` SHALL 以纯函数形式提供，MUST NOT 接收 `state`，MUST NOT 直接写日志。
+
+#### Scenario: 签名不含 state
+- **WHEN** 为共享层新增或修改函数
+- **THEN** 函数签名 MUST NOT 出现 `state` 参数，使其可在无图状态下单测
+
+#### Scenario: 留痕通过回执返回
+- **WHEN** 共享层产生需要留痕的操作（模型调用、转换、产出）
+- **THEN** 留痕条目 MUST 随回执返回（`ExtractResult.trail_entries` / `NormalizeResult.trail_entries`）
+- **AND** MUST 由节点用 `record_many()` 写回 `state`
+
+#### Scenario: 抽取是唯一模型入口
+- **WHEN** 需要从原文抽取候选字段
+- **THEN** ONLY `extract` MAY 调用模型
+- **AND** `parse` MUST 为 0 次模型调用，`normalize` MUST 为纯代码
+
+### Requirement: 定位基准唯一
+
+系统 SHALL 提供唯一的文本归一化基准，任何"两个字符串是否指向同一段原文"的判定 MUST 走它。
+
 #### Scenario: 归一化规则必须共用
 - **WHEN** 任何代码需要判断"两个字符串是否指向同一段原文"
-- **THEN** MUST 调用共享层的同一个归一化函数
-- **AND** MUST NOT 各自实现一份
-- **理由**：Agent 1 用该规则判定 `extracted`，Agent 4 用该规则校验 `extracted`；两份实现一旦分叉，全部字段会被误判为不合规，且原因极难定位
+- **THEN** MUST 调用共享层的 `normalize_ws`，MUST NOT 各自实现一份
+- **理由**：Agent 1 用该规则判定 `extracted`，Agent 4 用该规则校验 `extracted`；两份实现一旦分叉，全部字段会被误判为不合规且极难定位
 
----
+#### Scenario: 归一化常量唯一
+- **WHEN** 需要判断 span 是否超长
+- **THEN** MUST import 共享层的 `MAX_SPAN_LEN`，MUST NOT 各自写死一个数字
+
+#### Scenario: 归一化边界明确
+- **WHEN** 实现 `normalize_ws`
+- **THEN** MUST 按 NFKC 全半角 → 零宽字符剔除 → 连字符归一 → 引号归一 → 空白折叠的顺序执行
+- **AND** MUST NOT 做大小写折叠、去标点或同义词换算
 
 ### Requirement: 接缝一 · A → B 字段契约
 
@@ -44,8 +82,13 @@ Agent 1 SHALL 向 Agent 2 交付满足以下语义的字段表。
 
 #### Scenario: 三分类可信
 - **WHEN** `status="extracted"`
-- **THEN** `source.span` MUST 能在原文中定位（按共享归一化规则）
+- **THEN** `source.span` MUST 能在该 `file_id` 的原文中定位（按共享 `normalize_ws`）
 - **AND** 下游 MAY 据此免除人工核对
+
+#### Scenario: 必需的缺失必须占位
+- **WHEN** `fields.yaml` 标记 `required: true` 的字段无任何候选
+- **THEN** MUST 产出 `status="missing"`、`value=null`、`notes=["not_in_source"]` 的占位
+- **AND** MUST NOT 让该字段在 `fields` 中缺席
 
 #### Scenario: 初始状态
 - **WHEN** Agent 1 产出一个字段
@@ -59,12 +102,15 @@ Agent 1 SHALL 向 Agent 2 交付满足以下语义的字段表。
 - **WHEN** 抽取出 `fields.yaml` 未定义的字段
 - **THEN** MUST 只出现在 `extra_fields`，MUST NOT 混入 `fields`
 
+#### Scenario: 候选不得冒充字段
+- **WHEN** 只跑 `parse → extract`
+- **THEN** 候选 MUST 只存在于 `_candidates`
+- **AND** MUST NOT 写入 `fields`（未规范化、未三分类的值不满足契约）
+
 #### Scenario: Agent 2 不得改写
 - **WHEN** Agent 2 执行校验
 - **THEN** MUST NOT 修改 `fields` / `extra_fields` 中的任何值或状态
 - **AND** 校验结论 MUST 只以 `Finding` 表达
-
----
 
 ### Requirement: 接缝二 · A → C 文档契约
 
@@ -77,16 +123,19 @@ Agent 1 SHALL 向 Agent 3 交付与原文逐字一致的文档。
 
 #### Scenario: 业务类型的唯一来源
 - **WHEN** 需要 `business_type`
-- **THEN** MUST 只由 Agent 1 写入 `EditState.business_type`
+- **THEN** MUST 只由 `normalize` 写入 `EditState.business_type`（`ingest` 只透传入参）
 - **AND** Agent 3 在 `raw` 模式下推断出的类型 MUST 只写入 `legal.coverage`，MUST NOT 写回 `EditState.business_type`
 - **理由**：谁写的必须唯一可查；否则 Agent 4 无法判断该值的出处
 
 #### Scenario: 解析结果复用
-- **WHEN** 独立触发某 Agent 时 `docs` 已存在
-- **THEN** 系统 MUST 复用已有的 `docs`（若 `files` 未变化），MUST NOT 重复解析
-- **AND** 若 `files` 发生变化，MUST 重新解析并清除依赖旧 `docs` 的全部下游结果
+- **WHEN** 独立触发某 Agent 时 `docs` 已存在且 `SourceFile.sha256` 未变化
+- **THEN** 系统 MUST 复用已有的 `docs`，MUST NOT 重复解析
+- **AND** 若文件内容变化，MUST 重新解析并清除依赖旧 `docs` 的全部下游结果
 
----
+#### Scenario: 解析失败不冒充成功
+- **WHEN** 某文件解析失败
+- **THEN** 该 `ParsedDoc.errors` MUST 非空，且该文件 MUST NOT 参与后续字段判定
+- **AND** MUST NOT 用空 `full_text` 让下游误以为原文为空
 
 ### Requirement: 接缝三 · 全体 → D 留痕契约
 
@@ -114,8 +163,6 @@ Agent 1 SHALL 向 Agent 3 交付与原文逐字一致的文档。
 - **THEN** `trail` MUST NOT 为空
 - **AND** 占位实现同样 MUST 写至少一条
 
----
-
 ### Requirement: 接缝四 · B/闸门 与 D/闸门 的判定依据
 
 Agent 2 与 Agent 4 SHALL 以互不重叠的依据影响闸门判定。
@@ -131,7 +178,7 @@ Agent 2 与 Agent 4 SHALL 以互不重叠的依据影响闸门判定。
 - **AND** Agent 2 MUST NOT 写入 `verification`
 
 #### Scenario: 新增 Finding 的初始状态
-- **WHEN** Agent 2 或 Agent 3 产出一条 Finding
+- **WHEN** Agent 1 / 2 / 3 产出一条 Finding
 - **THEN** `resolved` MUST 为 `false`，`resolution` MUST 为 `null`
 - **AND** 只有人工核对节点 MAY 修改这两个字段
 
@@ -140,7 +187,10 @@ Agent 2 与 Agent 4 SHALL 以互不重叠的依据影响闸门判定。
 - **THEN** `blocking` MUST 由 `requirements.yaml` 的规则声明决定
 - **AND** Agent 4 MUST NOT 修改任何 Finding 的 `blocking`
 
----
+#### Scenario: 检查器只读
+- **WHEN** Agent 4 的检查器执行
+- **THEN** 检查器签名 MUST 为 `(state) -> list[Issue]`，MUST NOT 写任何 state 键
+- **AND** 阶段记录 MUST 由 `agent4` 节点统一聚合后写入
 
 ### Requirement: 前置声明
 
@@ -148,12 +198,12 @@ Agent 2 与 Agent 4 SHALL 以互不重叠的依据影响闸门判定。
 
 #### Scenario: 声明形式
 - **WHEN** 新增或修改一个 Agent
-- **THEN** MUST 在 `app/stages.py` 中登记其 `requires_stages` 与 `requires_keys`
+- **THEN** MUST 在 `app/stages.py` 中登记其 `requires_stages`、`requires_keys`、`produces`、`standalone`
 
 #### Scenario: Agent 2 的前置
 - **WHEN** 触发 Agent 2
 - **THEN** 必需 `fields` 非空且 `business_type` 非空
-- **AND** `docs` 缺失时 MUST 降级为仅依据字段判定，并在 `StageReport` 说明
+- **AND** `docs` 缺失时 MAY 降级为仅依据字段判定，并在 `StageReport` 说明
 
 #### Scenario: Agent 3 的前置
 - **WHEN** 触发 Agent 3
@@ -167,10 +217,8 @@ Agent 2 与 Agent 4 SHALL 以互不重叠的依据影响闸门判定。
 
 #### Scenario: 拒绝格式统一
 - **WHEN** 前置不满足
-- **THEN** MUST 返回 `{"refused": true, "missing": [...], "agent": "..."}`
+- **THEN** MUST 返回 `{"refused": true, "missing": [...], "agent": "...", "reason": "..."}`
 - **AND** MUST NOT 返回空结果或部分结果
-
----
 
 ### Requirement: fixture 是接缝的验收载体
 
