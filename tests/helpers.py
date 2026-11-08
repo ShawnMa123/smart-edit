@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.runtime import merge_update
+
 
 def make_doc(
     text: str,
@@ -69,15 +71,6 @@ GUARANTEE_TEXT = """保函编号：BG-2026-0001
 开立日期：12/03/26
 适用规则：URDG 758"""
 
-# The three reducer-backed keys in the contract: merging state must **append**, not overwrite
-REDUCER_KEYS = ("findings", "trail", "stages")
-
-
-def apply_update(state: dict, update: dict) -> dict:
-    """Emulate langgraph's reducer semantics for node-chaining tests without a graph."""
-    for key, value in update.items():
-        if key in REDUCER_KEYS:
-            state[key] = (state.get(key) or []) + value
-        else:
-            state[key] = value
-    return state
+# Reducer semantics have exactly one implementation: `app/runtime.merge_update` (design D2).
+# This alias exists so tests keep the `apply_update` name without owning a second copy.
+apply_update = merge_update

@@ -8,18 +8,16 @@ possible — the precondition for being able to explain a conclusion on site.
 
 from __future__ import annotations
 
-try:  # langgraph is only needed when wiring the graph; pure-function tests must not depend on it
-    from langgraph.types import Overwrite  # type: ignore[import-not-found]
-except Exception:  # pragma: no cover - plain override when langgraph is not installed
-    Overwrite = None  # type: ignore[assignment]
 
+def clear_candidates() -> list:
+    """Clear `_candidates` by returning an empty list.
 
-def clear_candidates() -> object:
-    """Clear `_candidates`.
+    `_candidates` is a **non-reducer** channel in `app/state.py`, so returning `[]` already means
+    "overwrite with empty" — whether the update is applied by langgraph or by
+    `app/runtime.merge_update`. langgraph's `Overwrite` wrapper is only required for channels that
+    *have* a reducer; wrapping here would instead leak an `Overwrite` object into every plain-dict
+    consumer (the chain executor, the API envelope, the tests).
 
-    `_candidates` is a temporary channel: `normalize` must clear it, otherwise the checkpointer
-    keeps it forever. When wiring the graph, use langgraph's `Overwrite([])`; without langgraph
-    it degrades to a plain empty list — the only difference is multi-writer semantics within one
-    step, which the unit-test path does not exercise.
+    If `_candidates` ever gains a reducer, wrap the return value in `Overwrite([])` at that point.
     """
-    return Overwrite([]) if Overwrite is not None else []
+    return []

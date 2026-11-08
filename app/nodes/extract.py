@@ -39,7 +39,29 @@ def extract_node(
             ),
         }
 
+    if llm is None:
+        # Design D6: no provider fails the stage loudly. Inventing candidates here would make a
+        # missing API key indistinguishable from a real extraction.
+        return {
+            "_candidates": [],  # nothing extracted: never leave a stale value from an earlier run
+            "stages": [
+                stage_report(
+                    EXTRACT_STAGE,
+                    status="failed",
+                    reason="no model provider configured (set SMART_EDIT_LLM)",
+                )
+            ],
+            **record(
+                state,
+                agent=SHARED_STAGE_OWNER,
+                stage=EXTRACT_STAGE,
+                op="pass",
+                detail={"reason": "no model provider configured, nothing extracted"},
+            ),
+        }
+
     result = extract(docs, list(field_keys or []), llm=llm, model=model)
+    provider = getattr(llm, "provider", None)
     if result.failed_batches:
         report = stage_report(
             EXTRACT_STAGE,
@@ -52,6 +74,8 @@ def extract_node(
         report = stage_report(
             EXTRACT_STAGE,
             status="done",
+            # A fixture-backed run must be distinguishable from a provider run by this field alone.
+            reason=f"candidates from {provider}" if provider else None,
             produced=len(result.candidates),
             model_calls=result.model_calls,
         )

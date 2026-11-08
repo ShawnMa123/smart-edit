@@ -72,3 +72,48 @@ pip install -e .
 uvicorn app.api.main:app --reload
 langgraph dev          # 在 LangSmith Studio 里看图和回放
 ```
+
+---
+
+## HTTP API (console transport)
+
+Contract: `openspec/changes/frontend-console/specs/console-api/spec.md`.
+
+```bash
+# 1. dependencies (the repo venv has no pip of its own)
+~/.local/bin/uv pip install --python .venv/bin/python -e '.[dev]'
+
+# 2. model provider for extraction — unset means `extract` fails loudly, by design
+export SMART_EDIT_LLM=fixture:fixtures/llm/extract_sample.json
+
+# 3. server
+.venv/bin/uvicorn app.api.main:app --reload
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /runs` | Create one run. Multipart with field `files`, or JSON `{"text": "..."}` for pasted text |
+| `POST /runs/{thread_id}/stages/{stage}` | Run a stage chain (`parse` / `extract` / `normalize`), backfilling prerequisites |
+| `GET /runs/{thread_id}` | Read the envelope: `fields`, `extra_fields`, `findings`, `stages`, `trail`, `supported_stages` |
+
+```bash
+# create a run from the bundled sample document, then audit it
+TID=$(curl -s -X POST localhost:8000/runs \
+        -F "files=@fixtures/llm/sample_document.txt;type=text/plain" \
+      | python3 -c 'import json,sys;print(json.load(sys.stdin)["thread_id"])')
+
+curl -s -X POST "localhost:8000/runs/$TID/stages/normalize" | python3 -m json.tool | head -40
+curl -s "localhost:8000/runs/$TID" | python3 -m json.tool | head -20
+```
+
+`SMART_EDIT_LLM` values: unset → `extract` records `failed` (no invented candidates);
+`fixture:<path>` → replays that file and says so in the stage `reason`; `openai:<model>` → reserved,
+raises `NotImplementedError`.
+
+Errors always come back as `{code, message, detail?}` with `code` one of `EMPTY_SUBMISSION` (400),
+`unknown_run` (404), `unknown_stage` (409), `REFUSED` (409), `NOT_STANDALONE` (403),
+`INCOMPLETE_RESULT` (500). Branch on `code`, not on `message`.
+
+Run state is process-scoped: after a restart the same `thread_id` answers `unknown_run` — never an
+empty run. Re-auditing means creating a new run, because `normalize` clears `_candidates` and a
+repeat trigger is refused.

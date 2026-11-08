@@ -20,6 +20,8 @@ runs.db-*
 *.sqlite3
 .env
 /eval/samples/
+# Uploaded files and pasted text for API runs (process-scoped, never committed)
+runs/
 
 # IDE
 /.idea/

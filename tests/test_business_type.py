@@ -69,7 +69,7 @@ def test_detect_business_type_contract_signature():
 
 
 def test_business_type_has_a_single_write_point():
-    """11.10 `business_type` has exactly one write point in the codebase (`normalize`)."""
+    """11.10 `business_type` is only *produced* by `normalize` (projections may read it)."""
     root = Path(__file__).resolve().parent.parent / "app"
     writers = []
     for path in root.rglob("*.py"):
@@ -78,9 +78,12 @@ def test_business_type_has_a_single_write_point():
             stripped = line.strip()
             if not stripped.startswith('"business_type":'):
                 continue
-            # two locations are allowed: the pure function (parsing) and the node write-back (nodes)
+            # A read-only projection (e.g. the API envelope) is not a second writer.
+            if 'state.get("business_type")' in stripped:
+                continue
+            # The allowed write points: the pure function (parsing) and the node write-back (nodes)
             writers.append(path.relative_to(root).as_posix())
 
     assert sorted(set(writers)) == ["nodes/normalize.py", "parsing/normalize.py"], (
-        f"business_type write points found in {sorted(set(writers))}, only normalize is allowed"
+        f"business_type is written in {sorted(set(writers))}, only normalize may write it"
     )
