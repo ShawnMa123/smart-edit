@@ -3,6 +3,12 @@
 > Artifacts are English per an explicit instruction (see `design.md` Open Questions 3).
 > Group 0 must complete **before any code**: it decides ownership of field-value checks and signs off
 > the two frozen-file edits. Everything here is deterministic — no model call anywhere.
+>
+> **Status (2026-11-08):** `0.1` and `0.2` are **pending** — 0.1 needs B's countersign on the
+> `agent-verify` boundary, 0.2 needs three-person approval for the `app/state.py` / `app/stages.py`
+> edits. Groups 1–3, 5, 7–9 are being implemented in the meantime against plain dicts, exactly as
+> `design.md` Migration step 2 allows. Tasks depending on a frozen edit (`3.3`, `4.x`, `6.2`, `6.3`)
+> stay unchecked until the sign-off lands.
 
 ## 0. Ownership and sign-off gate
 
@@ -18,41 +24,41 @@
 
 ## 1. Schema binding and typed values
 
-- [ ] 1.1 `app/rules/schema.py`: project `app/configs/fields.yaml` into a schema bundle (field id, value
+- [x] 1.1 `app/rules/schema.py`: project `app/configs/fields.yaml` into a schema bundle (field id, value
   type, `max_length`, `charset`, `precision`, `date_order`, `required`) plus a `schema_version` hash.
   Verify: test asserts all 15 fields project, the hash is stable across runs, and a broken config raises
   `FieldsConfigError` instead of yielding an empty schema.
-- [ ] 1.2 `app/audit/bind.py`: map `FieldValue` to an audit value using design D7 (absent / confirmed /
+- [x] 1.2 `app/audit/bind.py`: map `FieldValue` to an audit value using design D7 (absent / confirmed /
   unconfirmed / contract violation). Verify: table-driven test covering `missing`, `extracted` with a
   source, `inferred`, and `extracted` without a source.
 
 ## 2. Rule DSL and deterministic engine
 
-- [ ] 2.1 `app/rules/dsl.py`: the closed op set (`all`/`any`/`not`/`exists`/`compare`/`length`/
+- [x] 2.1 `app/rules/dsl.py`: the closed op set (`all`/`any`/`not`/`exists`/`compare`/`length`/
   `charset`/`contains_clause`) with structural validation. Verify: tests reject an empty `all`, `byte`
   length without `encoding`, `encoding` with a non-byte unit, unknown ops and extra properties.
-- [ ] 2.2 `app/rules/engine.py`: three-valued evaluation with the ordering schema → context →
+- [x] 2.2 `app/rules/engine.py`: three-valued evaluation with the ordering schema → context →
   applicability → expression; every `unknown` maps to `needs_input` or `unable_to_assess`, never `pass`.
   Verify: truth-table tests for each op, plus the rule that a missing field used in `required_facts`
   cannot pre-empt its own required-field finding.
-- [ ] 2.3 Purity guard. Verify: test asserts the `app/rules` import graph contains neither `app.llm` nor
+- [x] 2.3 Purity guard. Verify: test asserts the `app/rules` import graph contains neither `app.llm` nor
   an HTTP client, and that evaluation performs no filesystem writes.
-- [ ] 2.4 `app/rules/bundles.py`: load bundle files (`bundle_id`, `version`, `published`,
+- [x] 2.4 `app/rules/bundles.py`: load bundle files (`bundle_id`, `version`, `published`,
   `content_sha256`, rules) and evaluate only published versions. Verify: tests that an unpublished
   bundle is ignored, a missing mandatory bundle turns its units `failed`, and conflicting mandatory
   rules are reported.
-- [ ] 2.5 `app/rules/bundles/guarantee.yaml`: POC rule pack — required presence, amount positivity and
+- [x] 2.5 `app/rules/bundles/guarantee.yaml`: POC rule pack — required presence, amount positivity and
   maximum, expiry-after-issue, and schema-referenced length/charset rules. Verify: the bundle validates
   and every rule declares `rule_id`, `version`, `severity`, `gate_type`, `target_operations`.
-- [ ] 2.6 Every rule carries executable test vectors. Verify: test walks the bundle and executes each
+- [x] 2.6 Every rule carries executable test vectors. Verify: test walks the bundle and executes each
   vector, asserting at least one `pass` and one `finding` outcome per rule.
 
 ## 3. Coverage plan and report
 
-- [ ] 3.1 `app/audit/planner.py`: build the unit list from schema + bundle + context before any
+- [x] 3.1 `app/audit/planner.py`: build the unit list from schema + bundle + context before any
   evaluation. Verify: test asserts unit ids are unique and deterministic, that every schema field yields
   its schema units, and that the plan is produced without evaluating anything.
-- [ ] 3.2 `app/audit/report.py::summarise()`: the only place that computes counts, `completion`,
+- [x] 3.2 `app/audit/report.py::summarise()`: the only place that computes counts, `completion`,
   `outcome`, `freshness`, and the `no_applicable_checks` reason. Verify: conservation test
   (`sum(counts) == planned`), outcome matrix covering `pass+failed ≠ no_findings`, all-`not_applicable`
   → `unable_to_assess`, and `complete` only when every unit is pass/finding/not_applicable.
@@ -73,16 +79,16 @@
 
 ## 5. Operation gate
 
-- [ ] 5.1 `app/audit/policy.py`: the per-operation policy table from design D8 as data. Verify: test
+- [x] 5.1 `app/audit/policy.py`: the per-operation policy table from design D8 as data. Verify: test
   asserts all six operations are covered and that `save_draft` has no content-based blockers.
-- [ ] 5.2 `app/audit/gate.py::evaluate(state, operation, candidate_digest)` →
+- [x] 5.2 `app/audit/gate.py::evaluate(state, operation, candidate_digest)` →
   `{decision, operation, candidate_content_sha256, policy_revision, evaluated_at, reason_codes,
   authorized_finding_ids}`. Verify: matrix test over six operations × four states (clean,
   deterministic `hard_block`, `needs_input` on a required unit, missing bundle) asserting `allowed` only
   in the clean case and `blocked`/`indeterminate` for uncertainty.
-- [ ] 5.3 A decision binds the candidate. Verify: test asserting that a different candidate digest
+- [x] 5.3 A decision binds the candidate. Verify: test asserting that a different candidate digest
   produces `indeterminate` (or `blocked`) and that client-supplied rule ids/statuses are ignored.
-- [ ] 5.4 The decision is stored on the run. Verify: test asserting `state["gate"]` holds the documented
+- [x] 5.4 The decision is stored on the run. Verify: test asserting `state["gate"]` holds the documented
   keys and is overwritten per evaluation, never merged with a previous decision.
 
 ## 6. Node and transport
@@ -98,33 +104,33 @@
 
 ## 7. Human disposition
 
-- [ ] 7.1 Append-only disposition events for a run: `{finding_id, disposition, reason, actor, at}`, with
+- [x] 7.1 Append-only disposition events for a run: `{finding_id, disposition, reason, actor, at}`, with
   `open` / `accepted` / `rejected` / `needs_human_review`. Verify: test asserting events append (earlier
   events unchanged), rejecting a `critical` finding without a reason is refused, and `accepted` does not
   alter the unit's state.
 
 ## 8. Evidence family retained
 
-- [ ] 8.1 Port the applicable evidence checks into `app/audit/evidence.py` as units with
+- [x] 8.1 Port the applicable evidence checks into `app/audit/evidence.py` as units with
   `method="deterministic"`: overreach ops in the trail, untraceable `extracted` values, dangling finding
   anchors. Verify: tests for each, asserting `failed` units and the finding text naming the offending
   entry or field.
-- [ ] 8.2 Checks that cannot run on POC data (citation support, conflict, coverage declarations) are
+- [x] 8.2 Checks that cannot run on POC data (citation support, conflict, coverage declarations) are
   reported as `not_applicable` with a reason. Verify: test asserting they appear in the report as
   `not_applicable`, never silently skipped.
-- [ ] 8.3 Checker isolation. Verify: test where one check raises, asserting a `failed` item for that
+- [x] 8.3 Checker isolation. Verify: test where one check raises, asserting a `failed` item for that
   check, the remaining checks still run, and the run is not reported as having no findings.
 
 ## 9. Acceptance
 
-- [ ] 9.1 AT-01 determinism: audit the same snapshot twice and compare reports. Verify: pytest
+- [x] 9.1 AT-01 determinism: audit the same snapshot twice and compare reports. Verify: pytest
   asserting equality apart from ids/timestamps, with no model provider configured.
-- [ ] 9.2 AT-02/AT-14/AT-15 outcomes: a clean fixture document; a document missing a required field; a
+- [x] 9.2 AT-02/AT-14/AT-15 outcomes: a clean fixture document; a document missing a required field; a
   document with only `inferred` values. Verify: pytest asserting `no_findings` / finding on the missing
   field / `needs_input` and the matching gate decisions for `start_approval`.
-- [ ] 9.3 AT-17 staleness: audit, then change the snapshot, then ask the gate. Verify: pytest asserting
+- [x] 9.3 AT-17 staleness: audit, then change the snapshot, then ask the gate. Verify: pytest asserting
   the gate refuses to `allow` on the stale report and asks for a re-audit.
-- [ ] 9.4 Write `openspec/changes/agent-audit/DEMO.md`: commands, bundle id/version/hash, engine version,
+- [x] 9.4 Write `openspec/changes/agent-audit/DEMO.md`: commands, bundle id/version/hash, engine version,
   the outcomes observed from 9.1–9.3, and an explicit statement that semantic checks (AUD-10) are not
   implemented. Verify: file exists and its numbers match the runs.
 

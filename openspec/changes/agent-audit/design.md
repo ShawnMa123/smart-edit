@@ -160,6 +160,32 @@ timestamps).
 would silently destroy AT-01. A test is the only thing that survives a deadline.
 *Alternatives:* a comment in the module docstring.
 
+### D11. Coverage thresholds and decision transparency (adopted default)
+
+The report carries `coverage = {assessed, not_applicable, unsettled, ratio}` where
+`assessed = pass + finding` — **`not_applicable` never counts as assessed**. The gate applies three rules,
+but only to operations that assert "this document is ready" (`start_approval`, `formal_export`, `handoff`,
+`formal_mapping`):
+
+| Rule | Condition | Decision |
+|---|---|---|
+| R1 | `assessed == 0` | `indeterminate`, reason `no_assessed_checks` |
+| R2 | `ratio < 0.30` | `indeterminate`, reason `limited_coverage` |
+| R3 | `0.30 ≤ ratio < 0.60` | `allowed` **with** reason `limited_coverage`, so the client must print "assessed X of Y planned" |
+
+`save_draft` and `submit_version` are exempt (`enforce_coverage=False`): `REVIEW.md` decision 2 deliberately
+allows a discussion version to carry gaps, and gating it on coverage would contradict that decision.
+
+Every decision also carries `coverage`, `open_gaps`, `advisory_finding_ids` and `unsupported_capability`, so
+an `allowed` answer states what it is allowing instead of being a bare verdict — which is the failure mode
+Decision 2 warned about.
+
+*Why thresholds rather than UI text alone:* the third measured sample has **1 of 51** units assessed and the
+report merely says `needs_input`; a screen can be ignored, a decision cannot.
+*Adopted by A on 2026-11-08 as the default while `REVIEW.md` decision 1 is out for countersign.* The values
+are two constants in `app/audit/policy.py` (`MIN_ASSESSED_RATIO`, `LIMITED_COVERAGE_RATIO`); answering
+differently changes a constant and one test, not a design.
+
 ## Risks / Trade-offs
 
 - **[Two engines for one document]** `agent-verify` also claims field-value legality ⇒ split ownership
