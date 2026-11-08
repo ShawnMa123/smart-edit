@@ -71,7 +71,9 @@ ingest → parse → extract → normalize → reset → (Agent2 要件校验 �
 
 ```bash
 pip install -e .
-uvicorn app.api.main:app --reload
+./scripts/dev.sh                       # 一条命令起后端 :8000（fixture 模型）+ 前端 :5173，Ctrl+C 一起停
+./scripts/stop.sh                      # 终端已关/进程 nohup 起时收尾（--all 连 e2e 端口一起清）
+uvicorn app.api.main:app --reload      # 只要后端时
 langgraph dev          # 在 LangSmith Studio 里看图和回放
 .venv/bin/python scripts/audit_demo.py   # 规范审计组：一条命令打印计划 / 覆盖率 / 闸门决策（无需模型）
 .venv/bin/python -m app.rules.doctor     # 规则包体检：字段引用 / 冲突 / 向量完整性 / 计划单元数（退出码即门禁）
