@@ -58,6 +58,7 @@ def execute_chain(
     *,
     llm=None,
     fields_yaml: dict[str, dict] | None = None,
+    template_reference: dict | None = None,
 ) -> dict:
     """Run `chain` in order, merging each node update into `state` (mutated in place).
 
@@ -65,6 +66,7 @@ def execute_chain(
     - A stage whose latest report is `done` is skipped: `extract` consumes `_candidates` and
       `normalize` clears them, so re-running them would rebuild `fields` from nothing and turn every
       required field into a `missing` placeholder (design Risks).
+    - `template_reference` reaches the audit node only; it asks for template-driven audit (design D18).
     """
     unknown = [stage for stage in chain if stage not in STAGE_TARGETS]
     if unknown:
@@ -87,7 +89,7 @@ def execute_chain(
         elif stage == "extract":
             update = extract_node(state, llm=llm, field_keys=field_keys)
         elif stage == "audit":
-            update = audit_node(state)
+            update = audit_node(state, template_reference=template_reference)
         else:
             update = normalize_node(state, fields_yaml=fields_yaml)
         merge_update(state, update)

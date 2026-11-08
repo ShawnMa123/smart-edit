@@ -12,9 +12,10 @@
 >
 > **Status (2026-11-08, third pass):** groups 10–15 add **template-driven audit** (AUD-08/09/11,
 > RULE-03/04) to this same change — a customer template is part of what this group audits, not a
-> separate change. They are **not implemented yet** and are unchecked on purpose. With no published
-> template in `app/templates/`, the plan stays at today's 51 units, so groups 1–9 keep passing while
-> 10–15 land. Semantic clause equivalence is **not** built: it is a fixed `unable_to_assess` with reason
+> separate change. **Implemented:** 330 Python tests, 109 frontend tests, 4 HTTP end-to-end cases,
+> `python -m app.rules.doctor` green (rule packs + templates). With no template requested the plan
+> stays at today's 51 units, and `tests/test_template_integration.py` asserts exactly that. Semantic
+> clause equivalence is **not** built: it is a fixed `unable_to_assess` with reason
 > `semantic_equivalence_not_implemented` (`design.md` D17), so AT-01 is untouched.
 
 ## 0. Ownership and sign-off gate
@@ -152,95 +153,95 @@
 
 ## 10. Template data and loading
 
-- [ ] 10.1 `app/rules/templates.py`: load `app/templates/*.yaml` (`template_id` / `version` /
+- [x] 10.1 `app/rules/templates.py`: load `app/templates/*.yaml` (`template_id` / `version` /
   `published` / `synthetic` / `document_types` / `counterparty` / `fields` / `clauses` /
   `internal_policy` / `policy_packs`), compute `content_sha256`, and hand only published versions to the
   audit. Verify: tests asserting an unpublished pack is ignored, the digest is stable across runs, and a
   missing key or an unknown `requirement` value raises `TemplateError`.
-- [ ] 10.2 Effective schema (design D16): merge template-declared fields into the `SchemaBundle` built
+- [x] 10.2 Effective schema (design D16): merge template-declared fields into the `SchemaBundle` built
   from `fields.yaml`; a type conflict on the same `field_id` fails at load time. Verify: test asserting
   the merged schema contains `origin_country`, and that a conflicting type raises `TemplateError`
   instead of silently picking one.
-- [ ] 10.3 Compile field expectations to the DSL (D15): `allowed_values` (one or many) and
+- [x] 10.3 Compile field expectations to the DSL (D15): `allowed_values` (one or many) and
   `required_when` → `applicability`. Verify: tests asserting every compiled rule passes
   `validate_against_schema()`, with pass/finding vectors for "currency must be USD" and "origin country
   in [VN, TH]".
-- [ ] 10.4 Ship `app/templates/adidas-guarantee.yaml` (settlement currency `USD`, origin country
+- [x] 10.4 Ship `app/templates/adidas-guarantee.yaml` (settlement currency `USD`, origin country
   `[VN, TH]`, one required + one controlled clause, one lawful-source declaration, `synthetic: true`).
   Verify: `python -m app.rules.doctor` is green, and every check in the pack declares `gate_type` plus a
   `clause_id` or field anchor.
 
 ## 11. Template resolution and policy combination
 
-- [ ] 11.1 `app/audit/resolve.py`: candidates = `published ∧ document_types ∋ business_type ∧ counterparty
+- [x] 11.1 `app/audit/resolve.py`: candidates = `published ∧ document_types ∋ business_type ∧ counterparty
   match` (`counterparty.field`, default `beneficiary_name`, normalized). Verify: test asserting the unique
   match returns the pack plus `resolved_from` (document type, field, value).
-- [ ] 11.2 Refusal paths (D18): 0 candidates → `no_applicable_template`; ≥2 → `ambiguous_template` with the
+- [x] 11.2 Refusal paths (D18): 0 candidates → `no_applicable_template`; ≥2 → `ambiguous_template` with the
   candidate list. Verify: two tests asserting the reason codes, the `{template_id, version}` pairs, and
   that every template unit is `unable_to_assess`.
-- [ ] 11.3 A host reference only narrows; client version declarations are ignored. Verify: test asserting
+- [x] 11.3 A host reference only narrows; client version declarations are ignored. Verify: test asserting
   the reference can reduce the candidate set to one, an unpublished version reference is ignored, and the
   resolved version equals the host-resolved one.
-- [ ] 11.4 Policy combination (D19): `ResolvedPolicy` with per-pack `{pack_id, owner, version, valid_from,
+- [x] 11.4 Policy combination (D19): `ResolvedPolicy` with per-pack `{pack_id, owner, version, valid_from,
   valid_to, source}`. Verify: test asserting the report lists the template plus each pack version.
-- [ ] 11.5 Third conflict class: template expectation vs policy pack declaration, and a mandatory pack
+- [x] 11.5 Third conflict class: template expectation vs policy pack declaration, and a mandatory pack
   missing. Verify: tests asserting the conflict appears in `template.conflicts`, the affected unit is
   `unable_to_assess`, `reasons` carries `policy_conflict` / `missing_policy_pack`, and several rules for
   one field *inside* one pack are still not a conflict.
 
 ## 12. Clause and declaration checks
 
-- [ ] 12.1 `app/audit/clauses.py` over `normalized_full_texts()`: `required` missing → `finding`,
+- [x] 12.1 `app/audit/clauses.py` over `normalized_full_texts()`: `required` missing → `finding`,
   `controlled` not identical after fixed normalization → `finding`, `optional` missing →
   `not_applicable`. Verify: tests for the three states plus the whitespace / full-width-only case.
-- [ ] 12.2 Semantic equivalence stays out (D17): `semantic_equivalent` → `unable_to_assess` +
+- [x] 12.2 Semantic equivalence stays out (D17): `semantic_equivalent` → `unable_to_assess` +
   `semantic_equivalence_not_implemented`. Verify: test asserting the status and reason code, and that such
   a unit never returns `pass` and never produces a finding.
-- [ ] 12.3 Internal declarations (AUD-11): judge presence and condition only; `waivable` comes from the
+- [x] 12.3 Internal declarations (AUD-11): judge presence and condition only; `waivable` comes from the
   template, never from severity. Verify: tests asserting a missing declaration is a `finding`, a present
   one is `pass`, and the message never claims the funds or the transaction were verified.
 
 ## 13. Plan, report and gate integration
 
-- [ ] 13.1 `Unit.family` gains `template`; `build_plan()` emits one unit per field expectation, clause and
+- [x] 13.1 `Unit.family` gains `template`; `build_plan()` emits one unit per field expectation, clause and
   declaration (`check_id = TEMPLATE:<kind>:<id>`). Verify: test asserting unit ids are unique and stable,
   the plan total is `51 + template units`, and `summarise()`'s conservation assertion still holds.
-- [ ] 13.2 `app/audit/runner.py`: bind `fields ∪ extra_fields`, pass the effective schema as context,
+- [x] 13.2 `app/audit/runner.py`: bind `fields ∪ extra_fields`, pass the effective schema as context,
   evaluate the template family. Verify: test asserting a template field value comes from `extra_fields`,
   `inferred` → `needs_input`, and `extracted` without a source is not treated as a pass.
-- [ ] 13.3 Report baseline (D20) in `verification.audit.template`. Verify: test asserting the keys
+- [x] 13.3 Report baseline (D20) in `verification.audit.template`. Verify: test asserting the keys
   (`template_id` / `version` / `content_sha256` / `synthetic` / `counterparty` / `resolved_from` /
   `policy_packs` / `conflicts` / `candidate_templates`) and that a resolution failure records its reason.
-- [ ] 13.4 Finding/Issue projection: `gate_type` from the template, `location` at the field or clause id.
+- [x] 13.4 Finding/Issue projection: `gate_type` from the template, `location` at the field or clause id.
   Verify: test asserting `blocking` mirrors only `hard_block` and the anchor names the field/clause.
-- [ ] 13.5 Gate: `policy_conflict` → `blocked`, template digest change → `stale_report` +
+- [x] 13.5 Gate: `policy_conflict` → `blocked`, template digest change → `stale_report` +
   `template_changed`. Verify: tests asserting `start_approval` is neither `allowed` on a conflict nor on a
   template change.
-- [ ] 13.6 Envelope: `verification.audit.template` after an audit, `null` before it. Verify: `TestClient`
+- [x] 13.6 Envelope: `verification.audit.template` after an audit, `null` before it. Verify: `TestClient`
   test over `POST /runs/{id}/stages/audit`, plus the existing console-api assertions.
 
 ## 14. Health check, demo and docs
 
-- [ ] 14.1 `python -m app.rules.doctor` covers templates: field evaluability, `allowed_values` type
+- [x] 14.1 `python -m app.rules.doctor` covers templates: field evaluability, `allowed_values` type
   compatibility, clause text locatable in the pack's own text, vectors, conflicts. Verify: tests asserting
   exit 0 for a healthy pack, 1 for an unevaluable field or unlocatable clause, 2 when a pack cannot load.
-- [ ] 14.2 `scripts/audit_demo.py` gains a template scenario (clean document → template matched →
+- [x] 14.2 `scripts/audit_demo.py` gains a template scenario (clean document → template matched →
   expectations pass) and an ambiguity scenario (two candidates → `unable_to_assess`). Verify: the script
   prints both scenarios' outcome, coverage and gate decision.
-- [ ] 14.3 Docs: `how_to_use.md` gains "auditing against a customer template" (how the template is chosen,
+- [x] 14.3 Docs: `how_to_use.md` gains "auditing against a customer template" (how the template is chosen,
   what the panel shows, what `synthetic` means); `web/README.md` lists the new panel block. Verify: every
   documented command reproduces its stated output.
 
 ## 15. Acceptance — template slice
 
-- [ ] 15.1 No-template behaviour is unchanged: with `app/templates/` empty (or all unpublished) the audit
+- [x] 15.1 No-template behaviour is unchanged: with `app/templates/` empty (or all unpublished) the audit
   still plans 51 units at `0.647` coverage with `no_findings`. Verify: the whole suite stays green and a
   test asserts the plan count is 51.
-- [ ] 15.2 End-to-end: `Run spec audit` → normalize → audit shows the template baseline (id/version/
+- [x] 15.2 End-to-end: `Run spec audit` → normalize → audit shows the template baseline (id/version/
   `synthetic` banner), the template unit count and the expectation outcomes; an ambiguous set shows
   `unable_to_assess` with the reason code. Verify: `web/src/e2e.audit.test.ts` gains the template scenario,
   and component tests cover the `synthetic` and `ambiguous_template` renderings.
-- [ ] 15.3 Update `openspec/changes/agent-audit/DEMO.md` with the template commands, template id/version/
+- [x] 15.3 Update `openspec/changes/agent-audit/DEMO.md` with the template commands, template id/version/
   digest, both scenarios' outcome/coverage/gate results, and an explicit statement that semantic
   equivalence is not implemented. Verify: numbers match 15.1/15.2.
 
@@ -257,6 +258,13 @@
   one branch.
 - Template authoring and governance (a template editor, AUD-20's release/approval workflow) stays out:
   POC templates are hand-edited YAML reviewed in a PR, and the report must say they are synthetic.
+- The **matched** template path is proved in-process (`tests/test_template_integration.py`,
+  `scripts/audit_demo.py`) and in the UI component tests; over HTTP the fixture provider pins the
+  counterparty to "Beta Construction Ltd", so the end-to-end case asserts the *refusal* path. Add an
+  Adidas-extraction fixture (and a second `SMART_EDIT_LLM=fixture:…` server) to drive the matched path
+  over HTTP as well.
+- `POST /stages/audit?template=<id>` is the opt-in surface (`app/api/main.py`); the `console-api` delta in
+  `frontend-console` should document it, since that change owns the transport contract.
 - Decide `openspec/config.yaml`'s `Language: zh` vs these English artifacts (affects all three owners).
 - Archive with `/opsx-archive` once 9.1–9.4 **and** 15.1–15.3 pass and the boundary decision from 0.1 is
   merged.

@@ -15,6 +15,7 @@ import yaml
 from app.rules import doctor
 from app.rules.bundles import BundleError, load_bundle
 from app.rules.schema import SchemaError, load_schema
+from app.rules.templates import TemplateError, load_template
 
 BUNDLE_PATH = Path("app/rules/bundles/guarantee.yaml")
 
@@ -69,7 +70,13 @@ def test_the_shipped_pack_is_healthy():
     assert report["problems"] == []
     assert report["healthy"] is True
     assert report["schema"] == {"version": load_schema().version, "fields": 15}
-    assert report["plan"] == {"planned": 51, "schema": 39, "rule": 6, "evidence": 6}
+    assert report["plan"] == {
+        "planned": 51,
+        "schema": 39,
+        "rule": 6,
+        "evidence": 6,
+        "template": 0,
+    }
     assert report["bundles"] == [
         {
             "id": "guarantee-core",
@@ -155,7 +162,9 @@ def test_no_published_bundle_is_a_problem_and_exits_two(monkeypatch, capsys):
 
     report = doctor.inspect()
 
-    assert report["problems"] == ["no published bundle applies; an audit would refuse to run"]
+    # The bundle is the first thing to say out loud; the template then reports the pack it needs.
+    assert report["problems"][0] == "no published bundle applies; an audit would refuse to run"
+    assert any("mandatory policy pack" in problem for problem in report["problems"])
     assert report["healthy"] is False
     assert report["plan"] == {}
     assert doctor.main([]) == 2
@@ -194,6 +203,92 @@ def test_a_problem_found_in_a_loadable_pack_exits_one(tmp_path, monkeypatch, cap
 
     assert doctor.main([]) == 1
     assert "PROBLEMS (" in capsys.readouterr().out
+
+
+def test_the_shipped_template_is_in_the_health_report():
+    """14.1 The pack is listed with its states, conflicts and plan size."""
+    report = doctor.inspect()
+
+    assert report["problems"] == []
+    assert len(report["templates"]) == 1
+    template = report["templates"][0]
+    assert template["template_id"] == "adidas-guarantee"
+    assert template["synthetic"] is True
+    assert template["fields"] == 3
+    assert template["clauses"] == 2
+    assert template["declarations"] == 1
+    assert template["conflicts"] == 0
+    assert template["plan"] == 58
+    for field_id in ("currency", "origin_country", "guarantee_amount"):
+        assert template["states"][field_id] == ["finding", "needs_input", "pass"]
+
+
+def _pack(tmp_path, **overrides):
+    payload = {
+        "template_id": "probe",
+        "version": "1.0.0",
+        "published": True,
+        "document_types": ["guarantee"],
+        "counterparty": {"name": "Adidas AG"},
+        "fields": [{"key": "currency", "allowed_values": ["USD"], "gate_type": "advisory"}],
+    }
+    payload.update(overrides)
+    path = tmp_path / f"{payload['template_id']}.yaml"
+    path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+    return load_template(path)
+
+
+def test_a_template_field_that_cannot_be_evaluated_fails_the_check(tmp_path, monkeypatch):
+    """14.1 `allowed_values` on an amount cannot compile, so the pack is not publishable."""
+    bad = _pack(tmp_path, fields=[{"key": "guarantee_amount", "allowed_values": ["500000"]}])
+    monkeypatch.setattr(doctor, "load_templates", lambda *a, **k: [bad])
+
+    report = doctor.inspect()
+
+    assert any("allowed_values" in problem for problem in report["problems"])
+    assert doctor.main([]) == 1
+
+
+def test_a_controlled_clause_outside_the_template_body_fails_the_check(tmp_path, monkeypatch):
+    """14.1 A clause that is not in the pack's own text cannot be verified against anything."""
+    bad = _pack(
+        tmp_path,
+        body="DEMAND GUARANTEE — some other wording entirely.",
+        clauses=[
+            {"clause_id": "c1", "requirement": "controlled", "text": "Payment shall be made in USD."}
+        ],
+    )
+    monkeypatch.setattr(doctor, "load_templates", lambda *a, **k: [bad])
+
+    report = doctor.inspect()
+
+    assert any("not locatable in the template body" in problem for problem in report["problems"])
+
+
+def test_clauses_without_a_body_fail_the_check(tmp_path, monkeypatch):
+    """14.1 Without a body there is nothing to verify a controlled clause against."""
+    bad = _pack(
+        tmp_path, clauses=[{"clause_id": "c1", "requirement": "required", "text": "Anything."}]
+    )
+    monkeypatch.setattr(doctor, "load_templates", lambda *a, **k: [bad])
+
+    report = doctor.inspect()
+
+    assert any("no `body`" in problem for problem in report["problems"])
+
+
+def test_an_unloadable_template_is_reported_not_crashed(tmp_path, monkeypatch):
+    """14.1 A broken pack is a problem in the report, never an exception."""
+    def explode(*args, **kwargs):
+        raise TemplateError("probe.yaml: missing published")
+
+    monkeypatch.setattr(doctor, "load_templates", explode)
+
+    report = doctor.inspect()
+
+    assert report["templates"] == []
+    assert any("template could not be loaded" in problem for problem in report["problems"])
+    assert doctor.main([]) == 1
 
 
 def test_healthy_pack_exits_zero_and_prints_the_pack(capsys):

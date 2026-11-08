@@ -31,11 +31,25 @@ def audit_node(
     schema=None,
     bundles=None,
     operation: str | None = None,
+    templates=None,
+    template_reference: dict | None = None,
 ) -> dict:
-    """Run one audit over `state` and return the node update."""
+    """Run one audit over `state` and return the node update.
+
+    Template-driven audit is opt-in: pass `template_reference={"template_id": …}` (the stage trigger does
+    that when the caller names a template) or `templates=[…]`. With neither, the audit runs on the base
+    schema and the published rule packs, and the report says `template_not_requested`.
+    """
     digest = snapshot_digest(state)
     try:
-        outcome = audit_state(state, snapshot_digest=digest, schema=schema, bundles=bundles)
+        outcome = audit_state(
+            state,
+            snapshot_digest=digest,
+            schema=schema,
+            bundles=bundles,
+            templates=templates,
+            template_reference=template_reference,
+        )
     except Exception as exc:  # AuditRunError / BundleError / PlanError / SchemaError / …
         return _failed(state, f"audit refused: {exc}")
 
@@ -119,6 +133,7 @@ def _failed(state: dict, reason: str) -> dict:
 
 def _trail(state: dict, report: dict, digest: str, emit_entries: list[dict]) -> list[dict]:
     """One receipt for the audit itself, then one `emit` entry per finding (ids allocated once each)."""
+    template = report.get("template") or {}
     receipt = record(
         state,
         agent=AUDIT_AGENT,
@@ -131,6 +146,9 @@ def _trail(state: dict, report: dict, digest: str, emit_entries: list[dict]) -> 
             "assessed": report["coverage"]["assessed"],
             "snapshot_digest": digest,
             "model_calls": 0,
+            "template_id": template.get("template_id"),
+            "template_version": template.get("version"),
+            "template_reason": template.get("reason"),
         },
     )["trail"]
     # Allocate the emit ids against the receipt, or the two calls would hand out the same numbers.

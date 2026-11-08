@@ -130,6 +130,27 @@ export interface AuditFinding {
   message: string;
 }
 
+/** `verification.audit.template` — which customer template judged this document (design D20). */
+export interface TemplateBaseline {
+  requested: boolean;
+  template_id: string | null;
+  version: string | null;
+  content_sha256: string | null;
+  synthetic: boolean | null;
+  counterparty: string | null;
+  document_types: string[];
+  resolved_from: {
+    document_type: string | null;
+    counterparty_field: string | null;
+    counterparty_value: string | null;
+  } | null;
+  policy_packs: Array<{ pack_id: string; version: string; owner?: string | null }>;
+  conflicts: string[];
+  candidate_templates: Array<{ template_id: string; version: string }>;
+  reason: string | null;
+  reason_codes: string[];
+}
+
 /** `verification.audit` — the report baseline the panel quotes from. */
 export interface AuditReport {
   planned: number;
@@ -145,6 +166,7 @@ export interface AuditReport {
   bundle_versions: Record<string, string>;
   engine_version: string;
   findings: AuditFinding[];
+  template?: TemplateBaseline;
 }
 
 export interface VerificationReport {

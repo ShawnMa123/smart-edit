@@ -268,7 +268,7 @@ counterparty: {name: Adidas AG, match: exact_normalized, field: beneficiary_name
 fields:
   - key: currency                # already in fields.yaml: expectation only
     allowed_values: [USD]        # "the settlement currency MUST be USD"
-    gate_type: hard_block
+    gate_type: advisory          # the bank pack already gates `currency`; re-gating harder = a conflict
   - key: origin_country          # not in fields.yaml → read from extra_fields
     type: country
     allowed_values: [VN, TH]     # "the origin country MUST be one of these"
@@ -361,8 +361,9 @@ cannot override a version number. Client-supplied version declarations are ignor
 
 1. same `rule_id` at two versions (exists today);
 2. same `(field_id, category)` gated differently by different bundles (exists today);
-3. **new**: a template expectation contradicting a policy pack's declaration (template says `hard_block`,
-   customer pack says `advisory`), or a mandatory pack missing.
+3. **new**: a template expectation contradicting a policy pack's declaration — a pack that gates the
+   field **only** at a different `gate_type` than the template (a pack carrying several levels for that
+   field is not a disagreement: it already covers the stricter reading) — or a mandatory pack missing.
 
 Any of the three: affected units → `unable_to_assess` with `policy_conflict` / `missing_policy_pack`, the
 report gains `policy_conflict` in `reasons`, and the gate takes its existing `rule_conflict` path →

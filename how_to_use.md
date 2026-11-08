@@ -83,7 +83,53 @@ POST /api/runs/{thread_id}/stages/audit         ← 规范审计（前置已完�
 + `Rule audit did not run`，**且没有任何缺失字段清单**——那些空字段是占位符，不是这份文档的缺陷。
 （前端在 `extract` 未成功时**不会**发起 `/stages/audit`，避免拿占位符审出假问题。）
 
-## 5. 不开浏览器也能验证同一条链路
+## 5. 按客户模板审（模板驱动审计）
+
+审计默认只按"基础字段字典 + 银行规则包"跑（51 个单元）。**模板驱动是显式请求的**：你要审的是"和阿迪达斯的
+那份保函"，就点名模板；系统不会因为目录里有模板就擅自套用。
+
+```bash
+# 引擎本体：模板命中的场景
+.venv/bin/python scripts/audit_demo.py      # 看 [template matched] 与 [two templates match] 两段
+
+# 规则包 + 模板体检（字段可评性、条款能否在模板正文里定位、每条期望能否产出 pass/finding/needs_input）
+.venv/bin/python -m app.rules.doctor
+```
+
+HTTP 上点名模板（`?template=<id>` 只会**缩小**候选，永远不能指定未发布版本或改版本号）：
+
+```bash
+curl -s -X POST "localhost:8000/runs/$TID/stages/audit?template=adidas-guarantee" | python3 -m json.tool | head -40
+```
+
+模板命中时（实测，`app/templates/adidas-guarantee.yaml`）：
+
+| 项 | 实测值 |
+|---|---|
+| 计划单元 | **58** = 39 基础字段 + `origin_country` 类型单元 + 6 规则 + 6 证据 + **6 模板单元**（3 字段期望 + 2 条款 + 1 声明） |
+| 结论 | `no_findings`，`complete`，覆盖率 **0.69**（40 项已评估） |
+| 模板基线 | `verification.audit.template`：`adidas-guarantee` v1.0.0、`synthetic: true`、`resolved_from.beneficiary_name = Adidas AG`、`policy_packs: guarantee-core v1.0.0`、`conflicts: []` |
+
+模板没命中（文档对手方不是 Adidas）或同时命中两份时，**不猜**：
+
+| 情形 | 结果 |
+|---|---|
+| 0 份匹配 | 计划 52（多一个 `TEMPLATE:resolution`），`unable_to_assess` + `no_applicable_template`，闸门不放行 |
+| ≥2 份匹配 | `unable_to_assess` + `ambiguous_template`，报告列出候选 `{template_id, version}` |
+
+三种条款判断必须分清（这是 AUD-08 的要点）：
+
+| 声明 | 行为 |
+|---|---|
+| `required` | 文档里找不到该条款 → **finding** |
+| `controlled` | 规范化后仍与受控文本不一致 → **finding**（绝不说"语义等价"） |
+| `optional` | 缺失 → `not_applicable`，不是缺陷 |
+| `semantic_equivalent` | **恒 `unable_to_assess`** + `semantic_equivalence_not_implemented`：本构建不接模型，不靠关键词假装判断 |
+
+模板字段（如 `origin_country`）不在 `fields.yaml` 里，它从 `extra_fields` 读：**抽不到就是"没读到"
+（`needs_input`），不是"文档缺值"**。
+
+## 6. 不开浏览器也能验证同一条链路
 
 ```bash
 # 1) 引擎本体（无 HTTP、无模型）
@@ -106,7 +152,7 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
 .venv/bin/python -m pytest -q && npm --prefix web run test && npm --prefix web run typecheck
 ```
 
-## 6. 排查表
+## 7. 排查表
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
@@ -120,7 +166,7 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
 两个 digest 不要混：面板底部的 `server digest` 是后端对"文件＋字段"做的规范化哈希，左侧快照的
 digest 是浏览器对纯文本做的 SHA-256，**算法不同**，代码里也刻意不比较它们。
 
-## 7. 想再进一步
+## 8. 想再进一步
 
 - 换真实文档：不设 `SMART_EDIT_LLM` 走诚实路径；要真抽取需接 provider（`openai:` 仍是保留值）。
 - 加规则：改 `app/rules/bundles/guarantee.yaml`，先 `python -m app.rules.doctor` 过门禁（每条规则必须有

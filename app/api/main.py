@@ -139,7 +139,12 @@ def create_app(
         return JSONResponse(status_code=201, content=to_envelope(state))
 
     @app.post("/runs/{thread_id}/stages/{stage}")
-    async def trigger_stage(thread_id: str, stage: str) -> dict:
+    async def trigger_stage(thread_id: str, stage: str, template: str | None = None) -> dict:
+        """Run a stage chain. `?template=<id>` asks for template-driven audit (design D18).
+
+        The query parameter can only *narrow* which published template applies; it can never select a
+        version or an unpublished pack.
+        """
         store_: RunStore = app.state.store
         state = store_.get(thread_id)
 
@@ -159,7 +164,12 @@ def create_app(
 
         async with store_.lock(thread_id):
             try:
-                execute_chain(state, list(plan["chain"]), llm=app.state.llm)
+                execute_chain(
+                    state,
+                    list(plan["chain"]),
+                    llm=app.state.llm,
+                    template_reference={"template_id": template} if template else None,
+                )
             except UnknownStage as exc:
                 raise ApiFailure(409, "unknown_stage", str(exc)) from exc
 

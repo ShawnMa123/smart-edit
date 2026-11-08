@@ -30,6 +30,13 @@ npm --prefix web run dev        # http://localhost:5173
 `POST /api/runs/{id}/stages/audit`. The right pane renders the field table (normalization) and the rule
 audit block (`verification.checks`, `verification.audit`, `gate`) from that last envelope.
 
+Template-driven audit is **opt-in**: append `?template=<template_id>` to the audit call and the envelope
+gains `verification.audit.template` (id / version / `content_sha256` / `synthetic` / `resolved_from` /
+`policy_packs` / `conflicts`). Without it the audit runs on the base schema and the published rule packs,
+and the baseline says `template_not_requested` — never "no template, therefore clean". The panel shows
+the template block once the frontend is wired to the query parameter; today `how_to_use.md` §5 exercises
+it with `curl` and `scripts/audit_demo.py`.
+
 The full click-by-click walkthrough, with the numbers to expect, lives in `../how_to_use.md`.
 
 Run the backend **without** `SMART_EDIT_LLM` to see the honesty path: `extract` fails, the panel says the
@@ -48,9 +55,58 @@ VITE_E2E=1 VITE_API_BASE=http://127.0.0.1:8010 \
   npm --prefix web run test -- src/e2e.audit.test.ts
 ```
 
-## Troubleshooting
+## UI end-to-end (Playwright)
 
-| Symptom | Cause | Fix |
+`e2e/` drives a real browser against a real backend:
+
+```bash
+npm --prefix web run e2e                       # all projects
+npm --prefix web run e2e:headed                # watch the desktop project run
+npm --prefix web run e2e:report                # open the HTML report after a CI run
+npm --prefix web e2e -- --project=honesty      # only the no-provider path
+```
+
+`playwright.config.ts` starts four servers itself, so no manual setup is needed — but **kill leftovers
+first**, they are the number one cause of fake failures:
+
+```bash
+for p in 8000 8010 5173 5174; do lsof -nP -iTCP:$p -sTCP:LISTEN -t | xargs -r kill -9; done
+```
+
+| Project | Backend | Frontend | Viewport | Covers |
+|---|---|---|---|---|
+| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, unimplemented tabs, three-pane layout |
+| `honesty` | `:8010` with `SMART_EDIT_LLM=''` | `:5174` (`VITE_PROXY_TARGET`) | 1440×900 | "checks did not run", and **no** `/stages/audit` request |
+| `narrow` | `:8000` | `:5173` | iPhone 13 | one pane + tabs below 1366px, audit still reachable |
+
+Two things worth knowing:
+
+- The desktop project must be **≥1366px** — Playwright's default 1280×720 is the narrow layout in this
+  app (`useViewport.ts`).
+- The second vite instance exists because `app/api/main.py` has **no CORS middleware**; the browser can
+  only reach `:8010` through a dev proxy, hence `VITE_PROXY_TARGET` in `vite.config.ts`.
+
+Assertions stay on the data, not the pixels: `data-testid` hooks in `AuditPanel` / `EditorColumn`, stage
+rows carrying `data-stage`/`data-status`, gate carrying `data-decision`. Nothing snapshots the page —
+copy changes weekly, and a test that breaks on wording teaches the team to delete tests.
+
+All three checks in one command (what CI runs):
+
+```bash
+npm --prefix web run verify   # typecheck → vitest → playwright
+```
+
+Browser resolution — **nothing is ever downloaded** if you set one of these (needed on a restricted
+intranet):
+
+| Env | Uses |
+|---|---|
+| `PW_CHANNEL=chrome` | the installed Google Chrome (CI default) |
+| `PW_EXECUTABLE_PATH=/path/to/chrome` | a pinned Chrome/Chromium binary baked into the image |
+| `PW_VIDEO=1` | additionally records video (requires `npx playwright install ffmpeg`) |
+
+Without either variable Playwright looks for its own bundled build, which needs a one-off
+`npx playwright install chromium` (~200 MB) — skip that on a locked-down network.
 |---|---|---|
 | Audit panel says `HTTP_500 … backend is not running` | The dev proxy answered because nothing listens on `:8000` | Start uvicorn (see above). The vite log prints `http proxy error … ECONNREFUSED 127.0.0.1:8000` |
 | Audit panel says `Field checks did not run` | Backend started without `SMART_EDIT_LLM` — `extract` failed by design | Restart the backend with the fixture provider, or accept the honest path |

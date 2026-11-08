@@ -25,6 +25,8 @@ export function App() {
   const [currentDigest, setCurrentDigest] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [audit, dispatch] = useReducer(auditReducer, initialAuditState);
+  /** Which published template to audit against; empty means "rule bundle only" (design D18). */
+  const [templateId, setTemplateId] = useState('');
 
   // Keep the "current" digest in step with the editor, so staleness is instant on the next keystroke.
   useEffect(() => {
@@ -83,7 +85,9 @@ export function App() {
       // reports `done` while every field is a placeholder, so the guard is `extract` **and** `normalize`.
       const normalized = await triggerStage(created.thread_id, 'normalize');
       const report = fieldChecksRan(normalized)
-        ? await triggerStage(created.thread_id, 'audit')
+        ? await triggerStage(created.thread_id, 'audit', {
+            template: templateId.trim() || undefined,
+          })
         : normalized;
       dispatch({ type: 'succeed', envelope: report, at: Date.now() });
     } catch (error) {
@@ -123,6 +127,8 @@ export function App() {
         currentDigest={currentDigest}
         onRun={() => void handleRunAudit()}
         onStopWaiting={handleStopWaiting}
+        templateId={templateId}
+        onTemplateChange={setTemplateId}
         now={now}
       />
     ),

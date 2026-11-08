@@ -14,6 +14,8 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** Injected in tests; defaults to the global fetch. */
   fetchImpl?: typeof fetch;
+  /** Template-driven audit: narrows which published template applies (`?template=`). */
+  template?: string;
 }
 
 const isAbortError = (error: unknown): boolean =>
@@ -66,14 +68,20 @@ export function createRun(text: string, options: RequestOptions = {}): Promise<R
   );
 }
 
-/** Trigger a stage chain (`parse` / `extract` / `normalize` / `audit`). */
+/** Trigger a stage chain (`parse` / `extract` / `normalize` / `audit`).
+ *
+ * `options.template` asks for template-driven audit; it can only narrow which published template
+ * applies, never select a version (design D18).
+ */
 export function triggerStage(
   threadId: string,
   stage: string,
   options: RequestOptions = {},
 ): Promise<RunEnvelope> {
+  const template = options.template?.trim();
+  const query = template ? `?template=${encodeURIComponent(template)}` : '';
   return request(
-    `/runs/${encodeURIComponent(threadId)}/stages/${encodeURIComponent(stage)}`,
+    `/runs/${encodeURIComponent(threadId)}/stages/${encodeURIComponent(stage)}${query}`,
     { method: 'POST' },
     options,
   );

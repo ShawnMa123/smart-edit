@@ -90,6 +90,75 @@ describe.skipIf(!enabled)('end-to-end audit over HTTP', () => {
   });
 });
 
+const templateEnabled = import.meta.env.VITE_E2E_TEMPLATE === '1';
+
+/**
+ * The fixture provider pins `beneficiary_name` to "Beta Construction Ltd", so this document cannot match
+ * the Adidas pack: over HTTP the honest outcome is the *refusal*, which is exactly what must be proved
+ * end to end ("requested but not resolvable" must never read as a clean audit). The matched path is
+ * covered by `tests/test_template_integration.py` and the demo script.
+ */
+const TEMPLATE_DOCUMENT = `${DOCUMENT}Origin Country: VN
+Payment shall be made in USD within 30 days of presentation.
+This guarantee is governed by the laws of England and Wales.
+We confirm the funds are from lawful sources.
+`;
+
+describe.skipIf(!templateEnabled)('template-driven audit over HTTP', () => {
+  it('15.2 requesting a template that does not match is loud, not silently ignored', async () => {
+    const snapshot = await createSnapshot(TEMPLATE_DOCUMENT, null);
+    const created = await createRun(snapshot.text);
+    const normalized = await triggerStage(created.thread_id, 'normalize');
+    const report = await triggerStage(created.thread_id, 'audit', {
+      template: 'adidas-guarantee',
+    });
+    const view = buildAuditView(report, snapshot, snapshot.digest);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      'Template path:',
+      view.audit.template.label,
+      '| reason:',
+      view.audit.template.reason,
+      '| units:',
+      view.audit.template.units,
+      '| planned:',
+      view.audit.planned,
+      '| outcome:',
+      view.audit.outcome,
+    );
+
+    expect(fieldChecksRan(normalized)).toBe(true);
+    expect(view.audit.template.requested).toBe(true);
+    expect(view.audit.template.templateId).toBeNull();
+    expect(view.audit.template.reason).toBe('no_applicable_template');
+    expect(view.audit.template.units).toBe(1);
+    expect(view.audit.planned).toBe(52);
+    expect(view.audit.outcome).toBe('unable_to_assess');
+  });
+
+  it('15.2 an unknown reference cannot invent a template', async () => {
+    const snapshot = await createSnapshot(TEMPLATE_DOCUMENT, null);
+    const created = await createRun(snapshot.text);
+    await triggerStage(created.thread_id, 'normalize');
+    const report = await triggerStage(created.thread_id, 'audit', {
+      template: 'no-such-template',
+    });
+    const view = buildAuditView(report, snapshot, snapshot.digest);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      'Unknown template reference:',
+      view.audit.template.reason,
+      '| outcome:',
+      view.audit.outcome,
+    );
+
+    expect(view.audit.template.templateId).toBeNull();
+    expect(view.audit.template.reason).toBe('no_applicable_template');
+  });
+});
+
 const honestyEnabled = import.meta.env.VITE_E2E_HONESTY === '1';
 
 describe.skipIf(!honestyEnabled)('end-to-end honesty path over HTTP', () => {

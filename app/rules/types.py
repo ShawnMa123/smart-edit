@@ -25,7 +25,7 @@ UNIT_STATUSES = (PASS, FINDING, NOT_APPLICABLE, NEEDS_INPUT, UNABLE_TO_ASSESS, F
 SETTLED_STATUSES = (PASS, FINDING, NOT_APPLICABLE)
 
 Method = Literal["deterministic", "semantic"]
-Family = Literal["schema", "rule", "evidence"]
+Family = Literal["schema", "rule", "evidence", "template"]
 
 
 class Tri(Enum):

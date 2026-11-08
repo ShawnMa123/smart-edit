@@ -18,15 +18,24 @@ from __future__ import annotations
 import argparse
 import json
 
-from app.audit.planner import PlanError, build_plan, units_by_family
 from app.audit.bind import ABSENT, CONFIRMED, UNCONFIRMED, AuditValue
+from app.audit.planner import PlanError, build_plan, units_by_family
+from app.audit.resolve import resolve_policy
 from app.rules.bundles import BundleError, find_conflicts, load_bundles, validate_against_schema
 from app.rules.engine import evaluate_rule
 from app.rules.schema import SchemaError, load_schema
+from app.rules.templates import (
+    TemplateError,
+    compile_expectations,
+    load_templates,
+    merge_schema,
+)
 from app.rules.types import ENGINE_VERSION
 
 REQUIRED_VECTOR_STATUSES = ("pass", "finding", "needs_input")
 _FAILED = "failed"
+# A value that is not in any `allowed_values` list, used to prove an expectation *can* fail.
+_PROBE_FAILING_VALUE = "ZZ-NOT-ALLOWED"
 
 
 def _values(fields: dict) -> dict[str, AuditValue]:
@@ -118,7 +127,10 @@ def inspect(*, schema=None, bundles=None) -> dict:
                 "schema": len(units_by_family(units, "schema")),
                 "rule": len(units_by_family(units, "rule")),
                 "evidence": len(units_by_family(units, "evidence")),
+                "template": len(units_by_family(units, "template")),
             }
+
+    templates = inspect_templates(schema, bundles, problems)
 
     return {
         "engine_version": ENGINE_VERSION,
@@ -133,11 +145,106 @@ def inspect(*, schema=None, bundles=None) -> dict:
             }
             for bundle in bundles
         ],
+        "templates": templates,
         "vectors": vectors,
         "plan": plan,
         "problems": problems,
         "healthy": not problems,
     }
+
+
+def _demonstrable_states(rule: dict, expectation, schema) -> set[str]:
+    """Prove an expectation can produce pass, finding **and** needs_input (the rule-vector gate, compiled).
+
+    A template whose expectation can only ever pass is a green light with nothing behind it, so the same
+    bar the rule bundles meet applies here.
+    """
+    context = {"schema": schema}
+    condition = expectation.required_when
+    base: dict[str, AuditValue] = {}
+    if condition:
+        base[str(condition["field_id"])] = AuditValue(
+            str(condition["field_id"]), CONFIRMED, str(condition.get("equals"))
+        )
+    passing_value = expectation.allowed_values[0] if expectation.allowed_values else "probe-value"
+    probes = [
+        {**base, expectation.field_id: AuditValue(expectation.field_id, CONFIRMED, passing_value)},
+        {
+            **base,
+            expectation.field_id: AuditValue(expectation.field_id, CONFIRMED, _PROBE_FAILING_VALUE),
+        },
+        {**base, expectation.field_id: AuditValue(expectation.field_id, UNCONFIRMED, passing_value)},
+        # Absence is the fourth probe: a *required* expectation can only show a finding this way
+        # (`exists` on an absent field), and `allowed_values` simply reports "unknown" for it.
+        {**base, expectation.field_id: AuditValue(expectation.field_id, ABSENT)},
+    ]
+    return {evaluate_rule(rule, probe, context).status for probe in probes}
+
+
+def inspect_templates(schema, bundles: list, problems: list[str]) -> list[dict]:
+    """Templates: field evaluability, clause locatability, demonstrable states, conflicts (task 14.1)."""
+    try:
+        packs = load_templates()
+    except TemplateError as exc:
+        problems.append(f"template could not be loaded: {exc}")
+        return []
+
+    entries: list[dict] = []
+    for pack in packs:
+        entry: dict = {
+            "template_id": pack.template_id,
+            "version": pack.version,
+            "published": pack.published,
+            "synthetic": pack.synthetic,
+            "sha256": pack.content_sha256,
+            "fields": len(pack.fields),
+            "clauses": len(pack.clauses),
+            "declarations": len(pack.declarations),
+            "states": {},
+            "conflicts": 0,
+            "plan": 0,
+        }
+        try:
+            effective = merge_schema(schema, [pack])
+            rules = compile_expectations(pack, effective)
+        except TemplateError as exc:
+            problems.append(str(exc))
+            entries.append(entry)
+            continue
+
+        for rule, expectation in zip(rules, pack.fields):
+            states = _demonstrable_states(rule, expectation, effective)
+            entry["states"][expectation.field_id] = sorted(states)
+            missing = [state for state in REQUIRED_VECTOR_STATUSES if state not in states]
+            if missing:
+                problems.append(
+                    f"{pack.template_id}/{expectation.field_id}: no probe producing {missing}"
+                )
+
+        if pack.clauses and not pack.body:
+            problems.append(
+                f"{pack.template_id}: declares clauses but no `body` to verify them against"
+            )
+        for clause in pack.clauses:
+            if pack.body is None:
+                break
+            from app.parsing.normalize import normalize_ws
+
+            if normalize_ws(clause.text) not in normalize_ws(pack.body):
+                problems.append(
+                    f"{pack.template_id}/{clause.clause_id}: text is not locatable in the template body"
+                )
+
+        policy = resolve_policy(pack, bundles)
+        entry["conflicts"] = len(policy.conflicts)
+        problems.extend(f"{pack.template_id}: conflict: {conflict}" for conflict in policy.conflicts)
+
+        try:
+            entry["plan"] = len(build_plan(effective, bundles, templates=[pack]))
+        except PlanError as exc:
+            problems.append(f"{pack.template_id}: plan cannot be built: {exc}")
+        entries.append(entry)
+    return entries
 
 
 def render(report: dict) -> str:
@@ -150,11 +257,23 @@ def render(report: dict) -> str:
             f"  bundle {bundle['id']} v{bundle['version']} "
             f"published={bundle['published']} rules={bundle['rules']} sha256={bundle['sha256']}"
         )
+    for template in report.get("templates") or []:
+        lines.append(
+            f"  template {template['template_id']} v{template['version']} "
+            f"published={template['published']} synthetic={template['synthetic']} "
+            f"sha256={template['sha256']} "
+            f"fields={template['fields']} clauses={template['clauses']} "
+            f"declarations={template['declarations']} plan={template['plan']} "
+            f"conflicts={template['conflicts']}"
+        )
+        for field_id, states in (template.get("states") or {}).items():
+            lines.append(f"    field {field_id:<24} -> {', '.join(states) or '—'}")
     if report["plan"]:
         plan = report["plan"]
         lines.append(
             f"  plan: {plan['planned']} units "
-            f"(schema {plan['schema']} · rules {plan['rule']} · evidence {plan['evidence']})"
+            f"(schema {plan['schema']} · rules {plan['rule']} · evidence {plan['evidence']} · "
+            f"template {plan.get('template', 0)})"
         )
     if report["vectors"]:
         lines.append("  vectors:")

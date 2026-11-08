@@ -6,6 +6,7 @@ import {
   LABEL_FINDINGS,
   LABEL_NO_FINDINGS,
   LABEL_NOT_RUN,
+  LABEL_TEMPLATE_NOT_REQUESTED,
   SCOPE_NOT_RUN,
   SCOPE_RAN,
   buildAuditView,
@@ -14,6 +15,7 @@ import {
 import type { Snapshot } from './snapshot';
 import {
   NO_PROVIDER_REASON,
+  ambiguousTemplateEnvelope,
   auditedEnvelope,
   blockedAuditEnvelope,
   doneEnvelope,
@@ -21,6 +23,7 @@ import {
   findingsEnvelope,
   noProviderEnvelope,
   stage,
+  templatedEnvelope,
 } from './test/fixtures';
 
 const snapshot = (digest = 'digest-1'): Snapshot => ({
@@ -214,6 +217,43 @@ describe('the rule audit block (agent-audit `verification`)', () => {
     expect(model.audit.serverDigest).toBe('server-digest-0123456789');
     expect(model.digest).toBe('browser-digest');
     expect(model.stale).toBe(false);
+  });
+});
+
+describe('the template block (agent-audit `verification.audit.template`)', () => {
+  it('says no template was requested when the run never asked for one', () => {
+    const { template } = view(doneEnvelope()).audit;
+
+    expect(template.requested).toBe(false);
+    expect(template.templateId).toBeNull();
+    expect(template.label).toBe(LABEL_TEMPLATE_NOT_REQUESTED);
+    expect(template.units).toBe(0);
+  });
+
+  it('labels a synthetic pack as synthetic and counts the units it added', () => {
+    const { template } = view(templatedEnvelope()).audit;
+
+    expect(template.requested).toBe(true);
+    expect(template.templateId).toBe('adidas-guarantee');
+    expect(template.version).toBe('1.0.0');
+    expect(template.synthetic).toBe(true);
+    expect(template.label).toBe('Synthetic template · adidas-guarantee v1.0.0');
+    expect(template.units).toBe(2);
+    expect(template.counterparty).toBe('Adidas AG');
+    expect(template.policyPacks).toEqual(['guarantee-core v1.0.0']);
+    expect(template.conflicts).toEqual([]);
+  });
+
+  it('reports an unresolvable template with its reason and candidates', () => {
+    const { template } = view(ambiguousTemplateEnvelope()).audit;
+
+    expect(template.templateId).toBeNull();
+    expect(template.reason).toBe('ambiguous_template');
+    expect(template.candidates).toEqual([
+      { templateId: 'adidas-guarantee', version: '1.0.0' },
+      { templateId: 'adidas-guarantee-second', version: '2.0.0' },
+    ]);
+    expect(template.requested).toBe(true);
   });
 });
 

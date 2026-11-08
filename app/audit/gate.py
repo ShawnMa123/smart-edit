@@ -48,6 +48,7 @@ def evaluate_gate(
     findings: Sequence[dict] = (),
     dispositions: Sequence[dict] = (),
     now: datetime | None = None,
+    template_digest: str | None = None,
 ) -> dict:
     """Decide one operation from an audit report, its findings and the disposition history."""
     policy = policy_for(operation)
@@ -81,6 +82,15 @@ def evaluate_gate(
     if report.get("freshness") == "stale" or report.get("snapshot_digest") != candidate_digest:
         reasons.append("stale_report")
         return settle(INDETERMINATE)
+
+    # A template edit invalidates a report just as a document edit does (design D20). The digest is the
+    # template's own hash, so a changed controlled clause cannot be silently ignored.
+    if template_digest is not None:
+        recorded = (report.get("template") or {}).get("content_sha256")
+        if recorded != template_digest:
+            reasons.append("stale_report")
+            reasons.append("template_changed")
+            return settle(INDETERMINATE)
 
     if policy.unsupported_reason:
         reasons.append(policy.unsupported_reason)
@@ -172,12 +182,13 @@ def evaluate(
     *,
     dispositions: Sequence[dict] = (),
     now: datetime | None = None,
+    template_digest: str | None = None,
 ) -> dict:
     """Gate convenience used by the node layer.
 
-    The report is read from `state["verification"]["audit"]` — the slot task 3.3 fills once the
-    `VerificationReport.audit` field is signed off. Until then this returns `indeterminate`, which is the
-    correct answer for "no audit report exists yet".
+    The report is read from `state["verification"]["audit"]` — the slot task 3.3 fills. Pass
+    `template_digest` (the currently resolved template hash) to detect a template edit; without it the
+    gate can only judge document staleness.
     """
     if operation not in _known_operations():
         raise GateError(f"unknown operation {operation!r}")
@@ -193,6 +204,7 @@ def evaluate(
         findings=findings,
         dispositions=dispositions,
         now=now,
+        template_digest=template_digest,
     )
 
 

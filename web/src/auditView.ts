@@ -39,6 +39,8 @@ export type FieldChecks = 'ran' | 'did-not-run';
 
 /** `verification.audit.outcome` / gate vocabulary the panel renders. */
 export const LABEL_AUDIT_NOT_RUN = 'Rule audit did not run';
+export const LABEL_TEMPLATE_NOT_REQUESTED = 'No customer template was requested';
+export const LABEL_TEMPLATE_UNRESOLVED = 'Template could not be resolved';
 export const NOTE_GATE_NOT_ASKED =
   'No operation was asked about, so nothing is allowed: the gate answers one named operation at a time.';
 
@@ -85,6 +87,25 @@ export interface AuditSummary {
   /** Server-side digest — a *different* algorithm from the browser digest, so never compared. */
   serverDigest: string | null;
   gate: GateSummary;
+  template: TemplateSummary;
+}
+
+/** The customer template that judged this document, or why none did (design D20). */
+export interface TemplateSummary {
+  requested: boolean;
+  templateId: string | null;
+  version: string | null;
+  /** A demo pack must be labelled as such wherever it is shown. */
+  synthetic: boolean;
+  counterparty: string | null;
+  reason: string | null;
+  reasonCodes: string[];
+  conflicts: string[];
+  candidates: Array<{ templateId: string; version: string }>;
+  /** How many planned units came from the template (0 when none applied). */
+  units: number;
+  policyPacks: string[];
+  label: string;
 }
 
 export interface SourceLocation {
@@ -228,6 +249,44 @@ export function auditSummary(envelope: RunEnvelope): AuditSummary {
     bundleVersions: report?.bundle_versions ?? {},
     serverDigest: report?.snapshot_digest ?? null,
     gate: gateSummary(envelope),
+    template: templateSummary(envelope),
+  };
+}
+
+/**
+ * The template block. Three states are kept apart on purpose: requested and applied, requested and
+ * refused (with the reason), and never requested at all — the last one is not a clean audit, it is simply
+ * a rule-bundle audit, and the screen must say which.
+ */
+export function templateSummary(envelope: RunEnvelope): TemplateSummary {
+  const baseline = envelope.verification?.audit?.template ?? null;
+  const checks = envelope.verification?.checks ?? [];
+  const units = checks.filter((issue) => (issue.check_id ?? issue.checker).startsWith('TEMPLATE:')).length;
+  const requested = baseline?.requested ?? false;
+  const label = baseline?.template_id
+    ? `${baseline.synthetic ? 'Synthetic template' : 'Template'} · ${baseline.template_id} v${
+        baseline.version ?? '?'
+      }`
+    : requested
+      ? LABEL_TEMPLATE_UNRESOLVED
+      : LABEL_TEMPLATE_NOT_REQUESTED;
+
+  return {
+    requested,
+    templateId: baseline?.template_id ?? null,
+    version: baseline?.version ?? null,
+    synthetic: baseline?.synthetic ?? false,
+    counterparty: baseline?.counterparty ?? null,
+    reason: baseline?.reason ?? null,
+    reasonCodes: baseline?.reason_codes ?? [],
+    conflicts: baseline?.conflicts ?? [],
+    candidates: (baseline?.candidate_templates ?? []).map((candidate) => ({
+      templateId: candidate.template_id,
+      version: candidate.version,
+    })),
+    units,
+    policyPacks: (baseline?.policy_packs ?? []).map((pack) => `${pack.pack_id} v${pack.version}`),
+    label,
   };
 }
 

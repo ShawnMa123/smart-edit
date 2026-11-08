@@ -35,6 +35,12 @@ class RuleBundle:
     content_sha256: str
     document_types: tuple[str, ...]
     rules: tuple[dict, ...]
+    # Policy-pack metadata (design D19): needed to list the resolved policy in the report. Optional, so
+    # an existing bundle file keeps loading unchanged.
+    owner: str | None = None
+    valid_from: str | None = None
+    valid_to: str | None = None
+    source: str | None = None
 
 
 def _digest(payload: object) -> str:
@@ -85,6 +91,10 @@ def load_bundle(path: Path) -> RuleBundle:
         content_sha256=_digest({"version": payload["version"], "rules": list(rules)}),
         document_types=tuple(payload.get("document_types") or ("guarantee",)),
         rules=rules,
+        owner=payload.get("owner"),
+        valid_from=payload.get("valid_from"),
+        valid_to=payload.get("valid_to"),
+        source=payload.get("source") or path.name,
     )
 
 

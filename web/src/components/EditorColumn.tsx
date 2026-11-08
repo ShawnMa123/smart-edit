@@ -27,6 +27,7 @@ export function EditorColumn({ text, dirty, onChange, onCapture }: EditorColumnP
       <textarea
         className="editor-page"
         aria-label="Document text"
+        data-testid="editor-text"
         value={text}
         spellCheck={false}
         onChange={(event) => onChange(event.target.value)}

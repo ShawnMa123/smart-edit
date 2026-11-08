@@ -89,4 +89,22 @@ describe('triggerStage / getRun', () => {
     expect(calls[0].url).toBe(`${API_BASE}/runs/R-1`);
     expect(calls[0].init.method).toBe('GET');
   });
+
+  it('names a template when template-driven audit is asked for', async () => {
+    const calls: Call[] = [];
+    await triggerStage('R-1', 'audit', {
+      fetchImpl: record(calls, doneEnvelope()),
+      template: 'adidas-guarantee',
+    });
+
+    expect(calls[0].url).toBe(`${API_BASE}/runs/R-1/stages/audit?template=adidas-guarantee`);
+    expect(calls[0].init.method).toBe('POST');
+  });
+
+  it('sends no template parameter when none was named', async () => {
+    const calls: Call[] = [];
+    await triggerStage('R-1', 'audit', { fetchImpl: record(calls, doneEnvelope()), template: '   ' });
+
+    expect(calls[0].url).toBe(`${API_BASE}/runs/R-1/stages/audit`);
+  });
 });

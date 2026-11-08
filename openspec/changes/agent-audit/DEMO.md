@@ -166,6 +166,75 @@ Two contract guards run on every audit, so a producer cannot opt out:
 
 `REVIEW.zh-CN.md` decisions 1–3 still shape what the gate answers; the audit does not decide them.
 
+## Templates (groups 10-15, AUD-08/09/11)
+
+A customer template is part of what this group audits, not a separate change. Template-driven audit is
+**opt-in per run**: without a request the audit still plans exactly the 51-unit baseline.
+
+```bash
+.venv/bin/python -m app.rules.doctor        # rule packs **and** templates
+.venv/bin/python scripts/audit_demo.py      # [template matched] and [two templates match]
+
+# over HTTP — `?template=` may only narrow which published pack applies
+curl -s -X POST "localhost:8000/runs/$TID/stages/audit?template=adidas-guarantee" | python3 -m json.tool
+```
+
+| Item | Value |
+|---|---|
+| Template | `adidas-guarantee` v`1.0.0`, content hash `1e8077f8ce1c`, `synthetic: true` |
+| Its expectations | `currency ∈ [USD]` (advisory — the bank pack already gates it), `origin_country ∈ [VN, TH]` (hard block), `guarantee_amount` required when currency is USD |
+| Its clauses | 1 required + 1 controlled (both locatable in the pack's own `body`), 1 `lawful-source` declaration |
+
+### Measured outcomes
+
+| Scenario | Planned | Template units | Outcome | Gate `start_approval` |
+|---|---|---|---|---|
+| Template matched (Adidas counterparty, expectations satisfied) | **58** | 6 | `no_findings`, coverage **0.69** | — (not asked in the demo) |
+| Same document, two packs match | 52 | 1 (`TEMPLATE:resolution`) | `unable_to_assess` (`ambiguous_template`), candidates listed | `indeterminate` |
+| No template requested | **51** | 0 | `no_findings`, coverage 0.647 | unchanged |
+
+Plan arithmetic for a matched run: 39 base schema units + `origin_country`'s type unit + 6 rule units +
+6 evidence units + 6 template units (3 field expectations + 2 clauses + 1 declaration) = **58**.
+
+### What the template layer refuses to do
+
+- **Semantic clause equivalence is not implemented.** `requirement: semantic_equivalent` is
+  `unable_to_assess` with reason `semantic_equivalence_not_implemented` — never a keyword match, never
+  `pass`, never a finding. AUD-10 and this half of AUD-08 belong to a later change; AT-01 is untouched
+  because no model enters the audit path.
+- **A missing/ambiguous template is never resolved by guesswork.** Zero matches → `no_applicable_template`;
+  several → `ambiguous_template` with `{template_id, version}` candidates; a client reference can only
+  narrow, and an unpublished or unknown id is ignored (recorded as `reference_ignored`).
+- **A template edit invalidates a report.** `verification.audit.template.content_sha256` is compared by the
+  gate: a mismatch answers `stale_report` with reason `template_changed`. `snapshot_digest` stays
+  content-only, so a template edit can never masquerade as a document edit.
+- **Template fields are read from `extra_fields`.** `origin_country` is not in `fields.yaml`; when
+  normalization does not extract it the unit is `needs_input` ("not read"), not a missing-value finding.
+- **Policy conflicts stay visible.** A pack that gates a field *only* differently from the template (or a
+  mandatory pack that is missing) puts the conflict in `template.conflicts`, makes the affected unit
+  `unable_to_assess`, adds `policy_conflict` / `missing_policy_pack` to the report reasons, and blocks the
+  gate. Load order never decides.
+
+### Health check
+
+`python -m app.rules.doctor` now covers templates and keeps the same exit-code contract (`0`/`1`/`2`):
+
+```
+template adidas-guarantee v1.0.0 published=True synthetic=True sha256=1e8077f8ce1c
+         fields=3 clauses=2 declarations=1 plan=58 conflicts=0
+  field currency        -> finding, needs_input, pass
+  field origin_country  -> finding, needs_input, pass
+  field guarantee_amount -> finding, needs_input, pass
+```
+
+Each expectation must demonstrate `pass`, `finding` **and** `needs_input` — the same bar the rule vectors
+meet — so a template that can only ever pass fails the check.
+
+### Tests
+
+`330` Python tests and `109` frontend tests (plus 4 HTTP end-to-end cases) cover the slice; the
+no-template path is asserted to stay at exactly 51 units / 0.647 coverage.
+
 ## What this build deliberately does **not** do
 
 - **Semantic checks (AUD-10) are not implemented.** There is no model in the audit path, so no

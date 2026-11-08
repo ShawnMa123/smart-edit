@@ -9,6 +9,7 @@ import {
   SCOPE_RAN,
   buildAuditView,
   type AuditSummary,
+  type TemplateSummary,
 } from '../auditView';
 import {
   RESULT_TONE,
@@ -24,6 +25,9 @@ export interface AuditPanelProps {
   currentDigest: string;
   onRun: () => void;
   onStopWaiting: () => void;
+  /** Template-driven audit: the id the operator names (optional). */
+  templateId?: string;
+  onTemplateChange?: (templateId: string) => void;
   /** Injected clock so the elapsed timer is testable. */
   now?: number;
 }
@@ -63,7 +67,7 @@ function OutcomeChip({ checksRan, stale }: { checksRan: boolean; stale: boolean 
 function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
   if (!audit.ran) {
     return (
-      <div className="notice" role="status">
+      <div className="notice" role="status" data-testid="rule-audit" data-ran="false">
         <h3>{LABEL_AUDIT_NOT_RUN}</h3>
         <p className="tiny">
           This run carries no audit report, so the rule checks below were not performed. Nothing here
@@ -75,7 +79,7 @@ function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
 
   const gate = audit.gate;
   return (
-    <div>
+    <div data-testid="rule-audit" data-ran="true">
       <div className="row">
         <StatusChip token={auditOutcomeToken(audit.outcome)} />
         <span className="tiny muted">
@@ -108,7 +112,7 @@ function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
       </div>
 
       <h3 className="tiny muted">Gate</h3>
-      <div className="row">
+      <div className="row" data-testid="gate" data-decision={gate.decision} data-asked={String(gate.asked)}>
         <StatusChip token={gateDecisionToken(gate.decision)} />
         <span className="tiny muted">
           {gate.asked
@@ -157,11 +161,63 @@ function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
   );
 }
 
+function TemplateBlock({ template }: { template: TemplateSummary }) {
+  if (!template.templateId) {
+    return (
+      <div className="notice" role={template.requested ? 'alert' : 'status'}>
+        <h3>{template.label}</h3>
+        <p className="tiny">
+          {template.requested
+            ? 'Template-driven audit was requested but no single published pack applies'
+            : 'This audit ran against the base schema and the published rule packs'}
+          {template.reason && template.reason !== 'template_not_requested'
+            ? ` — reason: ${template.reason}.`
+            : '.'}
+          {template.candidates.length > 0
+            ? ` Candidates: ${template.candidates
+                .map((candidate) => `${candidate.templateId} v${candidate.version}`)
+                .join(', ')}.`
+            : ''}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="notice" role="status">
+      <h3>{template.label}</h3>
+      <p className="tiny">
+        {template.synthetic
+          ? 'Synthetic pack recorded for this POC — not a real customer contract. '
+          : ''}
+        {template.units} template unit{template.units === 1 ? '' : 's'}
+        {template.counterparty ? ` · counterparty ${template.counterparty}` : ''}
+        {template.policyPacks.length > 0 ? ` · packs ${template.policyPacks.join(', ')}` : ''}
+      </p>
+      {template.conflicts.length > 0 ? (
+        <ul className="tiny">
+          {template.conflicts.map((conflict) => (
+            <li key={conflict}>{conflict}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * The audit tab (tasks 7.1-7.6). Every claim comes from `auditView`, never from a JSX condition: an
  * incomplete run shows `blockedReason` and **no** field list.
  */
-export function AuditPanel({ state, currentDigest, onRun, onStopWaiting, now }: AuditPanelProps) {
+export function AuditPanel({
+  state,
+  currentDigest,
+  onRun,
+  onStopWaiting,
+  templateId = '',
+  onTemplateChange,
+  now,
+}: AuditPanelProps) {
   if (state.phase === 'idle') {
     return (
       <div>
@@ -170,7 +226,18 @@ export function AuditPanel({ state, currentDigest, onRun, onStopWaiting, now }: 
           The audit sends a frozen snapshot of the current text to the normalization stage and reports
           what those checks found.
         </p>
-        <button type="button" className="primary" onClick={onRun}>
+        <label className="tiny muted" htmlFor="template-id">
+          Customer template (optional — narrows which published pack applies)
+        </label>
+        <input
+          id="template-id"
+          type="text"
+          aria-label="Customer template"
+          placeholder="adidas-guarantee"
+          value={templateId}
+          onChange={(event) => onTemplateChange?.(event.target.value)}
+        />
+        <button type="button" className="primary" onClick={onRun} data-testid="audit-run">
           Run spec audit
         </button>
         <ScopeBlock />
@@ -211,7 +278,7 @@ export function AuditPanel({ state, currentDigest, onRun, onStopWaiting, now }: 
             {state.failure.message}
           </p>
         </div>
-        <button type="button" className="primary" onClick={onRun}>
+        <button type="button" className="primary" onClick={onRun} data-testid="audit-run-again">
           Run spec audit again
         </button>
       </div>
@@ -223,7 +290,7 @@ export function AuditPanel({ state, currentDigest, onRun, onStopWaiting, now }: 
   return (
     <div>
       {view.stale ? (
-        <div className="notice notice--warn" role="alert">
+        <div className="notice notice--warn" role="alert" data-testid="stale-alert">
           <h3>Report is stale</h3>
           <p className="tiny">
             This report is bound to snapshot <code>{view.digest.slice(0, 12)}</code> and the document
@@ -243,7 +310,12 @@ export function AuditPanel({ state, currentDigest, onRun, onStopWaiting, now }: 
         </div>
       ) : null}
 
-      <div className="row">
+      <div
+        className="row"
+        data-testid="audit-result"
+        data-field-checks={view.fieldChecks}
+        data-stale={String(view.stale)}
+      >
         <OutcomeChip checksRan={view.fieldChecks === 'ran'} stale={view.stale} />
         <span className="tiny muted">{view.resultLabel}</span>
       </div>
@@ -255,7 +327,7 @@ export function AuditPanel({ state, currentDigest, onRun, onStopWaiting, now }: 
       <h3 className="tiny muted">Stages</h3>
       <ul className="tiny">
         {view.stages.map((row) => (
-          <li key={row.stage}>
+          <li key={row.stage} data-testid="stage-row" data-stage={row.stage} data-status={row.status}>
             <StatusChip token={stageStatusToken(row.status)} /> <strong>{row.stage}</strong>{' '}
             {row.reason ? <span className="muted">— {row.reason}</span> : null}
           </li>
@@ -265,8 +337,10 @@ export function AuditPanel({ state, currentDigest, onRun, onStopWaiting, now }: 
       <h3 className="tiny muted">Rule audit</h3>
       <RuleAuditBlock audit={view.audit} />
 
+      {view.audit.ran ? <TemplateBlock template={view.audit.template} /> : null}
+
       {view.fieldChecks === 'did-not-run' ? (
-        <div className="notice notice--bad" role="alert">
+        <div className="notice notice--bad" role="alert" data-testid="not-run-alert">
           <h3>{LABEL_NOT_RUN}</h3>
           <p className="tiny">
             {view.blockedReason}. No field was checked, so no missing-field list is shown — the empty

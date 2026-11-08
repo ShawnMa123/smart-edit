@@ -10,6 +10,7 @@ import { explainError } from '../api/errors';
 import type { Snapshot } from '../snapshot';
 import {
   NO_PROVIDER_REASON,
+  ambiguousTemplateEnvelope,
   auditedEnvelope,
   blockedAuditEnvelope,
   doneEnvelope,
@@ -17,6 +18,7 @@ import {
   findingsEnvelope,
   noProviderEnvelope,
   stage,
+  templatedEnvelope,
 } from '../test/fixtures';
 
 const snapshot = (digest = 'digest-1'): Snapshot => ({
@@ -271,6 +273,53 @@ describe('rule audit block (agent-audit verification)', () => {
     expect(screen.getByText(/B-001/)).toBeTruthy();
     expect(screen.getByText(/gate: hard_block/)).toBeTruthy();
     expect(screen.getByText(/→ start_approval, formal_export, handoff/)).toBeTruthy();
+  });
+});
+
+describe('template block (agent-audit verification.audit.template)', () => {
+  const reportState = (envelopeValue: ReturnType<typeof auditedEnvelope>) => ({
+    phase: 'report' as const,
+    envelope: envelopeValue,
+    snapshot: snapshot(),
+    completedAt: 2_000,
+  });
+
+  it('offers an optional template field before the run', async () => {
+    const onTemplateChange = vi.fn();
+    render(
+      <AuditPanel
+        state={{ phase: 'idle' }}
+        currentDigest="digest-1"
+        onRun={vi.fn()}
+        onStopWaiting={vi.fn()}
+        templateId=""
+        onTemplateChange={onTemplateChange}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText('Customer template'), 'adidas');
+
+    expect(onTemplateChange).toHaveBeenCalled();
+  });
+
+  it('says a synthetic pack is synthetic and counts its units', () => {
+    renderPanel(reportState(templatedEnvelope()));
+
+    expect(screen.getByText('Synthetic template · adidas-guarantee v1.0.0')).toBeTruthy();
+    expect(screen.getByText(/not a real customer contract/)).toBeTruthy();
+    expect(screen.getByText(/2 template units/)).toBeTruthy();
+    expect(screen.getByText(/counterparty Adidas AG/)).toBeTruthy();
+  });
+
+  it('explains an ambiguous template instead of picking one', () => {
+    renderPanel(reportState(ambiguousTemplateEnvelope()));
+
+    expect(screen.getByText('Template could not be resolved')).toBeTruthy();
+    expect(screen.getByText(/reason: ambiguous_template/)).toBeTruthy();
+    expect(
+      screen.getByText(/adidas-guarantee v1\.0\.0, adidas-guarantee-second v2\.0\.0/),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Synthetic template/)).toBeNull();
   });
 });
 

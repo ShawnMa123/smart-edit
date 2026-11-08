@@ -69,12 +69,82 @@ def evidence_units() -> list[Unit]:
     ]
 
 
-def build_plan(schema: SchemaBundle, bundles: list[RuleBundle], *, include_evidence: bool = True) -> list[Unit]:
+# Check ids inside a template: `TEMPLATE:<template_id>:<kind>:<id>`, plus `TEMPLATE:resolution`
+# for the case where no template could be resolved. Stable and parseable back to their source.
+TEMPLATE_RESOLUTION_UNIT = "TEMPLATE:resolution"
+
+
+def template_units(template) -> list[Unit]:
+    """One unit per field expectation, clause and declaration (task 13.1)."""
+    units: list[Unit] = []
+    for expectation in template.fields:
+        units.append(
+            Unit(
+                check_id=f"TEMPLATE:{template.template_id}:field:{expectation.field_id}",
+                family="template",
+                rule_ref={
+                    "rule_id": f"TEMPLATE:{template.template_id}:{expectation.field_id}",
+                    "version": template.version,
+                },
+                field_id=expectation.field_id,
+                required=expectation.gate_type == "hard_block",
+                scope_key=template.template_id,
+            )
+        )
+    for clause in template.clauses:
+        units.append(
+            Unit(
+                check_id=f"TEMPLATE:{template.template_id}:clause:{clause.clause_id}",
+                family="template",
+                rule_ref={
+                    "rule_id": f"TEMPLATE:{template.template_id}:{clause.clause_id}",
+                    "version": template.version,
+                },
+                required=clause.gate_type == "hard_block",
+                scope_key=template.template_id,
+            )
+        )
+    for declaration in template.declarations:
+        units.append(
+            Unit(
+                check_id=f"TEMPLATE:{template.template_id}:declaration:{declaration.declaration_id}",
+                family="template",
+                rule_ref={
+                    "rule_id": f"TEMPLATE:{template.template_id}:{declaration.declaration_id}",
+                    "version": template.version,
+                },
+                required=declaration.gate_type == "hard_block",
+                scope_key=template.template_id,
+            )
+        )
+    return units
+
+
+def resolution_unit() -> Unit:
+    """The unit that carries "no template could be resolved", so the count still adds up."""
+    return Unit(check_id=TEMPLATE_RESOLUTION_UNIT, family="template")
+
+
+def build_plan(
+    schema: SchemaBundle,
+    bundles: list[RuleBundle],
+    *,
+    templates: list | tuple = (),
+    resolution_reason: str | None = None,
+    include_evidence: bool = True,
+) -> list[Unit]:
     """Return the planned units. Raises when the plan is empty or contains duplicate ids."""
     if not bundles:
         raise PlanError("no published rule bundle applies; refusing to report an empty check plan")
 
     units = schema_units(schema) + rule_units(bundles) + (evidence_units() if include_evidence else [])
+    for template in templates:
+        units.extend(template_units(template))
+    if not templates and resolution_reason:
+        # No template unit would be planned at all, and an empty template slice must never read as
+        # "nothing to check, therefore fine".
+        units.append(resolution_unit())
+
     seen: set[str] = set()
     for unit in units:
         if unit.check_id in seen:

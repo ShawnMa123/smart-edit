@@ -2,11 +2,13 @@
 
 import type {
   AuditFinding,
+  AuditIssue,
   AuditReport,
   FieldValue,
   GateDecision,
   RunEnvelope,
   StageReport,
+  TemplateBaseline,
   TrailEntry,
   VerificationReport,
 } from '../api/types';
@@ -220,6 +222,88 @@ export const verification = (over: Partial<VerificationReport> = {}): Verificati
   audit: auditReport(),
   ...over,
 });
+
+/** `verification.audit.template` — which pack judged the document (design D20). */
+export const templateBaseline = (over: Partial<TemplateBaseline> = {}): TemplateBaseline => ({
+  requested: true,
+  template_id: 'adidas-guarantee',
+  version: '1.0.0',
+  content_sha256: '1e8077f8ce1c',
+  synthetic: true,
+  counterparty: 'Adidas AG',
+  document_types: ['guarantee'],
+  resolved_from: {
+    document_type: 'guarantee',
+    counterparty_field: 'beneficiary_name',
+    counterparty_value: 'Adidas AG',
+  },
+  policy_packs: [{ pack_id: 'guarantee-core', version: '1.0.0', owner: null }],
+  conflicts: [],
+  candidate_templates: [{ template_id: 'adidas-guarantee', version: '1.0.0' }],
+  reason: null,
+  reason_codes: [],
+  ...over,
+});
+
+/** One template unit row, so the panel can count what the template added. */
+export const templateIssue = (fieldId: string): AuditIssue => ({
+  checker: `TEMPLATE:adidas-guarantee:field:${fieldId}`,
+  level: 'info',
+  finding_ids: [],
+  detail: 'pass',
+  location: fieldId,
+  check_id: `TEMPLATE:adidas-guarantee:field:${fieldId}`,
+  method: 'deterministic',
+});
+
+/** An audit that ran against the shipped synthetic pack. */
+export const templatedEnvelope = (over: Partial<RunEnvelope> = {}): RunEnvelope =>
+  auditedEnvelope({
+    verification: verification({
+      checks: [templateIssue('currency'), templateIssue('origin_country')],
+      audit: auditReport({
+        planned: 58,
+        coverage: { assessed: 35, not_applicable: 23, unsettled: 0, ratio: 0.603 },
+        template: templateBaseline(),
+      }),
+    }),
+    ...over,
+  });
+
+/** Two packs match: the audit refuses to choose and must say which ones it saw. */
+export const ambiguousTemplateEnvelope = (): RunEnvelope =>
+  auditedEnvelope({
+    verification: verification({
+      verdict: 'fail',
+      checks: [],
+      audit: auditReport({
+        planned: 52,
+        counts: {
+          pass: 33,
+          finding: 0,
+          not_applicable: 18,
+          needs_input: 0,
+          unable_to_assess: 1,
+          failed: 0,
+        },
+        coverage: { assessed: 33, not_applicable: 18, unsettled: 1, ratio: 0.635 },
+        outcome: 'unable_to_assess',
+        template: templateBaseline({
+          template_id: null,
+          version: null,
+          content_sha256: null,
+          synthetic: null,
+          counterparty: null,
+          policy_packs: [],
+          reason: 'ambiguous_template',
+          candidate_templates: [
+            { template_id: 'adidas-guarantee', version: '1.0.0' },
+            { template_id: 'adidas-guarantee-second', version: '2.0.0' },
+          ],
+        }),
+      }),
+    }),
+  });
 
 export const gateDecision = (over: Partial<GateDecision> = {}): GateDecision => ({
   decision: 'blocked',
