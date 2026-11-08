@@ -126,3 +126,6 @@ digest 是浏览器对纯文本做的 SHA-256，**算法不同**，代码里也�
 - 加规则：改 `app/rules/bundles/guarantee.yaml`，先 `python -m app.rules.doctor` 过门禁（每条规则必须有
   `pass` / `finding` / `needs_input` 向量）。
 - 让界面能问闸门：需要"询问某个受保护操作"的入口（`gate` 槽位已就绪，属 `console-api` / `editor-shell`）。
+
+
+想停服务：`lsof -nP -iTCP:8000,5173 -sTCP:LISTEN -t | xargs kill -9`
