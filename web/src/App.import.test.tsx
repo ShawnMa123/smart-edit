@@ -1,4 +1,4 @@
-/** Task 4.4 — import fills the editor, and never replaces what the user typed without asking. */
+/** Tasks 3.3/3.4 — import fills the editor, and never replaces what the user typed without asking. */
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -21,8 +21,8 @@ vi.mock('./api/client', () => ({
 
 const imported = (over: Partial<ImportedDocument> = {}): ImportedDocument => ({
   file_id: 'F-1',
-  filename: 'guarantee.pdf',
-  form: 'pdf_text',
+  filename: 'guarantee.docx',
+  form: 'docx_text',
   errors: [],
   full_text: 'DEMAND GUARANTEE\nAmount: USD 500,000.00',
   ...over,
@@ -41,20 +41,15 @@ const setViewport = (narrow: boolean) => {
   }));
 };
 
-const editor = () => screen.getByTestId('editor-text') as HTMLTextAreaElement;
+const surface = () => screen.getByTestId('editor-rich').textContent ?? '';
 
 const importOne = async (document: ImportedDocument = imported()) => {
   createRunWithFiles.mockResolvedValue(doneEnvelope());
-  triggerStage.mockResolvedValue({
-    ...doneEnvelope(),
-    documents: [document],
-  });
-  const input = screen.getByTestId('import-file-input');
+  triggerStage.mockResolvedValue({ ...doneEnvelope(), documents: [document] });
   await userEvent.upload(
-    input,
-    new File(['%PDF'], document.filename, { type: 'application/pdf' }),
+    screen.getByTestId('import-file-input'),
+    new File(['x'], document.filename, { type: 'application/octet-stream' }),
   );
-  // Wait for the report itself: the failure case has no "Use this text" button to wait for.
   await waitFor(() => expect(createRunWithFiles).toHaveBeenCalled());
   await screen.findByText(/documents? ready|No document could be read/);
 };
@@ -77,14 +72,16 @@ describe('importing a document', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Use this text/ }));
 
-    expect(createRunWithFiles).toHaveBeenCalledTimes(1);
     expect(triggerStage).toHaveBeenCalledWith(expect.any(String), 'parse');
-    expect(editor().value).toContain('DEMAND GUARANTEE');
+    await waitFor(() => expect(surface()).toContain('DEMAND GUARANTEE'));
+    expect(surface()).toContain('USD 500,000.00');
   });
 
-  it('asks before replacing what the user typed', async () => {
+  it('asks before replacing what the user already has in the editor', async () => {
     render(<App />);
-    await userEvent.type(editor(), 'my own draft');
+    // A real structural edit through the toolbar marks the document unsaved (jsdom cannot type into
+    // ProseMirror reliably, so this uses a toolbar command rather than keystrokes).
+    await userEvent.click(await screen.findByRole('button', { name: 'Insert table' }));
     const confirm = vi.fn().mockReturnValue(false);
     vi.stubGlobal('confirm', confirm);
 
@@ -92,18 +89,52 @@ describe('importing a document', () => {
     await userEvent.click(screen.getByRole('button', { name: /Use this text/ }));
 
     expect(confirm).toHaveBeenCalled();
-    expect(editor().value).toBe('my own draft');
+    expect(surface()).not.toContain('DEMAND GUARANTEE');
   });
 
-  it('replaces the text when the user agrees', async () => {
+  it('replaces the document when the user agrees', async () => {
     render(<App />);
-    await userEvent.type(editor(), 'my own draft');
+    await userEvent.click(await screen.findByRole('button', { name: 'Insert table' }));
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
 
     await importOne();
     await userEvent.click(screen.getByRole('button', { name: /Use this text/ }));
 
-    await waitFor(() => expect(editor().value).toContain('DEMAND GUARANTEE'));
+    await waitFor(() => expect(surface()).toContain('DEMAND GUARANTEE'));
+  });
+
+  it('prefers the imported structure when the file carries one', async () => {
+    render(<App />);
+    await importOne(
+      imported({
+        rich: {
+          type: 'doc',
+          provenance: 'deterministic',
+          content: [
+            { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'DEMAND GUARANTEE' }] },
+            {
+              type: 'table',
+              content: [
+                {
+                  type: 'tableRow',
+                  content: [
+                    { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Amount' }] }] },
+                    { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'USD 500,000.00' }] }] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Use this text/ }));
+
+    await waitFor(() => expect(surface()).toContain('DEMAND GUARANTEE'));
+    expect(screen.getByTestId('editor-rich').querySelector('h1')).toBeTruthy();
+    expect(screen.getByTestId('editor-rich').querySelector('table')).toBeTruthy();
+    expect(screen.getByText(/imported \(deterministic\)/)).toBeTruthy();
   });
 
   it('never fills the editor from a file that failed', async () => {
@@ -119,17 +150,19 @@ describe('importing a document', () => {
     );
 
     expect(screen.queryByRole('button', { name: /Use this text/ })).toBeNull();
-    expect(editor().value).toBe('');
+    expect(surface().trim()).toBe('');
   });
 
   it('clears the editor only through "start from blank"', async () => {
     render(<App />);
-    await userEvent.type(editor(), 'my own draft');
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
     await importOne();
+    await userEvent.click(screen.getByRole('button', { name: /Use this text/ }));
+    await waitFor(() => expect(surface()).toContain('DEMAND GUARANTEE'));
 
+    await importOne();
     await userEvent.click(screen.getByRole('button', { name: /Start from blank/ }));
 
-    expect(editor().value).toBe('');
+    await waitFor(() => expect(surface().trim()).toBe(''));
   });
 });

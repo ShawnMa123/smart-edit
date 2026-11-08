@@ -1,16 +1,18 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 
 import { ApiError } from './api/errors';
 import { createRun, createRunWithFiles, triggerStage } from './api/client';
 import type { ImportedDocument } from './api/types';
 import { auditReducer, initialAuditState } from './auditMachine';
 import { fieldChecksRan } from './auditView';
+import { richToPlainText } from './rich/plainText';
+import { plainTextToDocument, type RichDocument } from './rich/richDocument';
 import { createSnapshot, digestText } from './snapshot';
 import { versionStore, type VersionEntry } from './versionStore';
 import { AssistantPanel } from './components/AssistantPanel';
 import { DocumentActions } from './components/DocumentActions';
-import { EditorColumn } from './components/EditorColumn';
 import { ImportReport, initialImportState, type ImportState } from './components/ImportReport';
+import { RichEditor } from './components/RichEditor';
 import { VersionPanel } from './components/VersionPanel';
 import { useNarrowViewport } from './components/useViewport';
 
@@ -20,7 +22,9 @@ type PaneId = 'versions' | 'editor' | 'assistant';
 export function App() {
   const narrow = useNarrowViewport();
   const [pane, setPane] = useState<PaneId>('editor');
-  const [text, setText] = useState('');
+  /** The editor owns a rich document; everything downstream reads its projection (D2/D3). */
+  const [richDoc, setRichDoc] = useState<RichDocument>(() => plainTextToDocument(''));
+  const text = useMemo(() => richToPlainText(richDoc), [richDoc]);
   const [dirty, setDirty] = useState(false);
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
   const [versions, setVersions] = useState<VersionEntry[]>(() => versionStore.list(DOCUMENT_ID));
@@ -52,14 +56,20 @@ export function App() {
 
   const refreshVersions = () => setVersions(versionStore.list(DOCUMENT_ID));
 
-  const handleChange = (next: string) => {
-    setText(next);
-    setDirty(true);
+  /** Every edit arrives as a document; the projected text is derived, never typed twice. */
+  const handleDocumentChange = (next: RichDocument) => {
+    if (next === richDoc) return;
+    setRichDoc(next);
+    setDirty(richToPlainText(next) !== text);
   };
 
   const handleCapture = async () => {
     const snapshot = await createSnapshot(text, currentVersionId);
-    const version = versionStore.capture(DOCUMENT_ID, { digest: snapshot.digest, text });
+    const version = versionStore.capture(DOCUMENT_ID, {
+      digest: snapshot.digest,
+      text,
+      rich: richDoc,
+    });
     refreshVersions();
     setCurrentVersionId(version.id);
     setDirty(false);
@@ -68,7 +78,8 @@ export function App() {
   const handleRestore = (id: string) => {
     const restored = versionStore.restore(DOCUMENT_ID, id);
     if (restored === null) return;
-    setText(restored);
+    // Older entries have no rich document: they come back as paragraphs of the same text.
+    setRichDoc(versionStore.restoreRich(DOCUMENT_ID, id) ?? plainTextToDocument(restored));
     setCurrentVersionId(id);
     setDirty(true);
     setPane('editor');
@@ -100,23 +111,25 @@ export function App() {
   };
 
   /** Filling the editor is the only thing import does; user edits are never replaced silently. */
-  const replaceText = (next: string) => {
+  const replaceDocument = (next: RichDocument) => {
     const hasUserText = text.trim().length > 0 && dirty;
     if (hasUserText && !window.confirm('Replace the current editor content with the imported text?')) {
       return false;
     }
-    setText(next);
+    setRichDoc(next);
     setDirty(true);
     setPane('editor');
     return true;
   };
 
+  /** Imported structure wins; a document without `rich` degrades to paragraphs of its text. */
   const handleUseImported = (document: ImportedDocument) => {
-    if (replaceText(document.full_text)) setImportState(initialImportState);
+    const next = (document.rich as RichDocument | undefined) ?? plainTextToDocument(document.full_text);
+    if (replaceDocument(next)) setImportState(initialImportState);
   };
 
   const handleStartBlank = () => {
-    if (replaceText('')) setImportState(initialImportState);
+    if (replaceDocument(plainTextToDocument(''))) setImportState(initialImportState);
   };
 
   const handleRunAudit = async () => {
@@ -157,12 +170,7 @@ export function App() {
       />
     ),
     editor: (
-      <EditorColumn
-        text={text}
-        dirty={dirty}
-        onChange={handleChange}
-        onCapture={() => void handleCapture()}
-      />
+      <RichEditor document={richDoc} onChange={handleDocumentChange} dirty={dirty} />
     ),
     assistant: (
       <AssistantPanel

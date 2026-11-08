@@ -40,6 +40,9 @@ def to_envelope(state: dict) -> dict:
                 "form": doc.get("form"),
                 "errors": doc.get("errors") or [],
                 "full_text": doc.get("full_text") or "",
+                # Rich structure for the editor (`rich-text-editor` D2/D7): absent when the file produced
+                # no text, so a client falling back to `full_text` is the safe default.
+                "rich": doc.get("rich"),
             }
             for doc in state.get("docs") or []
         ],

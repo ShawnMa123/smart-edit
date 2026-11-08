@@ -79,11 +79,15 @@ def test_the_envelope_carries_the_imported_documents(api):
     assert before["documents"] == [], "an unparsed run must not fabricate text"
     assert len(after["documents"]) == 1
     document = after["documents"][0]
-    assert set(document) == {"file_id", "filename", "form", "errors", "full_text"}
+    assert set(document) == {"file_id", "filename", "form", "errors", "full_text", "rich"}
     assert document["form"] == "plain_text"
     assert document["errors"] == []
     assert document["full_text"].strip(), "the parsed text is what the editor shows"
     assert "blocks" not in document, "blocks stay server-side until a screen needs them"
+    # `rich-text-editor`: plain text has no structure to infer, so it degrades and says so.
+    assert document["rich"]["type"] == "doc"
+    assert document["rich"]["provenance"] == "fallback"
+    assert document["rich"]["content"], "a readable file still renders as paragraphs"
 
 
 def test_create_run_from_text(api):

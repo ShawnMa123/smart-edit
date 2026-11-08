@@ -16,6 +16,8 @@ import hashlib
 import os
 from pathlib import Path
 
+from app.parsing.rich_docx import RichDocError, document_to_rich as document_to_rich_docx
+from app.parsing.rich_pdf import RichPdfError, document_to_rich as document_to_rich_pdf
 from app.state import ParsedBlock, ParsedDoc, SourceFile
 
 PDF_MIME = "application/pdf"
@@ -272,6 +274,39 @@ def _text_block(file_id: str, text: str) -> ParsedBlock:
     }
 
 
+def _fallback_rich(blocks: list[ParsedBlock], full_text: str, reason: str) -> dict:
+    """Everything the deterministic/heuristic builders could not handle becomes plain paragraphs."""
+    content = (
+        [{"type": "paragraph", "content": [{"type": "text", "text": block["text"]}]} for block in blocks]
+        if blocks
+        else (
+            [{"type": "paragraph", "content": [{"type": "text", "text": full_text}]}]
+            if full_text.strip()
+            else []
+        )
+    )
+    return {
+        "type": "doc",
+        "content": content,
+        "provenance": "fallback",
+        "provenanceNote": reason,
+    }
+
+
+def _rich_for(path: str, form: str, blocks: list[ParsedBlock], full_text: str) -> dict:
+    """Rich structure for the editor (design D4/D5). Never fails an import: it degrades instead."""
+    try:
+        if form == "docx_text":
+            return document_to_rich_docx(path)
+        if form == "pdf_text":
+            return document_to_rich_pdf(path)
+    except (RichDocError, RichPdfError) as exc:
+        return _fallback_rich(blocks, full_text, f"{form}: {exc}")
+    except Exception as exc:  # a broken builder must not cost the user their text
+        return _fallback_rich(blocks, full_text, f"{form}: {type(exc).__name__}")
+    return _fallback_rich(blocks, full_text, f"{form}: no structural mapping in this build")
+
+
 def parse_file(src: SourceFile) -> ParsedDoc:
     """Parse a single file, **without raising**.
 
@@ -340,6 +375,10 @@ def parse_file(src: SourceFile) -> ParsedDoc:
     fingerprint = sha256_of(path)
     if fingerprint:
         doc["sha256"] = fingerprint
+    # Only when the file produced text: a failed file has nothing to render, and a rich structure for
+    # an empty document would look like a successfully read file.
+    if doc["full_text"].strip():
+        doc["rich"] = _rich_for(path, form, blocks, doc["full_text"])
     return doc
 
 

@@ -9,6 +9,8 @@
  * unavailable without `--localstorage-file`, which would otherwise make the store untestable.
  */
 
+import type { RichDocument } from './rich/richDocument';
+
 export interface VersionEntry {
   id: string;
   label: string;
@@ -16,12 +18,15 @@ export interface VersionEntry {
   createdAt: string;
   chars: number;
   text: string;
+  /** The rich document, when the version was captured from the editor (`rich-text-editor` D3). */
+  rich?: RichDocument;
 }
 
 export interface CaptureInput {
   digest: string;
   text: string;
   label?: string;
+  rich?: RichDocument;
 }
 
 export const MAX_VERSIONS = 20;
@@ -60,6 +65,8 @@ export interface VersionStore {
   list(documentId: string): VersionEntry[];
   get(documentId: string, id: string): VersionEntry | null;
   restore(documentId: string, id: string): string | null;
+  /** The rich document of a version, or `null` when it predates rich text. */
+  restoreRich(documentId: string, id: string): RichDocument | null;
   capture(documentId: string, input: CaptureInput, now?: Date): VersionEntry;
   clear(documentId: string): void;
 }
@@ -95,6 +102,11 @@ export function createVersionStore(storage: Storage = defaultStorage()): Version
       return read(documentId).find((entry) => entry.id === id)?.text ?? null;
     },
 
+    /** Restore the rich document of a version; `null` for entries captured before rich text existed. */
+    restoreRich(documentId, id) {
+      return read(documentId).find((entry) => entry.id === id)?.rich ?? null;
+    },
+
     capture(documentId, input, now = new Date()) {
       const entries = read(documentId);
       const version: VersionEntry = {
@@ -104,6 +116,7 @@ export function createVersionStore(storage: Storage = defaultStorage()): Version
         createdAt: now.toISOString(),
         chars: input.text.length,
         text: input.text,
+        ...(input.rich ? { rich: input.rich } : {}),
       };
       write(documentId, [version, ...entries].slice(0, MAX_VERSIONS));
       return version;

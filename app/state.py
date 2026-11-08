@@ -69,6 +69,9 @@ class ParsedDoc(TypedDict):
     full_text: str  # blocks concatenated in order, consumed directly by Agent 3
     errors: list[str]  # parse failure reasons; when non-empty this file takes no further part
     sha256: NotRequired[str | None]  # [SEMANTICS] used for the docs reuse check
+    # [SEMANTICS] `rich-text-editor` (5 Nov 2026): the same document as a renderable structure for the
+    # editor. Optional and client-only — the audit still reads `full_text` alone (design D2).
+    rich: NotRequired[dict]
 
 
 # --------------------------------------------------------------------------

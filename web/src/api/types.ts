@@ -1,5 +1,7 @@
 /** Contract types the workspace consumes — mirrors the envelope from `console-api`. */
 
+import type { RichDocument } from '../rich/richDocument';
+
 export interface SourceRef {
   file_id: string;
   page: number | null;
@@ -85,6 +87,11 @@ export interface ImportedDocument {
   form: string;
   errors: string[];
   full_text: string;
+  /**
+   * The same document as a renderable structure (`rich-text-editor` D2/D7). Optional: a run parsed by
+   * an older build has no `rich`, and the client then edits `full_text` as paragraphs.
+   */
+  rich?: RichDocument | null;
 }
 
 export interface RunEnvelope {

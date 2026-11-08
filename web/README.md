@@ -25,7 +25,22 @@ npm --prefix web install
 npm --prefix web run dev        # http://localhost:5173
 ```
 
-### Importing a file
+### Editing the document
+
+The centre pane is a **rich-text editor** (TipTap/ProseMirror), not a textarea: headings, bold/italic/
+underline, lists and tables are real, and imported structure is preserved. The audit still reads a plain
+text projection, so formatting cannot change a verdict:
+
+| Editor | Projected into the audit text |
+|---|---|
+| heading 1–3 | `#` / `##` / `###` + text |
+| paragraph | text (bold/italic/underline are dropped) |
+| bullet / numbered list | `- item` / `1. item` |
+| table | one line per row, cells joined with ` | ` |
+
+The projection lives in `src/rich/plainText.ts` and is covered by golden tests; formatting-only edits
+therefore leave the snapshot digest and the audit result unchanged. If the editor cannot start at all,
+`RichEditor` falls back to a textarea and says why — a blank pane is never the failure mode.
 
 `Import file` (header) uploads a PDF / DOCX / PNG / JPEG and fills the editor with the text the server
 read out of it: `POST /api/runs` (multipart) → `POST /api/runs/{id}/stages/parse` → read
