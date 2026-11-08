@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-edit/schemas/candidates.json",
+  "title": "Agent 1 extract output (candidate field batch)",
+  "description": "Structured-output contract for extract. MUST NOT contain page / bbox - position is located back in the source by the system.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["key", "raw_value", "span", "confidence"],
+    "properties": {
+      "key": {
+        "type": "string",
+        "description": "Field key; must come from fields.yaml (fields outside the dictionary are routed to extra_fields by normalize)"
+      },
+      "raw_value": {
+        "type": "string",
+        "description": "The raw value copied back by the model, not normalized; case and spelling must match the source"
+      },
+      "span": {
+        "type": "string",
+        "maxLength": 200,
+        "description": "Smallest locatable fragment; no field labels such as \"Applicant:\"; must be copied verbatim from the source"
+      },
+      "label": {
+        "type": ["string", "null"],
+        "description": "The field's label as written in the source, shown in the review console"
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Ranking within this stage only; MUST NOT be written into FieldValue (the contract has no such field)"
+      },
+      "doc_type": {
+        "type": ["string", "null"],
+        "description": "invoice / contract / bl / application_form …"
+      }
+    }
+  }
+}

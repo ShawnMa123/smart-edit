@@ -1,0 +1,55 @@
+{
+  "_readme": "Acceptance carrier for seam A -> C: Agent 3 only reads docs[].full_text and business_type. Assertions live in assert.py.",
+  "run_id": "seam-a-to-c",
+  "business_type": "guarantee",
+  "docs": [
+    {
+      "file_id": "F-1",
+      "filename": "guarantee.pdf",
+      "mime": "application/pdf",
+      "form": "pdf_text",
+      "blocks": [
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 90.0, 320.0, 104.0], "text": "保函编号：BG-2026-0001", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 120.0, 520.0, 150.0], "text": "本保函为见索即付独立保函，适用国际商会《见索即付保函统一规则》（URDG 758）。索赔须在到期日前以书面形式提交至开立银行。", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 160.0, 320.0, 174.0], "text": "开立日期：2026-03-12", "kind": "paragraph"}
+      ],
+      "full_text": "保函编号：BG-2026-0001\n本保函为见索即付独立保函，适用国际商会《见索即付保函统一规则》（URDG 758）。索赔须在到期日前以书面形式提交至开立银行。\n开立日期：2026-03-12",
+      "errors": [],
+      "sha256": "1a2b3c4d5e6f70819a2b3c4d5e6f70819a2b3c4d5e6f70819a2b3c4d5e6f7081"
+    }
+  ],
+  "fields": {
+    "guarantee_number": {
+      "key": "guarantee_number",
+      "value": "BG-2026-0001",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 90.0, 320.0, 104.0], "span": "BG-2026-0001", "form_label": null},
+      "normalized_from": "BG-2026-0001",
+      "label": "保函编号",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "issue_date": {
+      "key": "issue_date",
+      "value": "2026-03-12",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 160.0, 320.0, 174.0], "span": "2026-03-12", "form_label": null},
+      "normalized_from": "2026-03-12",
+      "label": "开立日期",
+      "doc_type": "application_form",
+      "notes": []
+    }
+  },
+  "trail": [
+    {"id": "agent1.parse#001", "agent": "agent1", "stage": "parse", "op": "read", "before": null, "after": "1 docs / 3 blocks", "ref": null, "model": null, "prompt_hash": null, "detail": {"failed": []}},
+    {"id": "agent1.normalize#001", "agent": "agent1", "stage": "normalize", "op": "pass", "before": "见索即付独立保函", "after": "guarantee", "ref": "F-1", "model": null, "prompt_hash": null, "detail": {"business_type": "guarantee", "evidence": "见索即付独立保函", "file_id": "F-1", "reason": "explicit_independence_clause"}}
+  ],
+  "stages": [
+    {"stage": "parse", "agent": "agent1", "status": "done", "reason": null, "produced": 1, "model_calls": 0},
+    {"stage": "normalize", "agent": "agent1", "status": "done", "reason": null, "produced": 2, "model_calls": 0}
+  ]
+}

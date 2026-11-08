@@ -641,3 +641,23 @@ tests/test_agent1_standalone.py                      # 三档独立触发
 | 1 | `MAX_SPAN_LEN = 200` 是否够用（长条款号、地址可能天然超长） | 超长即 `warn`，会拉低 `provenance_coverage` | A + C |
 | 2 | `required` 由 A 读取是否算违反"只执行 `stage=normalize`" | 若禁止，`missing` 占位无法产生 | A + B |
 | 3 | `business_type` 词表是否需要业务确认（`见索即付` 等强指示词） | 判错类型会让 Agent 2/3 走错分支 | 业务方 + A |
+
+## 15. 实施记录（写码时定下的、本文原先没写的决定）
+
+> 结论写在这里，别留在 PR 评论里。**每条都是"本文没写 = 未定义"的地方**，
+> 取最小可行解释，并在代码 docstring 里同步注明。
+
+| # | 问题 | 决定 | 位置 |
+|---|---|---|---|
+| 1 | `fields.yaml` 的**路径**本文没定 | `app/configs/fields.yaml`，可用环境变量 `SMART_EDIT_FIELDS_YAML` 覆盖 | `app/config.py` |
+| 2 | `locate_span` 在两个设计里签名不同 | 两个函数并存：`app/parsing/normalize.py::locate_span(full_text, span) -> bool`（契约签名）、`app/parsing/extract.py::locate_span(doc, span) -> (page, bbox)`（§6.4）；两者都只走 `normalize_ws` | 两文件 docstring |
+| 3 | `detect_business_type` 契约返回 `str`，但 §7.6 要求带 `evidence` + 留痕 | 契约签名保留；新增 `decide_business_type(docs) -> BusinessTypeDecision`（含 `evidence`/`reason`/`trail_entry`），契约函数转调它 | `app/parsing/normalize.py` |
+| 4 | `NormalizeResult.findings` 契约写 `list[Finding]`，但 `Finding.id` 只能由节点分配 | 实际返回**无 `id` 的草稿**，`build_fields` 不编号；编号由 `materialize_findings()` 完成 | `app/parsing/normalize.py` |
+| 5 | `extract` 的 `llm` 入参形态未定 | 接受"可调用对象"，返回 JSON 字符串 / list / `{"candidates": [...]}` 三种都可；测试注入桩 | `app/parsing/extract.py` |
+| 6 | `integer` 去单位后缀的触发条件（"仅当 `unit` 已声明"）与 `fields.yaml` 结构没有 `unit` 字段 | POC 的 `integer` 只有天数类字段，尾部字母后缀一律剥离；新增单位敏感字段前必须先扩展 `fields.yaml` | `_normalize_integer` |
+| 7 | `string` 的"名称类 vs 地址/条款类"无法从配置区分 | 显式列出 `FREEFORM_TEXT_KEYS = {"payment_terms"}`，其余 `string` 只去首尾空白 | `app/parsing/normalize.py` |
+| 8 | `pymupdf` 版本漂移 | `pymupdf>=2` 会拉入 `pymupdf-layout` / `onnxruntime`（POC 用不到），本地验证锁 `pymupdf<2`；`pyproject` 需按此收紧 | `pyproject.toml` |
+| 9 | `charset` 归属与 `agent-verify` spec 冲突 | 本文（task 1.3）把 `charset` 归 `stage.normalize`，`agent-verify/specs/business-verification/spec.md` 第 48 行把"字符集/长度"归 `stage.validate`；**当前按本文实现（A 只声明、不做语义判定）**，需 A + B 拍板后统一 | `app/configs/fields.yaml` |
+
+**仍未闭合（不在 A 单方能力内）**：tasks 1.6 / 2.5 / 6.5（与 B、C 的通知与对齐）、
+§11 验收（需 3 份真实样本 + 模型凭据 + `agent-audit` 的 `provenance_check`）。

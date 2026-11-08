@@ -1,0 +1,180 @@
+# Guarantee (保函) core field dictionary — the mapping basis for Agent 1.
+#
+# Every constraint must declare which stage owns it (design §7.7):
+#   stage.normalize = executed by A ("the system did not read it" -> a form problem)
+#   stage.validate  = executed by B ("the business does not allow it" -> a business problem)
+# `required` belongs to validate only: A **reads** it to decide whether to add a missing
+# placeholder, and MUST NOT derive blocking from it.
+# `date_order` must be declared explicitly (DMY / MDY / null), never omitted.
+#
+# NOTE: `label` / `aliases` are business data — they are the field names as they appear in the
+# customer's (Chinese) source documents, so they stay in Chinese on purpose.
+fields:
+  - key: guarantee_number
+    label: 保函编号
+    aliases: ["保函编号", "保函号", "GUARANTEE NO", "GUARANTEE NUMBER", "BG NO"]
+    type: string
+    required: true
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: [required]
+    max_length: 64
+
+  - key: guarantee_amount
+    label: 保函金额
+    aliases: ["保函金额", "金额", "AMOUNT", "GUARANTEE AMOUNT", "SUM"]
+    type: amount
+    required: true
+    date_order: null
+    stage:
+      normalize: [precision, thousands, max_length, charset]
+      validate: [required, positive]
+    max_length: 18
+    charset: '0-9.'
+    precision: 2
+    thousands: true
+
+  - key: currency
+    label: 币种
+    aliases: ["币种", "货币", "CURRENCY", "CCY"]
+    type: currency
+    required: true
+    date_order: null
+    stage:
+      normalize: [max_length, charset]
+      validate: [required]
+    max_length: 3
+    charset: 'A-Z'
+
+  - key: applicant_name
+    label: 申请人
+    aliases: ["申请人", "申请人名称", "APPLICANT", "APPLICANT NAME"]
+    type: string
+    required: true
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: [required]
+    max_length: 200
+
+  - key: beneficiary_name
+    label: 受益人
+    aliases: ["受益人", "受益人名称", "BENEFICIARY", "BENEFICIARY NAME"]
+    type: string
+    required: true
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: [required]
+    max_length: 200
+
+  - key: issuing_bank
+    label: 开立银行
+    aliases: ["开立银行", "担保行", "ISSUING BANK", "GUARANTOR"]
+    type: string
+    required: false
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: []
+    max_length: 200
+
+  - key: issue_date
+    label: 开立日期
+    aliases: ["开立日期", "出具日期", "ISSUE DATE", "DATE OF ISSUE"]
+    type: date
+    required: true
+    date_order: DMY
+    stage:
+      normalize: [max_length, date_order]
+      validate: [required]
+    max_length: 10
+
+  - key: expiry_date
+    label: 到期日
+    aliases: ["到期日", "失效日", "EXPIRY DATE", "EXPIRY", "VALID UNTIL"]
+    type: date
+    required: true
+    date_order: DMY
+    stage:
+      normalize: [max_length, date_order]
+      validate: [required]
+    max_length: 10
+
+  - key: tenor_days
+    label: 保函期限（天）
+    aliases: ["期限", "保函期限", "TENOR", "TENOR DAYS", "VALIDITY"]
+    type: integer
+    required: false
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: []
+    max_length: 8
+
+  - key: guarantee_type
+    label: 保函类型
+    aliases: ["保函类型", "类型", "TYPE", "GUARANTEE TYPE"]
+    type: string
+    required: false
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: []
+    max_length: 50
+
+  - key: governing_rules
+    label: 适用规则
+    aliases: ["适用规则", "适用法律", "GOVERNING RULES", "SUBJECT TO"]
+    type: string
+    required: false
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: []
+    max_length: 50
+
+  - key: contract_number
+    label: 合同或标书编号
+    aliases: ["合同编号", "标书号", "CONTRACT NO", "TENDER NO", "BID NO"]
+    type: string
+    required: false
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: []
+    max_length: 64
+
+  - key: applicant_country
+    label: 申请人所在国家
+    aliases: ["申请人国家", "APPLICANT COUNTRY"]
+    type: country
+    required: false
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: []
+    max_length: 2
+
+  - key: beneficiary_country
+    label: 受益人所在国家
+    aliases: ["受益人国家", "BENEFICIARY COUNTRY"]
+    type: country
+    required: false
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: []
+    max_length: 2
+
+  - key: payment_terms
+    label: 付款条件
+    aliases: ["付款条件", "付款方式", "PAYMENT TERMS", "PAYMENT"]
+    type: string
+    required: false
+    date_order: null
+    stage:
+      normalize: [max_length]
+      validate: []
+    max_length: 200
