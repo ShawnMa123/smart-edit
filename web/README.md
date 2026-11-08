@@ -25,15 +25,27 @@ npm --prefix web install
 npm --prefix web run dev        # http://localhost:5173
 ```
 
-Run the backend **without** `SMART_EDIT_LLM` to see the honesty path: `extract` fails, and the audit
-panel says the field checks did not run instead of blaming the document.
+`Run spec audit` inside the app issues **three** calls: `POST /api/runs`,
+`POST /api/runs/{id}/stages/normalize`, and then — only when `extract` **and** `normalize` finished —
+`POST /api/runs/{id}/stages/audit`. The right pane renders the field table (normalization) and the rule
+audit block (`verification.checks`, `verification.audit`, `gate`) from that last envelope.
+
+The full click-by-click walkthrough, with the numbers to expect, lives in `../how_to_use.md`.
+
+Run the backend **without** `SMART_EDIT_LLM` to see the honesty path: `extract` fails, the panel says the
+field checks did not run **and** the rule audit did not run, instead of blaming the document. The audit is
+never attempted on placeholder fields.
 
 ## Checks
 
 ```bash
 npm --prefix web run typecheck  # tsc --noEmit
-npm --prefix web run test       # vitest (jsdom)
+npm --prefix web run test       # vitest (jsdom); the HTTP e2e is skipped without VITE_E2E=1
 npm --prefix web run build      # emits web/dist/index.html
+
+# real HTTP end-to-end against a running backend
+VITE_E2E=1 VITE_API_BASE=http://127.0.0.1:8010 \
+  npm --prefix web run test -- src/e2e.audit.test.ts
 ```
 
 ## Troubleshooting
@@ -44,6 +56,8 @@ npm --prefix web run build      # emits web/dist/index.html
 | Audit panel says `Field checks did not run` | Backend started without `SMART_EDIT_LLM` — `extract` failed by design | Restart the backend with the fixture provider, or accept the honest path |
 | Browser shows `ERR_CONNECTION_REFUSED` on `:5173` | `npm --prefix web run dev` is not running (it blocks its own terminal) | Run it in a **second** terminal; check for the `Local: http://localhost:5173/` line |
 | Panel says the report is stale right after a run | The editor text changed after the audit started (including a trailing newline) | Re-audit the current snapshot; the digest shown is the one that was audited |
+| `409 unknown_stage: unregistered stage target: audit` | A backend started **before** the audit stage existed is still holding the port | Kill it (`lsof -nP -iTCP:8000 -sTCP:LISTEN -t \| xargs kill -9`) and start uvicorn again |
+| Rule audit block says `Not asked` | Correct: nothing asked the gate about an operation | Expect this until a gate endpoint exists; use `scripts/audit_demo.py` to see decisions |
 
 ## What this build deliberately does not do
 

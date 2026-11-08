@@ -50,12 +50,35 @@ export const RESULT_TONE: Record<string, StatusToken> = {
   stale: token('Stale report', 'warn'),
 };
 
+/**
+ * `verification.audit.outcome` (agent-audit report). Deliberately worded differently from
+ * `LABEL_NO_FINDINGS` so a screen can never claim "compliant" by picking the greener token.
+ */
+export const AUDIT_OUTCOME: Record<string, StatusToken> = {
+  no_findings: token('No findings reported', 'ok'),
+  findings_present: token('Findings reported', 'warn'),
+  needs_input: token('Needs input', 'warn'),
+  unable_to_assess: token('Unable to assess', 'unknown'),
+  unknown: token('Unknown outcome', 'unknown'),
+};
+
+/** `gate.decision`. `not-asked` is a first-class value: nobody asked the gate, so nothing is allowed. */
+export const GATE_DECISION: Record<string, StatusToken> = {
+  allowed: token('Allowed', 'ok'),
+  blocked: token('Blocked', 'bad'),
+  indeterminate: token('Indeterminate', 'warn'),
+  'not-asked': token('Not asked', 'unknown'),
+  unknown: token('Unknown decision', 'unknown'),
+};
+
 const lookup = (table: Record<string, StatusToken>, value: string): StatusToken =>
   table[value] ?? table.unknown;
 
 export const fieldStatusToken = (status: string): StatusToken => lookup(FIELD_STATUS, status);
 export const stageStatusToken = (status: string): StatusToken => lookup(STAGE_STATUS, status);
 export const severityToken = (severity: string): StatusToken => lookup(SEVERITY, severity);
+export const auditOutcomeToken = (outcome: string): StatusToken => lookup(AUDIT_OUTCOME, outcome);
+export const gateDecisionToken = (decision: string): StatusToken => lookup(GATE_DECISION, decision);
 
 /** Every distinct status label the app can render — asserted by the token test. */
 export const ALL_STATUS_LABELS: string[] = [
@@ -63,4 +86,6 @@ export const ALL_STATUS_LABELS: string[] = [
   ...Object.values(STAGE_STATUS),
   ...Object.values(SEVERITY),
   ...Object.values(RESULT_TONE),
+  ...Object.values(AUDIT_OUTCOME),
+  ...Object.values(GATE_DECISION),
 ].map((entry) => entry.label);

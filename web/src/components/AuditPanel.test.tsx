@@ -10,6 +10,8 @@ import { explainError } from '../api/errors';
 import type { Snapshot } from '../snapshot';
 import {
   NO_PROVIDER_REASON,
+  auditedEnvelope,
+  blockedAuditEnvelope,
   doneEnvelope,
   envelope,
   findingsEnvelope,
@@ -225,6 +227,50 @@ describe('fixture banner (7.6)', () => {
     });
 
     expect(screen.queryByText('Fixture-backed run')).toBeNull();
+  });
+});
+
+describe('rule audit block (agent-audit verification)', () => {
+  const reportState = (envelopeValue: ReturnType<typeof auditedEnvelope>) => ({
+    phase: 'report' as const,
+    envelope: envelopeValue,
+    snapshot: snapshot(),
+    completedAt: 2_000,
+  });
+
+  it('says the rule audit did not run when there is no report', () => {
+    renderPanel(reportState(doneEnvelope()));
+
+    expect(screen.getByText('Rule audit did not run')).toBeTruthy();
+    expect(screen.queryByText(/planned checks assessed/i)).toBeNull();
+  });
+
+  it('shows the plan, the assessed count and the coverage ratio', () => {
+    renderPanel(reportState(auditedEnvelope()));
+
+    expect(screen.getByText(/33 of 51 planned checks assessed/)).toBeTruthy();
+    expect(screen.getByText(/ratio 0\.647/)).toBeTruthy();
+    expect(screen.getByText('No findings reported')).toBeTruthy();
+    expect(screen.getByText(/guarantee-core v1\.0\.0/)).toBeTruthy();
+  });
+
+  it('never renders an unasked gate as allowed', () => {
+    renderPanel(reportState(auditedEnvelope()));
+
+    expect(screen.getByText('Not asked')).toBeTruthy();
+    expect(screen.getByText(/nothing is allowed/i)).toBeTruthy();
+    expect(screen.queryByText('Allowed')).toBeNull();
+  });
+
+  it('lists the audited findings with their gate type and blocks the gate', () => {
+    renderPanel(reportState(blockedAuditEnvelope()));
+
+    expect(screen.getByText('Findings reported')).toBeTruthy();
+    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(screen.getByText(/start_approval · reasons hard_block/)).toBeTruthy();
+    expect(screen.getByText(/B-001/)).toBeTruthy();
+    expect(screen.getByText(/gate: hard_block/)).toBeTruthy();
+    expect(screen.getByText(/→ start_approval, formal_export, handoff/)).toBeTruthy();
   });
 });
 

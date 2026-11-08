@@ -77,9 +77,11 @@
 
 ## 4. P3 — 交付与可观测
 
-1. **UI 接入（后端已就绪，剩前端一行）**：`editor-shell` 的"规范审计"按钮改指 `stages/audit`（现在错指
-   `normalize`），并显示"51 项中评估了 X 项" + 缺口数 + advisories —— 数据都在信封的
-   `verification.checks` / `verification.audit.coverage` / `gate` 里。`6.2/6.3` 已完成，此项只等前端改动。
+1. ✅ **已做** UI 接入：`web/` 的「Run spec audit」现在按 `POST /runs` → `stages/normalize` →
+   `stages/audit` 三步走（`extract`/`normalize` 未 done 时**不**发审计请求，避免拿占位符审出假缺陷），
+   右栏新增「Rule audit」块显示 `verification`：51 个计划单元 / 评估数 / 覆盖率 / 命中规则带
+   `gate_type` 与 `target_operations` / 闸门结论（未问时为 `Not asked`，绝不显示成 `Allowed`）。
+   详见 `how_to_use.md`（点哪、看到什么数字、怎么排查）。
 2. ✅ **已做** CI 门禁：`pytest`（254）+ 规则向量门禁（`test_rule_bundles.py`）+ 性能基准
    `tests/test_audit_perf.py`（断言"整篇只归一化一次"+ 0.5 s 灾难线，锁住 O1 不回归）。
 3. ✅ **已做** 演示脚本固化：`scripts/audit_demo.py`（`--json` 可选）一条命令打印计划、三种文档的

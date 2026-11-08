@@ -66,7 +66,7 @@ export function createRun(text: string, options: RequestOptions = {}): Promise<R
   );
 }
 
-/** Trigger a stage chain (`parse` / `extract` / `normalize`). */
+/** Trigger a stage chain (`parse` / `extract` / `normalize` / `audit`). */
 export function triggerStage(
   threadId: string,
   stage: string,

@@ -1,13 +1,22 @@
 import { explainError } from '../api/errors';
 import type { AuditState } from '../auditMachine';
 import {
+  LABEL_AUDIT_NOT_RUN,
   LABEL_NOT_RUN,
+  NOTE_GATE_NOT_ASKED,
   NOTE_NO_FINDINGS,
   SCOPE_NOT_RUN,
   SCOPE_RAN,
   buildAuditView,
+  type AuditSummary,
 } from '../auditView';
-import { RESULT_TONE, severityToken, stageStatusToken } from '../tokens';
+import {
+  RESULT_TONE,
+  auditOutcomeToken,
+  gateDecisionToken,
+  severityToken,
+  stageStatusToken,
+} from '../tokens';
 import { StatusChip } from './StatusChip';
 
 export interface AuditPanelProps {
@@ -43,6 +52,109 @@ function ScopeBlock() {
 function OutcomeChip({ checksRan, stale }: { checksRan: boolean; stale: boolean }) {
   if (stale) return <StatusChip token={RESULT_TONE.stale} />;
   return <StatusChip token={checksRan ? RESULT_TONE.ran : RESULT_TONE['did-not-run']} />;
+}
+
+/**
+ * The rule audit as the server reported it (agent-audit `verification`).
+ *
+ * Two claims this block refuses to make: an absent report is *not* a clean one, and an absent gate
+ * decision is *not* an allowed one — both are rendered with their own word.
+ */
+function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
+  if (!audit.ran) {
+    return (
+      <div className="notice" role="status">
+        <h3>{LABEL_AUDIT_NOT_RUN}</h3>
+        <p className="tiny">
+          This run carries no audit report, so the rule checks below were not performed. Nothing here
+          says the document is clean.
+        </p>
+      </div>
+    );
+  }
+
+  const gate = audit.gate;
+  return (
+    <div>
+      <div className="row">
+        <StatusChip token={auditOutcomeToken(audit.outcome)} />
+        <span className="tiny muted">
+          {audit.assessed} of {audit.planned} planned checks assessed
+          {audit.ratio !== null ? ` · ratio ${audit.ratio}` : ''}
+        </span>
+      </div>
+
+      <div className="metrics">
+        <div className="metric">
+          <b>{audit.planned}</b>
+          <span>Planned checks</span>
+        </div>
+        <div className="metric">
+          <b>{audit.assessed}</b>
+          <span>Assessed</span>
+        </div>
+        <div className="metric">
+          <b>{audit.counts.not_applicable ?? 0}</b>
+          <span>Not applicable</span>
+        </div>
+        <div className="metric">
+          <b>{audit.counts.needs_input ?? 0}</b>
+          <span>Needs input</span>
+        </div>
+        <div className="metric">
+          <b>{audit.hardBlockFindings}</b>
+          <span>Hard blocks</span>
+        </div>
+      </div>
+
+      <h3 className="tiny muted">Gate</h3>
+      <div className="row">
+        <StatusChip token={gateDecisionToken(gate.decision)} />
+        <span className="tiny muted">
+          {gate.asked
+            ? `${gate.operation} · reasons ${gate.reasonCodes.join(', ') || '—'}` +
+              (gate.openGaps !== null ? ` · open gaps ${gate.openGaps}` : '')
+            : NOTE_GATE_NOT_ASKED}
+        </span>
+      </div>
+      {gate.unsupportedCapability ? (
+        <p className="tiny muted">
+          Capability not provided in this build: <code>{gate.unsupportedCapability}</code>
+        </p>
+      ) : null}
+
+      {audit.findings.length > 0 ? (
+        <div>
+          <h3 className="tiny muted">Rule findings (from the audit)</h3>
+          {audit.findings.map((finding) => (
+            <div className="finding" key={finding.key}>
+              <div className="row">
+                <StatusChip token={severityToken(finding.severity)} />
+                <span className="tiny muted">
+                  {finding.id ?? 'un-numbered'} · {finding.rule ?? 'rule'} · gate: {finding.gateType ?? '—'}
+                  {finding.targetOperations.length > 0
+                    ? ` → ${finding.targetOperations.join(', ')}`
+                    : ''}
+                </span>
+              </div>
+              <div>{finding.message}</div>
+              {finding.evidence ? (
+                <div className="tiny muted">evidence: {finding.evidence}</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <p className="tiny muted">
+        engine {audit.engineVersion} · schema {audit.schemaVersion} · bundle{' '}
+        {Object.entries(audit.bundleVersions)
+          .map(([id, version]) => `${id} v${version}`)
+          .join(', ') || '—'}{' '}
+        · server digest <code>{(audit.serverDigest ?? '').slice(0, 12)}</code>
+      </p>
+    </div>
+  );
 }
 
 /**
@@ -149,6 +261,9 @@ export function AuditPanel({ state, currentDigest, onRun, onStopWaiting, now }: 
           </li>
         ))}
       </ul>
+
+      <h3 className="tiny muted">Rule audit</h3>
+      <RuleAuditBlock audit={view.audit} />
 
       {view.fieldChecks === 'did-not-run' ? (
         <div className="notice notice--bad" role="alert">

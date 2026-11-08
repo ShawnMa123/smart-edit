@@ -3,6 +3,7 @@ import { useEffect, useReducer, useState } from 'react';
 import { ApiError } from './api/errors';
 import { createRun, triggerStage } from './api/client';
 import { auditReducer, initialAuditState } from './auditMachine';
+import { fieldChecksRan } from './auditView';
 import { createSnapshot, digestText } from './snapshot';
 import { versionStore, type VersionEntry } from './versionStore';
 import { AssistantPanel } from './components/AssistantPanel';
@@ -78,7 +79,12 @@ export function App() {
     dispatch({ type: 'start', snapshot, at: Date.now() });
     try {
       const created = await createRun(snapshot.text);
-      const report = await triggerStage(created.thread_id, 'normalize');
+      // The audit only runs on values, never on placeholders: with no provider `normalize` still
+      // reports `done` while every field is a placeholder, so the guard is `extract` **and** `normalize`.
+      const normalized = await triggerStage(created.thread_id, 'normalize');
+      const report = fieldChecksRan(normalized)
+        ? await triggerStage(created.thread_id, 'audit')
+        : normalized;
       dispatch({ type: 'succeed', envelope: report, at: Date.now() });
     } catch (error) {
       const failure =

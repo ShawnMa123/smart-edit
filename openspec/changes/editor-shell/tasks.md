@@ -106,14 +106,23 @@
 - [x] 7.7 Accessibility assertions: every status chip renders a text label, and the panes, tabs and
   audit action are reachable by keyboard in DOM order. Verify: component test scanning rendered chip
   text and asserting tab order.
+- [x] 7.8 Rule audit block: `App` triggers `stages/audit` after `normalize` and the panel renders
+  `verification` — one `Issue` per planned unit, the coverage ratio, the audited findings with their
+  `gate_type` / `target_operations`, and the gate decision. Absent report and absent gate decision each
+  get their own word (`Rule audit did not run`, `Not asked`) so neither can read as clean/allowed.
+  Verify: component test for both states, and the guard that the audit is never requested unless
+  `extract` **and** `normalize` are `done` (`fieldChecksRan()` in `auditView.ts`).
 
 ## 8. Acceptance
 
-- [x] 8.1 End-to-end audit over HTTP with the fixture provider: capture a snapshot, run the audit, and
-  assert the panel shows stage strip, checks, counts and the audited digest. Verify: recorded result
-  in `DEMO.md` including the digest and the stage statuses.
+- [x] 8.1 End-to-end audit over HTTP with the fixture provider: capture a snapshot, run `normalize`, then
+  `stages/audit`, and assert the panel shows the stage strip (`parse/extract/normalize/audit`), checks,
+  counts, the rule-audit block (**51 planned / 33 assessed / ratio 0.647 / `no_findings` / gate
+  `not-asked`**) and the audited digest. Verify: `src/e2e.audit.test.ts` against a live backend
+  (`VITE_E2E=1 VITE_API_BASE=http://127.0.0.1:8010`), recorded in `DEMO.md`.
 - [x] 8.2 Honesty path end-to-end: with `SMART_EDIT_LLM` unset, the panel shows "field checks did not
-  run" with the stage reason and no defect list. Verify: recorded result in `DEMO.md`.
+  run" with the stage reason, no defect list, **and** "rule audit did not run" — the UI never sends
+  placeholders to `/stages/audit`. Verify: `VITE_E2E_HONESTY=1` recorded result in `DEMO.md`.
 - [x] 8.3 Prototype parity checklist: idle / running / failed / report / stale states compared against
   `HSBC_Nexus_Document_Editor_Mock_Demo.html`, plus the layout comparison at 1366×768. Verify: every
   line of the checklist in `DEMO.md` ticked, or the deviation recorded with its reason.

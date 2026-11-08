@@ -9,9 +9,19 @@ import {
   SCOPE_NOT_RUN,
   SCOPE_RAN,
   buildAuditView,
+  stageStatus,
 } from './auditView';
 import type { Snapshot } from './snapshot';
-import { NO_PROVIDER_REASON, doneEnvelope, envelope, findingsEnvelope, noProviderEnvelope, stage } from './test/fixtures';
+import {
+  NO_PROVIDER_REASON,
+  auditedEnvelope,
+  blockedAuditEnvelope,
+  doneEnvelope,
+  envelope,
+  findingsEnvelope,
+  noProviderEnvelope,
+  stage,
+} from './test/fixtures';
 
 const snapshot = (digest = 'digest-1'): Snapshot => ({
   text: 'document',
@@ -148,6 +158,73 @@ describe('fixture labelling (task 5.5)', () => {
     });
 
     expect(view(provider).usedFixture).toBe(false);
+  });
+});
+
+describe('the rule audit block (agent-audit `verification`)', () => {
+  it('reports "did not run" when the envelope carries no report', () => {
+    const model = view(doneEnvelope());
+
+    expect(model.audit.ran).toBe(false);
+    expect(model.audit.planned).toBeNull();
+    expect(model.audit.outcome).toBe('unknown');
+    expect(model.audit.gate.decision).toBe('not-asked');
+  });
+
+  it('quotes the plan, the assessed count and the coverage ratio verbatim', () => {
+    const { audit } = view(auditedEnvelope());
+
+    expect(audit.ran).toBe(true);
+    expect(audit.planned).toBe(51);
+    expect(audit.assessed).toBe(33);
+    expect(audit.ratio).toBe(0.647);
+    expect(audit.outcome).toBe('no_findings');
+    expect(audit.verdict).toBe('pass');
+    expect(audit.counts.not_applicable).toBe(18);
+    expect(audit.engineVersion).toBe('1.0.0');
+    expect(audit.schemaVersion).toBe('044a959e73af');
+    expect(audit.bundleVersions).toEqual({ 'guarantee-core': '1.0.0' });
+  });
+
+  it('never treats a missing gate decision as allowed', () => {
+    const { audit } = view(auditedEnvelope());
+
+    expect(audit.gate.asked).toBe(false);
+    expect(audit.gate.decision).toBe('not-asked');
+    expect(audit.gate.decision).not.toBe('allowed');
+  });
+
+  it('carries the gate type and the target operations of each finding', () => {
+    const { audit } = view(blockedAuditEnvelope());
+
+    expect(audit.outcome).toBe('findings_present');
+    expect(audit.hardBlockFindings).toBe(1);
+    expect(audit.findings[0].id).toBe('B-001');
+    expect(audit.findings[0].gateType).toBe('hard_block');
+    expect(audit.findings[0].targetOperations).toContain('start_approval');
+    expect(audit.findings[0].rule).toBe('SCHEMA:guarantee_amount:required@schema-1');
+    expect(audit.gate).toMatchObject({ asked: true, decision: 'blocked', openGaps: 0 });
+    expect(audit.gate.reasonCodes).toEqual(['hard_block']);
+    expect(audit.gate.authorizedFindingIds).toEqual(['B-001']);
+  });
+
+  it('keeps the server digest separate from the browser digest', () => {
+    const model = view(auditedEnvelope(), 'browser-digest', 'browser-digest');
+
+    expect(model.audit.serverDigest).toBe('server-digest-0123456789');
+    expect(model.digest).toBe('browser-digest');
+    expect(model.stale).toBe(false);
+  });
+});
+
+describe('stage helper', () => {
+  it('reports the latest status per stage, and `absent` when the run never reached it', () => {
+    const audited = auditedEnvelope();
+
+    expect(stageStatus(audited, 'normalize')).toBe('done');
+    expect(stageStatus(audited, 'audit')).toBe('done');
+    expect(stageStatus(audited, 'merge')).toBe('absent');
+    expect(stageStatus(noProviderEnvelope(), 'audit')).toBe('absent');
   });
 });
 
