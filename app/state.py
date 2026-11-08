@@ -62,7 +62,9 @@ class ParsedDoc(TypedDict):
     file_id: str
     filename: str
     mime: str
-    form: Literal["pdf_text", "pdf_form", "email", "plain_text"]
+    # [SEMANTICS] `docx_text` / `image_ocr` added by `document-import` (4 Nov 2026): the form is what
+    # tells a reader whether the text was *read* or *recognised*. Existing values are unchanged.
+    form: Literal["pdf_text", "pdf_form", "email", "plain_text", "docx_text", "image_ocr"]
     blocks: list[ParsedBlock]
     full_text: str  # blocks concatenated in order, consumed directly by Agent 3
     errors: list[str]  # parse failure reasons; when non-empty this file takes no further part

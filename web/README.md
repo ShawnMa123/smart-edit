@@ -25,6 +25,27 @@ npm --prefix web install
 npm --prefix web run dev        # http://localhost:5173
 ```
 
+### Importing a file
+
+`Import file` (header) uploads a PDF / DOCX / PNG / JPEG and fills the editor with the text the server
+read out of it: `POST /api/runs` (multipart) → `POST /api/runs/{id}/stages/parse` → read
+`documents[]` from the envelope. Images and scanned PDFs need a local OCR engine
+(`brew install tesseract tesseract-lang`); text-layer PDFs and DOCX do not.
+
+Failures are listed per file and are never dressed as success — a file with errors gets no "use this
+text" action. The user-facing wording for each code lives in `src/components/ImportReport.tsx`:
+
+| Code | What the screen says |
+|---|---|
+| `unsupported_mime` | "This file type is not supported (PDF, DOCX, PNG and JPEG are)." |
+| `ocr_engine_missing` | "The local OCR engine is not installed on the server, so images cannot be read right now." |
+| `no_text_recognized` | "No text could be recognised in this file." |
+| `image_open_failed` / `pdf_open_failed` / `docx_unreadable` | "This image/PDF/DOCX could not be opened/read." |
+| `file_too_large` / `too_many_pages` | "…larger than the import limit" / "…more pages than the OCR limit allows" |
+
+Text recognised by OCR is labelled `Image · recognised text, please check`; the fields extracted from it
+stay `inferred` and cannot pass a rule check until a human confirms them.
+
 `Run spec audit` inside the app issues **three** calls: `POST /api/runs`,
 `POST /api/runs/{id}/stages/normalize`, and then — only when `extract` **and** `normalize` finished —
 `POST /api/runs/{id}/stages/audit`. The right pane renders the field table (normalization) and the rule

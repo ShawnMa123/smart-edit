@@ -145,7 +145,49 @@ curl -s -X POST "localhost:8000/runs/$TID/stages/audit?template=adidas-guarantee
 模板字段（如 `origin_country`）不在 `fields.yaml` 里，它从 `extra_fields` 读：**抽不到就是"没读到"
 （`needs_input`），不是"文档缺值"**。
 
-## 6. 不开浏览器也能验证同一条链路
+## 6. 从文件导入（PDF / Word / 图片）
+
+客户不用再手打：点页面右上角 **Import file**，选一个 PDF、Word（`.docx`）或图片（`.png/.jpg`），
+服务器解析成文本后填进中间栏，你再改再点 `Run spec audit`。
+
+**前置条件（仅图片和扫描件需要）**：本地 OCR 引擎。macOS：
+
+```bash
+brew install tesseract tesseract-lang     # 5.5.4；语言包提供 chi_sim
+# 可选：语言与 dpi（默认 chi_sim+eng / 300）
+export SMART_EDIT_OCR_LANGS=chi_sim+eng
+```
+
+纯文本 PDF 与 DOCX **不需要**它；引擎缺失时只有图片/扫描件会失败，并且会明确告诉你原因。
+
+| 输入 | 怎么读 | 结果里的 `form` |
+|---|---|---|
+| 带文本层的 PDF | pymupdf 文本层，带页号与区域 | `pdf_text` |
+| 扫描版 PDF | 逐页 OCR（需 tesseract） | `pdf_text`（但文本是识别来的） |
+| Word `.docx` | 标准库解 zip + XML，只取段落与表格文字，**不执行宏** | `docx_text` |
+| PNG / JPEG | OCR（需 tesseract），区域坐标指向图片 | `image_ocr` |
+| 纯文本 / `.eml` | 直接读 | `plain_text` / `email` |
+
+界面会做的事：每个文件一行结果（`PDF · text layer` / `Image · recognised text, please check` 等）；
+**失败的文件不给"使用这段文本"按钮**，只给原因和「重新上传 / 从空白开始」；多个成功时由你选一个填进去；
+若编辑框里已有你打的字，会先问一句再覆盖。
+
+**为什么识别出来的文本要你核对**：OCR 会认错金额和公司名，而审计只认"已确认"的值。OCR 文本对应的
+字段一律按 `inferred` 落库，`app/audit/bind.py` 保证未确认的 `inferred` 值让相关检查落到
+`needs_input`，**不可能**算通过。所以错字最多变成"请确认"，不会变成"合规"。
+
+失败原因对照（面板上会同时显示人话和错误码）：
+
+| 错误码 | 人话 | 怎么办 |
+|---|---|---|
+| `unsupported_mime` | 这个类型不支持 | 换 PDF / DOCX / PNG / JPEG；旧版 `.doc` 不支持 |
+| `ocr_engine_missing` | 服务器没装 OCR 引擎 | 按上面的 `brew install` 装，或从空白手输 |
+| `no_text_recognized` | 识别不出文字 | 传更清晰/正着的图，或手输 |
+| `image_open_failed` / `docx_unreadable` / `pdf_open_failed` | 文件打不开 | 重新导出再传 |
+| `file_too_large` | 超过 20 MB 上限 | 压缩或拆分 |
+| `too_many_pages` | 超过 30 页 OCR 上限 | 只传相关页 |
+
+## 7. 不开浏览器也能验证同一条链路
 
 ```bash
 # 1) 引擎本体（无 HTTP、无模型）
@@ -168,7 +210,7 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
 .venv/bin/python -m pytest -q && npm --prefix web run test && npm --prefix web run typecheck
 ```
 
-## 7. 排查表
+## 8. 排查表
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
@@ -182,7 +224,7 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
 两个 digest 不要混：面板底部的 `server digest` 是后端对"文件＋字段"做的规范化哈希，左侧快照的
 digest 是浏览器对纯文本做的 SHA-256，**算法不同**，代码里也刻意不比较它们。
 
-## 8. 想再进一步
+## 9. 想再进一步
 
 - 换真实文档：不设 `SMART_EDIT_LLM` 走诚实路径；要真抽取需接 provider（`openai:` 仍是保留值）。
 - 加规则：改 `app/rules/bundles/guarantee.yaml`，先 `python -m app.rules.doctor` 过门禁（每条规则必须有

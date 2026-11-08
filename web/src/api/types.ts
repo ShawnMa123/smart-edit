@@ -77,6 +77,16 @@ export interface CandidatePreview {
   doc_type?: string | null;
 }
 
+/** One file as the server read it (`documents[]`, `document-import` D7). */
+export interface ImportedDocument {
+  file_id: string;
+  filename: string;
+  /** `pdf_text` / `docx_text` / `plain_text` / `email` vs `image_ocr` — read or recognised. */
+  form: string;
+  errors: string[];
+  full_text: string;
+}
+
 export interface RunEnvelope {
   thread_id: string;
   business_type: string | null;
@@ -87,6 +97,8 @@ export interface RunEnvelope {
   stages: StageReport[];
   trail: TrailEntry[];
   _candidates: CandidatePreview[];
+  /** What each uploaded file yielded; `[]` means "nothing parsed yet". */
+  documents?: ImportedDocument[];
   supported_stages: string[];
   /** `null` = no audit has run on this run yet. Never read as "clean". */
   verification?: VerificationReport | null;

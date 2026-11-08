@@ -27,6 +27,7 @@ ENVELOPE_KEYS = (
     "stages",
     "trail",
     "_candidates",
+    "documents",
     "verification",
     "gate",
     "supported_stages",
@@ -65,6 +66,24 @@ def test_envelope_refuses_to_omit_stages():
     """4.1 / 4.6 A state without `stages` never serialises as a clean run."""
     with pytest.raises(IncompleteResult):
         to_envelope({"run_id": "R-1"})
+
+
+def test_the_envelope_carries_the_imported_documents(api):
+    """0.2 `documents` is how the editor gets its text; `[]` means "nothing parsed yet"."""
+    client, _ = api
+    thread_id = _new_run(client)
+
+    before = client.get(f"/runs/{thread_id}").json()
+    after = client.post(f"/runs/{thread_id}/stages/parse").json()
+
+    assert before["documents"] == [], "an unparsed run must not fabricate text"
+    assert len(after["documents"]) == 1
+    document = after["documents"][0]
+    assert set(document) == {"file_id", "filename", "form", "errors", "full_text"}
+    assert document["form"] == "plain_text"
+    assert document["errors"] == []
+    assert document["full_text"].strip(), "the parsed text is what the editor shows"
+    assert "blocks" not in document, "blocks stay server-side until a screen needs them"
 
 
 def test_create_run_from_text(api):

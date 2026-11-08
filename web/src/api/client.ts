@@ -68,6 +68,23 @@ export function createRun(text: string, options: RequestOptions = {}): Promise<R
   );
 }
 
+/**
+ * Create one run from uploaded files (`document-import`).
+ *
+ * No `Content-Type` header on purpose: the browser must set the multipart boundary itself, otherwise
+ * FastAPI parses zero files and answers `EMPTY_SUBMISSION`.
+ */
+export function createRunWithFiles(
+  files: File[],
+  options: RequestOptions = {},
+): Promise<RunEnvelope> {
+  const form = new FormData();
+  for (const file of files) {
+    form.append('files', file, file.name);
+  }
+  return request('/runs', { method: 'POST', body: form }, options);
+}
+
 /** Trigger a stage chain (`parse` / `extract` / `normalize` / `audit`).
  *
  * `options.template` asks for template-driven audit; it can only narrow which published template

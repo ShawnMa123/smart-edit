@@ -76,13 +76,20 @@ def test_plain_text_blocks_have_no_page(tmp_path):
 
 
 def test_scan_like_pdf_raises_not_silent(tmp_path):
-    """3.3 A scanned document returns an explicit error, never an empty `full_text` as success."""
+    """3.3 A scanned PDF is OCR'd; when that cannot produce text it says so, never empty success.
+
+    `document-import` changed the route (a missing text layer now goes to OCR instead of dead-ending),
+    so the guarantee is checked at the level that must never change: **no text ⇒ an error, never a
+    `done` with an empty `full_text`**.
+    """
     blank = _make_blank_pdf(tmp_path / "scan.pdf")
     doc = parse_file(_source(blank, "F-3"))
 
-    assert doc["errors"], "a missing text layer must be reported"
-    assert "no_text_layer" in doc["errors"][0]
-    assert doc["errors"][0] == NO_TEXT_LAYER
+    assert doc["errors"], "a scan that produced no text must be reported"
+    assert doc["errors"][0].startswith(
+        ("ocr_engine_missing", "no_text_recognized", "ocr_failed")
+    )
+    assert doc["errors"][0] != NO_TEXT_LAYER, "the dead end was replaced by an OCR attempt"
     assert doc["full_text"] == ""
     assert doc["blocks"] == []
 

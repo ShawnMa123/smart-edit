@@ -1,7 +1,8 @@
 import { useEffect, useReducer, useState } from 'react';
 
 import { ApiError } from './api/errors';
-import { createRun, triggerStage } from './api/client';
+import { createRun, createRunWithFiles, triggerStage } from './api/client';
+import type { ImportedDocument } from './api/types';
 import { auditReducer, initialAuditState } from './auditMachine';
 import { fieldChecksRan } from './auditView';
 import { createSnapshot, digestText } from './snapshot';
@@ -9,6 +10,7 @@ import { versionStore, type VersionEntry } from './versionStore';
 import { AssistantPanel } from './components/AssistantPanel';
 import { DocumentActions } from './components/DocumentActions';
 import { EditorColumn } from './components/EditorColumn';
+import { ImportReport, initialImportState, type ImportState } from './components/ImportReport';
 import { VersionPanel } from './components/VersionPanel';
 import { useNarrowViewport } from './components/useViewport';
 
@@ -27,6 +29,8 @@ export function App() {
   const [audit, dispatch] = useReducer(auditReducer, initialAuditState);
   /** Which published template to audit against; empty means "rule bundle only" (design D18). */
   const [templateId, setTemplateId] = useState('');
+  /** File-import round: what was uploaded and how it went (`document-import` D10). */
+  const [importState, setImportState] = useState<ImportState>(initialImportState);
 
   // Keep the "current" digest in step with the editor, so staleness is instant on the next keystroke.
   useEffect(() => {
@@ -74,6 +78,45 @@ export function App() {
     versionStore.clear(DOCUMENT_ID);
     setVersions([]);
     setCurrentVersionId(null);
+  };
+
+  const handleImport = async (files: File[]) => {
+    setImportState({ phase: 'reading', documents: [], failure: null });
+    try {
+      const created = await createRunWithFiles(files);
+      const parsed = await triggerStage(created.thread_id, 'parse');
+      setImportState({
+        phase: 'ready',
+        documents: parsed.documents ?? [],
+        failure: null,
+      });
+    } catch (error) {
+      const failure =
+        error instanceof ApiError
+          ? { code: error.code, message: error.message }
+          : { code: 'NETWORK', message: String(error) };
+      setImportState({ phase: 'failed', documents: [], failure });
+    }
+  };
+
+  /** Filling the editor is the only thing import does; user edits are never replaced silently. */
+  const replaceText = (next: string) => {
+    const hasUserText = text.trim().length > 0 && dirty;
+    if (hasUserText && !window.confirm('Replace the current editor content with the imported text?')) {
+      return false;
+    }
+    setText(next);
+    setDirty(true);
+    setPane('editor');
+    return true;
+  };
+
+  const handleUseImported = (document: ImportedDocument) => {
+    if (replaceText(document.full_text)) setImportState(initialImportState);
+  };
+
+  const handleStartBlank = () => {
+    if (replaceText('')) setImportState(initialImportState);
   };
 
   const handleRunAudit = async () => {
@@ -151,8 +194,15 @@ export function App() {
             {text.length} characters · history stored in this browser
           </div>
         </div>
-        <DocumentActions />
+        <DocumentActions onImport={(files) => void handleImport(files)} />
       </header>
+
+      <ImportReport
+        state={importState}
+        onUse={handleUseImported}
+        onRetry={() => setImportState(initialImportState)}
+        onStartBlank={handleStartBlank}
+      />
 
       {narrow ? (
         <div className="pane-tabs" role="tablist" aria-label="Workspace panes">

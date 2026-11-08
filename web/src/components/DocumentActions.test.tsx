@@ -1,10 +1,10 @@
-/** Task 6.4 — actions this build cannot perform are labelled and never report success. */
+/** Tasks 4.2 — `Import file` is a real action now; the rest are still labelled. */
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { DocumentActions, UNAVAILABLE_ACTIONS } from './DocumentActions';
+import { DocumentActions, IMPORT_ACCEPT, UNAVAILABLE_ACTIONS } from './DocumentActions';
 
 describe('DocumentActions', () => {
   it('labels every unavailable action', () => {
@@ -31,5 +31,29 @@ describe('DocumentActions', () => {
     await userEvent.click(screen.getByRole('button', { name: /Start approval · not implemented/ }));
 
     expect(screen.getByRole('status').textContent).toContain('approval workflow');
+  });
+
+  it('offers import as a real action, not a labelled placeholder', () => {
+    render(<DocumentActions />);
+
+    const button = screen.getByRole('button', { name: 'Import file' });
+    expect(button.textContent).not.toContain('not implemented');
+    expect(UNAVAILABLE_ACTIONS.some((action) => action.id === 'import')).toBe(false);
+  });
+
+  it('accepts exactly the four document types and hands the files over', async () => {
+    const onImport = vi.fn();
+    render(<DocumentActions onImport={onImport} />);
+    const input = screen.getByTestId('import-file-input') as HTMLInputElement;
+
+    expect(input.accept).toBe(IMPORT_ACCEPT);
+    const file = new File(['%PDF'], 'guarantee.pdf', { type: 'application/pdf' });
+    await userEvent.upload(input, file);
+
+    expect(onImport).toHaveBeenCalledTimes(1);
+    expect(onImport.mock.calls[0][0]).toHaveLength(1);
+    expect((onImport.mock.calls[0][0] as File[])[0].name).toBe('guarantee.pdf');
+    // The input is cleared so choosing the same file again still fires `change`.
+    expect(input.value).toBe('');
   });
 });

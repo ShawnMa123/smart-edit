@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { API_BASE, createRun, getRun, triggerStage } from './client';
+import { API_BASE, createRun, createRunWithFiles, getRun, triggerStage } from './client';
 import { INVALID_RESPONSE_CODE, TIMEOUT_CODE } from './errors';
 import { doneEnvelope } from '../test/fixtures';
 
@@ -70,6 +70,34 @@ describe('createRun', () => {
     await expect(
       createRun('text', { fetchImpl: reject(new Error('connection refused')) }),
     ).rejects.toMatchObject({ code: 'NETWORK' });
+  });
+});
+
+describe('createRunWithFiles', () => {
+  it('posts the files as multipart and lets the browser set the boundary', async () => {
+    const calls: Call[] = [];
+    const file = new File(['%PDF-1.4 fake'], 'guarantee.pdf', { type: 'application/pdf' });
+
+    await createRunWithFiles([file], { fetchImpl: record(calls, doneEnvelope()) });
+
+    expect(calls[0].url).toBe(`${API_BASE}/runs`);
+    expect(calls[0].init.method).toBe('POST');
+    expect(calls[0].init.body).toBeInstanceOf(FormData);
+    expect((calls[0].init.body as FormData).get('files')).toBeTruthy();
+    // A Content-Type here would replace the browser's boundary and the server would see zero files.
+    expect(calls[0].init.headers).toBeUndefined();
+  });
+
+  it('sends every chosen file under the same field name', async () => {
+    const calls: Call[] = [];
+    const files = [
+      new File(['a'], 'one.pdf', { type: 'application/pdf' }),
+      new File(['b'], 'two.docx'),
+    ];
+
+    await createRunWithFiles(files, { fetchImpl: record(calls, doneEnvelope()) });
+
+    expect((calls[0].init.body as FormData).getAll('files')).toHaveLength(2);
   });
 });
 
