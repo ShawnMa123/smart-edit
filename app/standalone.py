@@ -9,12 +9,14 @@ Sources: `openspec/changes/agent-normalize/design.md` §10,
 
 from __future__ import annotations
 
-from app.stages import STAGE_TARGETS
+from app.stages import AGENT_TARGETS, STAGE_TARGETS
 
 
 def plan_standalone(target: str, state: dict) -> dict:
     """Return the backfill plan; when it cannot run, return a structured refusal (`status` = HTTP)."""
-    spec = STAGE_TARGETS.get(target)
+    # `agent4` -> `audit`: an agent id means its registered target, never a silently widened chain.
+    resolved = AGENT_TARGETS.get(target, target)
+    spec = STAGE_TARGETS.get(resolved)
     if spec is None:
         return {
             "status": 409,
@@ -28,6 +30,21 @@ def plan_standalone(target: str, state: dict) -> dict:
         for report in state.get("stages") or []
         if report.get("status") == "done"
     }
+
+    # A prerequisite this build does not implement cannot be backfilled; refusing is the only
+    # honest answer ("run the full chain" would fabricate a stage that does not exist).
+    unimplemented = [stage for stage in spec.requires_stages if stage not in STAGE_TARGETS]
+    if unimplemented:
+        return {
+            "status": 409,
+            "error": "REFUSED",
+            "missing": unimplemented,
+            "detail": (
+                f"prerequisite stage(s) {unimplemented} are not implemented in this build; "
+                f"refusing to run {resolved}"
+            ),
+        }
+
     backfill = [stage for stage in spec.requires_stages if stage not in done]
 
     covered: set[str] = set()
@@ -44,7 +61,8 @@ def plan_standalone(target: str, state: dict) -> dict:
 
     return {
         "status": 200,
-        "target": target,
-        "chain": backfill + [target],
+        "target": resolved,
+        "requested": target,
+        "chain": backfill + [resolved],
         "backfill": backfill,
     }

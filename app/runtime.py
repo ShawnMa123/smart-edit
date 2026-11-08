@@ -15,6 +15,7 @@ Design: `openspec/changes/frontend-console/design.md` D1-D2.
 from __future__ import annotations
 
 from app.config import FieldsConfigError, load_fields_config
+from app.nodes.audit import audit_node
 from app.nodes.extract import extract_node
 from app.nodes.normalize import normalize_node
 from app.nodes.parse import parse_node
@@ -27,6 +28,7 @@ NODES = {
     "parse": parse_node,
     "extract": extract_node,
     "normalize": normalize_node,
+    "audit": audit_node,
 }
 
 
@@ -84,6 +86,8 @@ def execute_chain(
             update = parse_node(state)
         elif stage == "extract":
             update = extract_node(state, llm=llm, field_keys=field_keys)
+        elif stage == "audit":
+            update = audit_node(state)
         else:
             update = normalize_node(state, fields_yaml=fields_yaml)
         merge_update(state, update)

@@ -186,6 +186,55 @@ report merely says `needs_input`; a screen can be ignored, a decision cannot.
 are two constants in `app/audit/policy.py` (`MIN_ASSESSED_RATIO`, `LIMITED_COVERAGE_RATIO`); answering
 differently changes a constant and one test, not a design.
 
+### D12. Integrity and performance hardening (second pass)
+
+Four items were tightened after review; none changes an externally visible decision, so they were applied
+without a new sign-off round.
+
+| # | Problem | Fix | Evidence |
+|---|---|---|---|
+| 1 | Locating spans re-normalised the whole document **per field** (and per candidate in `extract`) | `app/parsing/normalize.py::normalized_full_texts()`; `span_locatable(..., normalized=…)` and `extract.locate_span(..., normalized_blocks=…)` accept a pre-computed index. Both new parameters are optional, so existing callers keep working | provenance check on a 48.4k-character document with 15 fields: **314 ms → 19.9 ms** |
+| 2 | `find_conflicts()` only caught the same `rule_id` at two versions | also reports the same `(field_id, category)` gated **inconsistently across bundles** (e.g. `hard_block` in `bank` vs `advisory` in `client`). A *single* bundle may legitimately carry both, so only cross-bundle disagreement counts | 2 new tests, including one asserting our own pack stays clean |
+| 3 | Rule vectors only had to demonstrate `pass` | every rule must now produce `pass`, `finding` **and** `needs_input` | 4 vectors added; the gate test in `test_rule_bundles.py` enforces it |
+| 4 | `audit_state(snapshot_digest="unknown")` defaulted silently | `snapshot_digest` is a **required** argument; a report that cannot name its snapshot can never be judged stale | `AuditRunError` + test |
+
+*Why item 1 is in the shared layer:* `span_locatable` belongs to `app/parsing/normalize.py`, which Agent 4's
+`provenance_check` also uses. The change is additive (optional keyword argument) and behaviour-preserving,
+so it does not alter the seam; A applied it with the owner's approval.
+
+### D13. Where the audit's rows land, and where the gate reads them
+
+The frozen contract has no gate type on `Finding`, so the projection has to answer two questions at
+once: what a client shows, and what the gate trusts.
+
+| Output | Shape | Why |
+|---|---|---|
+| `verification.checks` | one `Issue` per **planned unit** (51 for a guarantee), `checker` = check id, `level` from the finding's severity or the unit status, `location` = the anchor | `Issue` is the only per-check row the contract offers; one row per unit is what makes "33 of 51 assessed" inspectable |
+| the four optional `Issue` fields | `check_id`, `gate_type`, `target_operations`, `method` | a reviewer must see which row would block an operation without opening a second payload |
+| `state["findings"]` | contract `Finding` rows, numbered by `app/findings.py` (`B-` prefix), `blocking` mirrors **only** `gate_type == "hard_block"` | severity never decides blocking (`agent-contract` §4.5, AUD-13) |
+| `verification.audit["findings"]` | the audit's own copy: `id`, `check_id`, rule ref, `gate_type`, `target_operations`, `method`, anchor, evidence | the gate needs the gate type; the contract `Finding` deliberately does not carry one |
+
+`gate.evaluate()` therefore reads `verification.audit["findings"]` and falls back to `state["findings"]`
+only when no report exists. Reading the contract rows instead would silently treat every hard block as
+`advisory` — the failure mode where the gate answers "allowed" and nobody notices.
+
+`verdict` answers "can the audit stand behind this report", not "is the document good": `no_findings` →
+`pass`, `findings_present` / `needs_input` → `warn`, `unable_to_assess` → `fail`. `credibility` is
+`assessed / planned` with its formula spelled out; `score` stays `None` because a display number must
+never feed a verdict (contract) — nothing computes one.
+
+Transport consequences (tasks 6.2/6.3), all additive:
+
+- `audit` is a stage target declaring the whole shared layer (`parse`, `extract`, `normalize`), because
+  `execute_chain` runs a plan as written and never expands it transitively;
+- `agent4` stays a **name**, not a second chain: `AGENT_TARGETS` maps it to `audit`, and an agent id
+  without a registered target is still refused (409) rather than widened;
+- a prerequisite stage this build does not implement (`merge`) is refused with a reason instead of being
+  skipped — "run it anyway" would fabricate a stage that does not exist;
+- the envelope always carries `verification` and `gate`; `null` means "no audit yet" / "the gate was
+  never asked", never "clean";
+- the node decides a gate **only** when the caller names an operation: an audit alone approves nothing.
+
 ## Risks / Trade-offs
 
 - **[Two engines for one document]** `agent-verify` also claims field-value legality ⇒ split ownership
@@ -210,8 +259,9 @@ differently changes a constant and one test, not a design.
 
 Additive; nothing persisted yet, so no data migration.
 
-1. **Sign-off gate**: boundary with `agent-verify`, the five optional contract fields, the `agent4`
-   standalone flip. Nothing else starts until this is recorded.
+1. **Sign-off gate**: boundary with `agent-verify` (**still open**, task 0.1) and the five optional
+   contract fields + the `agent4` standalone flip (**approved by A on 2026-11-08**, tasks 0.2). The
+   boundary question blocks nothing in code: `agent-verify` authors bundles, this change evaluates them.
 2. `app/rules/` + `app/audit/` + `app/nodes/audit.py`, tested against plain dicts (no transport needed).
 3. Register the `audit` stage target and expose it through the existing envelope.
 4. Rollback: delete the new modules and revert the two frozen-file edits; nothing else references them.
@@ -221,7 +271,12 @@ Additive; nothing persisted yet, so no data migration.
 1. **Boundary with `agent-verify`** — does B agree that `business-verification` becomes a bundle author
    (business parameters, requirement lists) while this group owns the engine and the gate? Blocking for
    code; recorded as task 0.
-2. **Contract sign-off** — five optional fields plus one standalone flip, three-person approval.
+2. **Contract sign-off** — **answered for A (2026-11-08), B / C countersign pending.** A approved the
+   five optional fields plus the standalone flip as a purely additive diff (`tasks.md` 0.2 records it),
+   because nothing existing was renamed, removed or re-typed; the only behavioural change is that
+   `agent4` becomes triggerable through the new `audit` target. B / C may still answer "no" — the
+   rollback is deleting `app/nodes/audit.py`, `app/audit/project.py` and reverting those three small
+   blocks.
 3. **Artifact language** — `openspec/config.yaml` still declares `Language: zh` while these artifacts are
    English per an explicit instruction.
 4. **Bundle authoring workflow** — POC bundles are hand-edited YAML reviewed in PR; AUD-20 governance is

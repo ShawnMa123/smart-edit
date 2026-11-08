@@ -27,6 +27,8 @@ ENVELOPE_KEYS = (
     "stages",
     "trail",
     "_candidates",
+    "verification",
+    "gate",
     "supported_stages",
 )
 
@@ -56,7 +58,7 @@ def test_envelope_carries_every_required_key(api):
     for key in ENVELOPE_KEYS:
         assert key in body, f"envelope is missing {key}"
     assert body["supported_stages"] == sorted(STAGE_TARGETS)
-    assert body["supported_stages"] == ["extract", "normalize", "parse"]
+    assert body["supported_stages"] == ["audit", "extract", "normalize", "parse"]
 
 
 def test_envelope_refuses_to_omit_stages():
@@ -153,16 +155,43 @@ def test_retriggering_a_done_stage_is_reuse(api):
     assert second["trail"] == first["trail"], "a skipped stage writes nothing"
 
 
-def test_non_standalone_agent_is_403(tmp_path):
-    """4.5 `agent4` is refused before the plan lookup, so it is not reported as unknown."""
+def test_agent4_is_standalone_through_the_audit_target(tmp_path):
+    """0.2 / 6.2 `agent4` flipped to standalone: the agent id resolves to the registered `audit` target."""
     client, _ = _build(tmp_path)
     thread_id = _new_run(client)
 
-    response = client.post(f"/runs/{thread_id}/stages/agent4")
+    body = client.post(f"/runs/{thread_id}/stages/agent4").json()
+
+    assert [report["stage"] for report in body["stages"]] == [
+        "parse",
+        "extract",
+        "normalize",
+        "audit",
+    ]
+    assert body["verification"]["audit"]["planned"] == 51
+
+
+def test_a_non_standalone_agent_is_still_403(tmp_path, monkeypatch):
+    """4.5 The refusal survives for any agent that is not registered as standalone.
+
+    No agent in this build is non-standalone any more (0.2 flipped `agent4`), so the branch is
+    exercised by injecting one — the rule still has to hold for the next agent that registers.
+    """
+    from app.api import main as api_main
+    from app.stages import AgentSpec
+
+    monkeypatch.setitem(
+        api_main.AGENT_SPECS, "agent9", AgentSpec("agent1", (), (), (), False)
+    )
+    client, _ = _build(tmp_path)
+    thread_id = _new_run(client)
+
+    response = client.post(f"/runs/{thread_id}/stages/agent9")
 
     assert response.status_code == 403
     assert response.json()["code"] == "NOT_STANDALONE"
-    assert response.json()["detail"]["agent"] == "agent4"
+    assert response.json()["detail"]["agent"] == "agent9"
+    assert "agent9" not in STAGE_TARGETS
 
 
 def test_unregistered_stage_is_409(tmp_path):
@@ -219,7 +248,7 @@ def test_every_error_body_has_code_and_message(tmp_path):
     responses = [
         client.post("/runs", json={}),
         client.get("/runs/R-nope"),
-        client.post(f"/runs/{thread_id}/stages/agent4"),
+        client.post(f"/runs/{thread_id}/stages/agent2"),
         client.post(f"/runs/{thread_id}/stages/summarize"),
     ]
     store.get(thread_id)["files"] = []
@@ -271,8 +300,70 @@ def test_refusal_codes_end_to_end(tmp_path):
     thread_id = _new_run(client)
 
     assert client.post("/runs", json={}).json()["code"] == "EMPTY_SUBMISSION"
-    assert client.post(f"/runs/{thread_id}/stages/agent4").json()["code"] == "NOT_STANDALONE"
+    assert client.post(f"/runs/{thread_id}/stages/agent2").json()["code"] == "unknown_stage"
     assert client.post(f"/runs/{thread_id}/stages/bogus").json()["code"] == "unknown_stage"
     assert client.get("/runs/R-nope").json()["code"] == "unknown_run"
     store.get(thread_id)["files"] = []
     assert client.post(f"/runs/{thread_id}/stages/parse").json()["code"] == "REFUSED"
+
+
+def test_audit_stage_over_http(api):
+    """6.2 `POST /stages/audit` backfills the shared layer and returns the envelope."""
+    client, _ = api
+    thread_id = _new_run(client)
+
+    body = client.post(f"/runs/{thread_id}/stages/audit").json()
+
+    assert [report["stage"] for report in body["stages"]] == [
+        "parse",
+        "extract",
+        "normalize",
+        "audit",
+    ]
+    assert [report["status"] for report in body["stages"]] == ["done"] * 4
+    audit_stage = body["stages"][-1]
+    assert audit_stage["agent"] == "agent4"
+    assert audit_stage["model_calls"] == 0
+
+    verification = body["verification"]
+    assert len(verification["checks"]) == 51, "one Issue per planned unit"
+    assert verification["audit"]["planned"] == 51
+    assert verification["audit"]["engine_version"] == "1.0.0"
+    assert verification["audit"]["bundle_versions"] == {"guarantee-core": "1.0.0"}
+    assert verification["verdict"] in ("pass", "warn", "fail")
+    assert verification["score"] is None, "score is display-only and never computed here"
+
+
+def test_verification_and_gate_are_null_until_asked(api):
+    """6.3 Both keys exist before an audit, and `null` never means clean."""
+    client, _ = api
+    thread_id = _new_run(client)
+
+    body = client.get(f"/runs/{thread_id}").json()
+
+    assert body["verification"] is None
+    assert body["gate"] is None
+
+
+def test_an_audit_alone_never_approves_anything(api):
+    """6.3 The audit decides no operation: `gate` stays null until one is asked about."""
+    client, _ = api
+    thread_id = _new_run(client)
+
+    body = client.post(f"/runs/{thread_id}/stages/audit").json()
+
+    assert body["verification"]["audit"]["outcome"]
+    assert body["gate"] is None
+
+
+def test_audit_over_http_keeps_the_console_contract(tmp_path):
+    """6.3 Adding the audit surfaces breaks no existing console-api expectation."""
+    client, _ = _build(tmp_path)
+    thread_id = _new_run(client)
+
+    body = client.post(f"/runs/{thread_id}/stages/normalize").json()
+
+    assert body["verification"] is None, "normalize does not audit"
+    assert body["gate"] is None
+    assert body["findings"] == [] or isinstance(body["findings"], list)
+    assert not OVERREACH_OPS & {entry["op"] for entry in body["trail"]}

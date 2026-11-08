@@ -205,13 +205,22 @@ class Issue(TypedDict):
     finding_ids: list[str]
     detail: str
     location: str | None  # field key / chunk_id / trail entry id
+    # [SEMANTICS] agent-audit additions (design D3, signed off 2026-11-08). All optional, so an
+    # existing producer of `Issue` keeps working unchanged.
+    check_id: NotRequired[str]  # which planned unit this row reports
+    gate_type: NotRequired[str]  # advisory / human_review / hard_block — severity never implies it
+    target_operations: NotRequired[list[str]]  # operations this row gates, when it gates any
+    method: NotRequired[str]  # deterministic / semantic
 
 
 class VerificationReport(TypedDict):
     checks: list[Issue]
     verdict: Literal["pass", "warn", "fail"]
-    credibility: dict  # fully recomputable; formula in the agent-audit spec
+    credibility: dict  # fully recomputable; see app/audit/project.py::credibility
     score: float | None  # display only; MUST NOT feed any verdict or rerun
+    # [SEMANTICS] agent-audit addition (design D3, signed off 2026-11-08): the audit report baseline
+    # (snapshot digest, schema/bundle/engine versions, counts, coverage, outcome, findings).
+    audit: NotRequired[dict]
 
 
 # --------------------------------------------------------------------------

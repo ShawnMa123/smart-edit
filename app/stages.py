@@ -56,7 +56,7 @@ AGENT_SPECS = {
         ("merge",),
         ("findings", "stages"),
         ("verification", "stages", "trail"),
-        False,
+        True,  # flipped with task 0.2: the audit is triggerable on its own through `audit`
     ),
 }
 
@@ -74,8 +74,28 @@ STAGE_TARGETS = {
         True,
         ("fields", "extra_fields", "business_type"),
     ),
+    # Agent 4's only triggerable target (task 6.2). It declares the **whole** shared layer, not just
+    # `normalize`: `execute_chain` runs the plan as written and does not expand it transitively, so
+    # requiring only `normalize` would run it without `docs` and fail by design.
+    "audit": AgentSpec(
+        "agent4",
+        ("parse", "extract", "normalize"),
+        ("fields",),
+        ("verification", "gate", "findings"),
+        True,
+        ("verification", "gate"),
+    ),
 }
 ENRICHED_CHAIN = ("parse", "extract", "normalize")
+
+# An agent id resolves to the stage target that represents it, so `POST /runs/{id}/stages/agent4`
+# means "run the audit" rather than `unknown_stage`. An agent with no registered target is still
+# refused — registration, never a guess (design D5 of `frontend-console`).
+AGENT_TARGETS = {
+    "agent1": "normalize",
+    "agent4": "audit",
+}
+
 RAW_BACKFILL = ("parse",)
 
 

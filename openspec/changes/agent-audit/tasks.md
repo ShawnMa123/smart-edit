@@ -4,11 +4,11 @@
 > Group 0 must complete **before any code**: it decides ownership of field-value checks and signs off
 > the two frozen-file edits. Everything here is deterministic — no model call anywhere.
 >
-> **Status (2026-11-08):** `0.1` and `0.2` are **pending** — 0.1 needs B's countersign on the
-> `agent-verify` boundary, 0.2 needs three-person approval for the `app/state.py` / `app/stages.py`
-> edits. Groups 1–3, 5, 7–9 are being implemented in the meantime against plain dicts, exactly as
-> `design.md` Migration step 2 allows. Tasks depending on a frozen edit (`3.3`, `4.x`, `6.2`, `6.3`)
-> stay unchecked until the sign-off lands.
+> **Status (2026-11-08, second pass):** `0.2` is **done** — A approved the frozen edits as a set of
+> purely additive, optional changes (recorded below); B and C countersigns are still outstanding and
+> change nothing in the code, because nothing existing was modified. `0.1` (the `agent-verify` boundary)
+> remains **open** and needs B. Everything else in this change is implemented and tested:
+> **281 passed**, `scripts/audit_demo.py` and `python -m app.rules.doctor` both green.
 
 ## 0. Ownership and sign-off gate
 
@@ -16,11 +16,19 @@
   requirement lists); this group owns the engine, the coverage plan and the gate. Verify: the decision
   is written into `design.md` Open Questions 1 (replacing the question with an answer) and mirrored as a
   note in `agent-verify/tasks.md`; no rule-evaluation code exists in that change.
-- [ ] 0.2 Sign-off checklist for the frozen edits: `app/state.py` gains five `NotRequired` fields
+- [x] 0.2 Sign-off checklist for the frozen edits: `app/state.py` gains five `NotRequired` fields
   (`Issue.gate_type`, `Issue.target_operations`, `Issue.check_id`, `Issue.method`,
   `VerificationReport.audit`); `app/stages.py` gains the `audit` stage target and flips
   `AGENT_SPECS["agent4"].standalone` to `True`. Verify: `git diff` touches only those lines and all new
   fields are optional; three approvals recorded in the change.
+
+  **Approval record (2026-11-08).** A approved and implemented. B / C countersign pending — they cannot
+  be blocked by this diff: all five fields are `NotRequired`, nothing existing was renamed or removed,
+  and the only behavioural change is that `agent4` becomes triggerable through the new `audit` target.
+  Files touched: `app/state.py` (the `Issue` / `VerificationReport` blocks only), `app/stages.py`
+  (`AGENT_SPECS["agent4"].standalone`, the new `audit` entry in `STAGE_TARGETS`, `AGENT_TARGETS`).
+  Evidence: `tests/test_audit_node.py::test_agent4_resolves_to_the_audit_target`,
+  `tests/test_api.py::test_agent4_is_standalone_through_the_audit_target`.
 
 ## 1. Schema binding and typed values
 
@@ -51,7 +59,8 @@
   maximum, expiry-after-issue, and schema-referenced length/charset rules. Verify: the bundle validates
   and every rule declares `rule_id`, `version`, `severity`, `gate_type`, `target_operations`.
 - [x] 2.6 Every rule carries executable test vectors. Verify: test walks the bundle and executes each
-  vector, asserting at least one `pass` and one `finding` outcome per rule.
+  vector, asserting at least one `pass` **and one `finding` and one `needs_input`** outcome per rule
+  (design D12 #3).
 
 ## 3. Coverage plan and report
 
@@ -62,19 +71,19 @@
   `outcome`, `freshness`, and the `no_applicable_checks` reason. Verify: conservation test
   (`sum(counts) == planned`), outcome matrix covering `pass+failed ≠ no_findings`, all-`not_applicable`
   → `unable_to_assess`, and `complete` only when every unit is pass/finding/not_applicable.
-- [ ] 3.3 Report carries its baseline. Verify: test asserts `verification.audit` holds snapshot digest,
+- [x] 3.3 Report carries its baseline. Verify: test asserts `verification.audit` holds snapshot digest,
   `schema_version`, bundle versions and `engine_version`, and that a differing digest marks the report
   stale rather than rebinding findings.
 
 ## 4. Findings and gate types
 
-- [ ] 4.1 Project units into `Issue` and rule failures into `Finding`, populating the four optional
+- [x] 4.1 Project units into `Issue` and rule failures into `Finding`, populating the four optional
   fields (`gate_type`, `target_operations`, `method`, `check_id`) and citing `rule_id` + version.
   Verify: test asserts a deterministic finding carries `gate_type` and a rule reference, and that
   severity never implies `blocking`.
-- [ ] 4.2 Model output can never hard-block. Verify: test feeding a `method="semantic"` finding with
+- [x] 4.2 Model output can never hard-block. Verify: test feeding a `method="semantic"` finding with
   `gate_type="hard_block"` asserts the audit reports a contract violation and does not block on it.
-- [ ] 4.3 Anchors are checked, not guessed. Verify: test where a finding references an unknown field key
+- [x] 4.3 Anchors are checked, not guessed. Verify: test where a finding references an unknown field key
   yields a `failed` unit, and a resolvable key yields an anchor that points at that field.
 
 ## 5. Operation gate
@@ -93,12 +102,12 @@
 
 ## 6. Node and transport
 
-- [ ] 6.1 `app/nodes/audit.py`: call the pure functions, write one `StageReport`, return trail entries —
+- [x] 6.1 `app/nodes/audit.py`: call the pure functions, write one `StageReport`, return trail entries —
   no business logic in the node and no model call. Verify: node test asserting the stage report status,
   contract-valid trail ops, and that a failing audit still returns a report rather than raising.
-- [ ] 6.2 Register the `audit` stage target (after 0.2). Verify: `plan_standalone("audit", state)`
+- [x] 6.2 Register the `audit` stage target (after 0.2). Verify: `plan_standalone("audit", state)`
   returns a chain, and `POST /runs/{thread_id}/stages/audit` over `TestClient` returns the envelope.
-- [ ] 6.3 Expose `verification` and `gate` in the envelope. Verify: TestClient test asserting both keys
+- [x] 6.3 Expose `verification` and `gate` in the envelope. Verify: TestClient test asserting both keys
   are present after an audit and absent (or null) before it, and that adding them breaks no existing
   console-api test.
 
@@ -113,8 +122,8 @@
 
 - [x] 8.1 Port the applicable evidence checks into `app/audit/evidence.py` as units with
   `method="deterministic"`: overreach ops in the trail, untraceable `extracted` values, dangling finding
-  anchors. Verify: tests for each, asserting `failed` units and the finding text naming the offending
-  entry or field.
+  anchors. `provenance` normalises each document **once** via `normalized_full_texts()` (design D12 #1).
+  Verify: tests for each, asserting `failed` units and the finding text naming the offending entry or field.
 - [x] 8.2 Checks that cannot run on POC data (citation support, conflict, coverage declarations) are
   reported as `not_applicable` with a reason. Verify: test asserting they appear in the report as
   `not_applicable`, never silently skipped.

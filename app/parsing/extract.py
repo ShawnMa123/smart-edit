@@ -38,19 +38,29 @@ class ExtractResult:
     failed_batches: list[str] = field(default_factory=list)
 
 
-def locate_span(doc: dict, span: str) -> tuple[int | None, list[float] | None]:
+def locate_span(
+    doc: dict,
+    span: str,
+    *,
+    normalized_blocks: list[str] | None = None,
+) -> tuple[int | None, list[float] | None]:
     """Locate `span` inside `doc.blocks` and return `(page, bbox)`; `(None, None)` if not found.
 
     Comparison uses `normalize_ws` (the same function as `provenance_check`).
     Only a hit **inside a single block** is accepted: a span crossing blocks is an overreach case,
     so return None and let it take the "not locatable" branch — never guess a bbox between two
     blocks.
+
+    `normalized_blocks` lets one extraction pass normalise each block once instead of once per
+    candidate (design D12).
     """
     needle = normalize_ws(span)
     if not needle:
         return None, None
-    for block in doc.get("blocks") or []:
-        if needle in normalize_ws(block["text"]):
+    blocks = doc.get("blocks") or []
+    texts = normalized_blocks or [normalize_ws(block["text"]) for block in blocks]
+    for block, text in zip(blocks, texts):
+        if needle in text:
             return block.get("page"), block.get("bbox")
     return None, None
 
@@ -153,6 +163,9 @@ def extract(
             )
             continue
 
+        # One normalisation per block for the whole document, not one per candidate (design D12).
+        normalized_blocks = [normalize_ws(block["text"]) for block in doc.get("blocks") or []]
+
         for batch_index, (start, end, oversize) in enumerate(_batches(doc, batch_chars)):
             blocks = doc["blocks"][start:end]
             batch_id = f"{doc['file_id']}#{batch_index}"
@@ -185,7 +198,7 @@ def extract(
                 continue
 
             for item in parsed:
-                page, bbox = locate_span(doc, item["span"])
+                page, bbox = locate_span(doc, item["span"], normalized_blocks=normalized_blocks)
                 candidates.append(
                     {
                         "key": item["key"],

@@ -31,5 +31,9 @@ def to_envelope(state: dict) -> dict:
         "stages": state.get("stages") or [],
         "trail": state.get("trail") or [],
         "_candidates": state.get("_candidates") or [],
+        # Audit surfaces (tasks 6.3): `null` means "no audit yet" / "the gate was never asked" — it
+        # never means "clean", so a client must not read a missing value as approval.
+        "verification": state.get("verification"),
+        "gate": state.get("gate"),
         "supported_stages": supported_stages(),
     }

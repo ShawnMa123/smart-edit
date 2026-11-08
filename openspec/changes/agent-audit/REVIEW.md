@@ -4,14 +4,15 @@
 > because they are business-acceptance questions, not code questions. Each one changes what the screen
 > will tell an operator, or what the gate will refuse.
 > **Who signs.** Decision 1: C proposes, B accepts. Decision 2: B. Decision 3: C (and business if handy).
-> **Why now.** Everything else in this change is built and tested (22/31 tasks, 219 tests). These three
-> gate the remaining ones: `3.3`, `4.1`–`4.3`, `6.1`–`6.3` cannot display or enforce a policy that has
-> not been agreed.
+> **Why now.** Everything else in this change is built and tested (30/31 tasks, 281 tests); the tasks
+> that were waiting on these three answers (`3.3`, `4.1`–`4.3`, `6.1`–`6.3`) are now implemented on the
+> recommended defaults, so a "no" changes one constant or one boolean plus one test — nothing is waiting.
 > **Evidence below is measured**, from `DEMO.md` runs, not estimated.
 
-> **Status (2026-11-08).** A has implemented the recommended defaults below so the work is not blocked while
-> you read this. Nothing here is final: each answer flips a constant or a boolean plus one test, not a
-> rewrite. Please tick and initial the table at the end — especially if you disagree.
+> **Status (2026-11-08, second pass).** A has implemented the recommended defaults below end to end, so
+> the work is not blocked while you read this. Nothing here is final: each answer flips a constant or a
+> boolean plus one test, not a rewrite. Please tick and initial the table at the end — especially if you
+> disagree.
 
 ## What the current build already does (so the decisions have context)
 
@@ -107,7 +108,9 @@ UI until a bundle exists.
 - **`agent-verify` boundary** (B's countersign): `agent-verify` authors rule bundles, this group owns the
   engine and the gate. Tracked as `design.md` Open Questions 1 / task 0.1.
 - **Frozen-file approval** (A + B + C): five optional contract fields plus the `agent4` standalone flip.
-  Tracked as task 0.2 — has its own checklist.
+  Tracked as task 0.2 — approved and implemented by A (additive only); B / C countersign pending and
+  changes nothing in the code.
 
-Once 1–3 are signed, we add the three rules/fields and their tests (no frozen file involved), then the
-remaining tasks `3.3`, `4.1`–`4.3`, `6.1`–`6.3` can display and enforce them.
+All three recommended defaults are now implemented end to end: one `Issue` per planned unit, the gate
+reading `verification.audit["findings"]`, and `POST /runs/{thread_id}/stages/audit` as a triggerable
+stage (the audit itself decides no operation). Your answers now only decide whether the defaults change.

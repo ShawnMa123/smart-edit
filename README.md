@@ -48,7 +48,9 @@ ingest → parse → extract → normalize → reset → (Agent2 要件校验 �
 
 > 说明：四类能力由三人分担 —— 前三类各一人，第四类与 Agent 3 同一人。
 
-**独立触发**：`agent1/2/3` 可被前端单独调用，系统自动补齐其声明的前置阶段；`agent4` 不可单独触发。
+**独立触发**：`agent1/2/3` 可被前端单独调用，系统自动补齐其声明的前置阶段；`agent4` 通过注册的
+`audit` 阶段目标触发（`POST /runs/{tid}/stages/audit` 或 `.../stages/agent4`，两者同一实现），
+前置为 `parse → extract → normalize`。
 
 ---
 
@@ -71,6 +73,8 @@ ingest → parse → extract → normalize → reset → (Agent2 要件校验 �
 pip install -e .
 uvicorn app.api.main:app --reload
 langgraph dev          # 在 LangSmith Studio 里看图和回放
+.venv/bin/python scripts/audit_demo.py   # 规范审计组：一条命令打印计划 / 覆盖率 / 闸门决策（无需模型）
+.venv/bin/python -m app.rules.doctor     # 规则包体检：字段引用 / 冲突 / 向量完整性 / 计划单元数（退出码即门禁）
 ```
 
 ---
@@ -93,8 +97,12 @@ export SMART_EDIT_LLM=fixture:fixtures/llm/extract_sample.json
 | Endpoint | Purpose |
 |---|---|
 | `POST /runs` | Create one run. Multipart with field `files`, or JSON `{"text": "..."}` for pasted text |
-| `POST /runs/{thread_id}/stages/{stage}` | Run a stage chain (`parse` / `extract` / `normalize`), backfilling prerequisites |
-| `GET /runs/{thread_id}` | Read the envelope: `fields`, `extra_fields`, `findings`, `stages`, `trail`, `supported_stages` |
+| `POST /runs/{thread_id}/stages/{stage}` | Run a stage chain (`parse` / `extract` / `normalize` / `audit`), backfilling prerequisites |
+| `GET /runs/{thread_id}` | Read the envelope: `fields`, `extra_fields`, `findings`, `stages`, `trail`, `verification`, `gate`, `supported_stages` |
+
+`verification` / `gate` are `null` until they mean something: `null` verification = no audit yet, `null`
+gate = nobody asked the gate. Neither is ever "clean". The audit decides no operation by itself — a
+decision appears only when one is asked for (`gate.evaluate(state, operation, digest)`).
 
 ```bash
 # create a run from the bundled sample document, then audit it
@@ -103,6 +111,7 @@ TID=$(curl -s -X POST localhost:8000/runs \
       | python3 -c 'import json,sys;print(json.load(sys.stdin)["thread_id"])')
 
 curl -s -X POST "localhost:8000/runs/$TID/stages/normalize" | python3 -m json.tool | head -40
+curl -s -X POST "localhost:8000/runs/$TID/stages/audit" | python3 -m json.tool | head -40
 curl -s "localhost:8000/runs/$TID" | python3 -m json.tool | head -20
 ```
 
