@@ -26,3 +26,7 @@ runs/
 # IDE
 /.idea/
 /.vscode/
+
+# Cline local tooling (workspace metadata, not part of the application)
+/.cline/
+/.clinerules/
