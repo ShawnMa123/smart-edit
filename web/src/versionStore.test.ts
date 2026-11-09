@@ -74,3 +74,13 @@ describe('version history', () => {
     expect(history.list('doc-2').map((entry) => entry.text)).toEqual(['two']);
   });
 });
+describe('spec regressions found by the audit test design', () => {
+  it.fails('BUG-F4 corrupt entries in browser storage are ignored, not exposed', () => {
+    const storage = memoryStorage();
+    storage.setItem('smart-edit:versions:doc-1', JSON.stringify([null, { id: 7 }]));
+    const history = createVersionStore(storage);
+
+    expect(history.list(DOC)).toEqual([]);
+    expect(history.get(DOC, 'anything')).toBeNull();
+  });
+});

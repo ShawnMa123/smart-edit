@@ -389,3 +389,13 @@ describe('accessibility (7.7)', () => {
     }
   });
 });
+describe('spec regressions found by the audit test design', () => {
+  it.fails('BUG-A13 disables the gate controls while the report is stale', () => {
+    renderPanel(
+      { phase: 'report', envelope: auditedEnvelope(), snapshot: snapshot('digest-1'), completedAt: 2_000 },
+      'a-different-current-digest',
+    );
+
+    expect(screen.getByRole('button', { name: 'Ask gate' })).toBeDisabled();
+  });
+});
