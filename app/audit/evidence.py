@@ -7,6 +7,8 @@ identity.
 
 from __future__ import annotations
 
+import re
+
 from app.parsing.normalize import normalized_full_texts, span_locatable
 from app.rules.types import (
     FAILED,
@@ -19,7 +21,11 @@ from app.rules.types import (
 )
 from app.state import OVERREACH_OPS
 
-NOT_RUN_REASON = "requires_agent_regulatory_output"
+REGULATORY_REASON = "requires_agent_regulatory_output"
+VERIFY_REASON = "requires_agent_verify_output"
+# Checks with no implementation yet report the missing upstream capability, never `pass`.
+NOT_RUN_REASON = REGULATORY_REASON
+_UNAVAILABLE_REASONS = {"conclusion_conflict": VERIFY_REASON}
 
 
 def _finding(unit: Unit, title: str, severity: str, gate_type: str, detail: dict) -> dict:
@@ -94,10 +100,211 @@ def _check_finding_anchor(unit: Unit, state: dict) -> CheckResult:
     )
 
 
+_CURRENCY = r"USD|EUR|GBP|JPY|CNY|RMB|SGD|HKD|AUD|CAD|CHF"
+_AMOUNT_RE = re.compile(rf"\b({_CURRENCY})\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b", re.IGNORECASE)
+_ISO_DATE_RE = re.compile(r"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b")
+_DMY_DATE_RE = re.compile(r"\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b")
+_RULE_RE = re.compile(r"\b(UCP|URDG|URC|ISP|eUCP|ISBP)\s*(\d{3})\b", re.IGNORECASE)
+_CLAUSE_RE = re.compile(r"\b(?:article|clause|section)\s+(\d+(?:\.\d+)*)\b|第\s*(\d+)\s*条", re.IGNORECASE)
+_COUNTRY_CODE_RE = re.compile(r"\b(AE|CN|GB|HK|SG|US|UAE)\b")
+_COUNTRY_NAME_RE = re.compile(
+    r"\b(United Arab Emirates|United Kingdom|United States|China|Hong Kong|Singapore)\b",
+    re.IGNORECASE,
+)
+_COUNTRY_BY_NAME = {
+    "united arab emirates": "AE",
+    "united kingdom": "GB",
+    "united states": "US",
+    "china": "CN",
+    "hong kong": "HK",
+    "singapore": "SG",
+}
+
+_UNCOVERED_MARKERS = (
+    "未覆盖",
+    "未涵盖",
+    "not covered",
+    "coverage unavailable",
+    "法规建议未覆盖",
+)
+_UNCERTAIN_MARKERS = ("业务类型不确定", "business type uncertain")
+
+
+def _entities(text: str) -> set[str]:
+    """Key facts a citation must carry (amount / date / country / rule / clause).
+
+    Minimal local implementation so Agent 4 does not import Agent 3's extractor. TODO(agent3):
+    unify with `app.regulatory.entities.extract_entities` once that module lands; until then the
+    audit must not depend on an unmerged package.
+    """
+    found: set[str] = set()
+    for currency, number in _AMOUNT_RE.findall(text):
+        found.add(f"amount:{currency.upper()}{number.replace(',', '')}")
+
+    for year, month, day in _ISO_DATE_RE.findall(text):
+        found.add(f"date:{int(year):04d}-{int(month):02d}-{int(day):02d}")
+    for day, month, year in _DMY_DATE_RE.findall(text):
+        full_year = int(year)
+        if full_year < 100:
+            full_year += 2000
+        found.add(f"date:{full_year:04d}-{int(month):02d}-{int(day):02d}")
+
+    for rule, number in _RULE_RE.findall(text):
+        found.add(f"rule:{rule.upper()}{number}")
+
+    for article, clause in _CLAUSE_RE.findall(text):
+        found.add(f"clause:{article or clause}")
+
+    for code in _COUNTRY_CODE_RE.findall(text):
+        found.add(f"country:{code}")
+    for name in _COUNTRY_NAME_RE.findall(text):
+        found.add(f"country:{_COUNTRY_BY_NAME[name.lower()]}")
+    return found
+
+
+def _check_citation_support(unit: Unit, state: dict) -> CheckResult:
+    legal = state.get("legal") or {}
+    claims = legal.get("claims") or []
+    if not legal or not claims:
+        return CheckResult(unit.check_id, NOT_APPLICABLE, reason_code="no_regulatory_claims")
+
+    chunks = {
+        str(chunk.get("chunk_id")): chunk
+        for chunk in state.get("retrieved") or []
+        if chunk.get("chunk_id")
+    }
+    fabricated: list[str] = []
+    entity_gaps: list[dict] = []
+    inconsistent: list[str] = []
+
+    for claim in claims:
+        chunk_id = claim.get("chunk_id")
+        if not chunk_id:
+            continue
+        key = str(chunk_id)
+        chunk = chunks.get(key)
+        if chunk is None:
+            fabricated.append(key)
+        else:
+            missing = _entities(claim.get("text") or "") - _entities(chunk.get("text") or "")
+            if missing:
+                entity_gaps.append(
+                    {
+                        "chunk_id": key,
+                        "claim": claim.get("text"),
+                        "missing_entities": sorted(missing),
+                    }
+                )
+        if claim.get("support") == "insufficient":
+            inconsistent.append(key)
+
+    if fabricated or entity_gaps:
+        detail = {
+            "chunk_ids": fabricated,
+            "entity_gaps": entity_gaps,
+            "evidence": (fabricated or [gap["chunk_id"] for gap in entity_gaps])[0],
+        }
+        return CheckResult(
+            unit.check_id,
+            FINDING,
+            finding=_finding(
+                unit,
+                "A regulatory claim cites a chunk that does not support it",
+                "critical",
+                "hard_block",
+                detail,
+            ),
+        )
+
+    if inconsistent:
+        detail = {"chunk_ids": inconsistent, "evidence": inconsistent[0]}
+        return CheckResult(
+            unit.check_id,
+            FINDING,
+            finding=_finding(
+                unit,
+                "A claim marked insufficient still cites a chunk",
+                "warn",
+                "advisory",
+                detail,
+            ),
+        )
+
+    return CheckResult(unit.check_id, PASS)
+
+
+def _coverage_text(legal: dict) -> str:
+    coverage = legal.get("coverage") or {}
+    notes = coverage.get("notes")
+    if isinstance(notes, str):
+        notes = [notes]
+    return " ".join([str(legal.get("summary") or ""), *(str(note) for note in notes or [])]).lower()
+
+
+def _check_coverage_declaration(unit: Unit, state: dict) -> CheckResult:
+    legal = state.get("legal") or {}
+    if not legal:
+        return CheckResult(unit.check_id, NOT_APPLICABLE, reason_code="no_regulatory_output")
+
+    coverage = legal.get("coverage") or {}
+    retrieved = state.get("retrieved") or []
+    unavailable = coverage.get("unavailable") is True
+    summary = str(legal.get("summary") or "").lower()
+
+    if unavailable and not any(marker in summary for marker in _UNCOVERED_MARKERS):
+        detail = {"unavailable": True, "summary": legal.get("summary"), "evidence": "unavailable"}
+        return CheckResult(
+            unit.check_id,
+            FINDING,
+            finding=_finding(
+                unit,
+                "The regulatory answer says coverage is unavailable without declaring the gap",
+                "critical",
+                "hard_block",
+                detail,
+            ),
+        )
+
+    if not unavailable and not retrieved:
+        detail = {"unavailable": False, "retrieved": 0, "evidence": "no_retrieval"}
+        return CheckResult(
+            unit.check_id,
+            FINDING,
+            finding=_finding(
+                unit,
+                "Coverage is claimed but nothing was retrieved",
+                "critical",
+                "hard_block",
+                detail,
+            ),
+        )
+
+    text = _coverage_text(legal)
+    if coverage.get("business_type_uncertain") is True and not any(
+        marker in text for marker in _UNCERTAIN_MARKERS
+    ):
+        detail = {"business_type_uncertain": True, "evidence": "business_type_uncertain"}
+        return CheckResult(
+            unit.check_id,
+            FINDING,
+            finding=_finding(
+                unit,
+                "The business type is uncertain but the answer does not say so",
+                "warn",
+                "advisory",
+                detail,
+            ),
+        )
+
+    return CheckResult(unit.check_id, PASS)
+
+
 _CHECKS = {
     "trail_overreach": _check_trail_overreach,
     "provenance": _check_provenance,
     "finding_anchor": _check_finding_anchor,
+    "citation_support": _check_citation_support,
+    "coverage_declaration": _check_coverage_declaration,
 }
 
 
@@ -106,7 +313,8 @@ def evaluate_evidence_unit(unit: Unit, state: dict) -> CheckResult:
     name = unit.check_id.split(":", 1)[-1]
     check = _CHECKS.get(name)
     if check is None:
-        return CheckResult(unit.check_id, NOT_APPLICABLE, reason_code=NOT_RUN_REASON)
+        reason = _UNAVAILABLE_REASONS.get(name, NOT_RUN_REASON)
+        return CheckResult(unit.check_id, NOT_APPLICABLE, reason_code=reason)
     try:
         return check(unit, state)
     except RuleEvaluationError as exc:
