@@ -16,6 +16,10 @@
   这是一个"拓宽枚举"的加法，现有代码与数据完全不受影响。A 在采纳本 change 时批准；B / C 追认待签——
   他们若反对，回滚方式是把字面量改回 4 个取值并删除 DOCX/OCR 两个分支（`app/parsing/parse.py`），
   不影响其他任何模块。证据：`tests/test_parse_import.py`、`tests/test_api.py::test_the_envelope_carries_the_imported_documents`。
+
+  **归档批准（2026-11-09）**：项目所有者 Andy 明确批准归档（"我同意"）：确认这是纯加法——6 个取值中既有 4 个不变，
+  无字段、类型或行为回退。B / C 的追认仍待签；与 `agent-audit` 0.2 的口径一致——改动只拓宽冻结枚举、不影响任何
+  既有数据，追认不阻塞归档；若 B / C 事后反对，回滚步骤同上。
 - [x] 0.2 `app/api/envelope.py`：新增 `documents` 键 `[{file_id, filename, form, errors, full_text}]`，未解析时为 `[]`。Verify: `TestClient` 测试断言未解析运行返回 `[]`、解析后字段齐全，且既有 10 个键与 `INCOMPLETE_RESULT` 语义不变。
 
 ## 1. DOCX 解析（零新依赖）
