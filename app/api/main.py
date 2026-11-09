@@ -23,6 +23,7 @@ from app.llm import resolve_llm
 from app.nodes.audit import AUDIT_AGENT, AUDIT_STAGE
 from app.nodes.gate import gate_node
 from app.runs import RunStore, UnknownRun
+from app.runner import Runner
 from app.runtime import UnknownStage, execute_chain, merge_update
 from app.standalone import plan_standalone
 from app.stages import AGENT_SPECS
@@ -97,16 +98,32 @@ async def _read_submission(request: Request) -> tuple[list[tuple[str, str, bytes
     return [], None
 
 
+def _control_body(state: dict, result: dict) -> dict:
+    """Envelope + one control-plane outcome; `interrupt` is the first pause payload."""
+    body = to_envelope(state)
+    body["status"] = result.get("status")
+    body["interrupt"] = result.get("interrupt")
+    body["interrupts"] = result.get("interrupts") or []
+    return body
+
+
 def create_app(
     *,
     store: RunStore | None = None,
     llm=_UNSET,
     runs_dir: str | Path | None = None,
+    runner: Runner | None = None,
+    checkpointer_path: str | Path | None = None,
 ) -> FastAPI:
     """Build the app. `llm` overrides provider resolution (tests inject a fixture or `None`)."""
     app = FastAPI(title="smart-edit console API", version="0.1.0")
     app.state.store = store if store is not None else RunStore(runs_dir)
     app.state.llm = resolve_llm() if llm is _UNSET else llm
+    app.state.runner = runner or Runner(
+        app.state.store,
+        llm=app.state.llm,
+        checkpointer_path=checkpointer_path,
+    )
 
     @app.exception_handler(ApiFailure)
     async def _api_failure(request: Request, exc: ApiFailure) -> JSONResponse:  # noqa: ARG001
@@ -169,11 +186,17 @@ def create_app(
         return JSONResponse(status_code=201, content=to_envelope(state))
 
     @app.post("/runs/{thread_id}/stages/{stage}")
-    async def trigger_stage(thread_id: str, stage: str, template: str | None = None) -> dict:
+    async def trigger_stage(
+        thread_id: str,
+        stage: str,
+        template: str | None = None,
+        input_mode: str = "raw",
+    ) -> dict:
         """Run a stage chain. `?template=<id>` asks for template-driven audit (design D18).
 
-        The query parameter can only *narrow* which published template applies; it can never select a
-        version or an unpublished pack.
+        `input_mode=raw|enriched` applies to Agent 3; `raw` is the default so the existing console
+        (source text only) keeps its behaviour. The query parameter can only *narrow* which
+        published template applies; it can never select a version or an unpublished pack.
         """
         store_: RunStore = app.state.store
         state = store_.get(thread_id)
@@ -188,7 +211,7 @@ def create_app(
                 {"agent": stage},
             )
 
-        plan = plan_standalone(stage, state)
+        plan = plan_standalone(stage, state, input_mode=input_mode)
         if plan.get("status") != 200:
             raise _read_plan_refusal(plan)
 
@@ -310,6 +333,36 @@ def create_app(
             "events": events,
             "latest": latest(events, finding_id),
         }
+
+    @app.post("/runs/{thread_id}/run")
+    async def run_graph(thread_id: str) -> dict:
+        """Run the checkpointed main graph to its first `interrupt` (or `END`).
+
+        The five frontend endpoints keep their legacy chain semantics; this endpoint is the
+        additive control plane the `poc-skeleton` graph needs. It never bypasses the per-run lock.
+        """
+        store_: RunStore = app.state.store
+        state = store_.get(thread_id)
+        async with store_.lock(thread_id):
+            result = app.state.runner.start(thread_id)
+        return _control_body(state, result)
+
+    @app.post("/runs/{thread_id}/resume")
+    async def resume_run(thread_id: str, request: Request) -> dict:
+        """Resume one `hitl` interrupt. The same payload is applied exactly once."""
+        store_: RunStore = app.state.store
+        state = store_.get(thread_id)
+        payload = await _read_object(request)
+        async with store_.lock(thread_id):
+            result = app.state.runner.resume(thread_id, payload)
+        return _control_body(state, result)
+
+    @app.get("/runs/{thread_id}/events")
+    async def read_events(thread_id: str) -> dict:
+        """Oldest-first node / stage / trail timeline for the replay view."""
+        store_: RunStore = app.state.store
+        store_.get(thread_id)
+        return {"thread_id": thread_id, "events": app.state.runner.events(thread_id)}
 
     @app.get("/runs/{thread_id}")
     async def read_run(thread_id: str) -> dict:

@@ -21,6 +21,7 @@ from app.nodes.normalize import normalize_node
 from app.nodes.parse import parse_node
 from app.regulatory.node import regulatory_node
 from app.stages import STAGE_TARGETS, latest_stage
+from app.standalone import clear_previous_outputs
 
 # The only keys with a reducer in `app/state.py`. Anything else overwrites.
 REDUCER_KEYS = ("findings", "trail", "stages")
@@ -90,18 +91,19 @@ def execute_chain(
         # retrieval and `R-` findings instead of showing a stale one. Other done stages stay reusable.
         if is_done(state, stage) and stage != "agent3":
             continue
+        # Only the target's own conclusions are cleared; `stages` / `trail` stay append-only.
+        stale = clear_previous_outputs(state, stage)
+        if stale:
+            # `findings` is a reducer key in the graph, but the chain executor is a plain dict:
+            # replacing means assignment here, never `merge_update` (which would append).
+            if "findings" in stale:
+                state["findings"] = stale.pop("findings")
+            merge_update(state, stale)
         if stage == "parse":
             update = parse_node(state)
         elif stage == "extract":
             update = extract_node(state, llm=llm, field_keys=field_keys)
         elif stage == "agent3":
-            state["findings"] = [
-                finding
-                for finding in state.get("findings") or []
-                if finding.get("source") != "regulatory"
-            ]
-            state["legal"] = None
-            state["retrieved"] = []
             update = regulatory_node(state, retriever=retriever, answerer=answerer)
         elif stage == "audit":
             update = audit_node(state, template_reference=template_reference)
