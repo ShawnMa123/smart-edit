@@ -17,6 +17,10 @@ export interface UseRichEditorOptions {
 }
 
 export function useRichEditor({ document, onChange }: UseRichEditorOptions): Editor | null {
+  // The last document the editor itself produced. The parent echoes it back as a prop; tracking the
+  // exact object is what lets the effect tell "my own edit" from "an import/version restore".
+  const applied = useRef<RichDocument>(document);
+
   const editor = useEditor({
     extensions,
     content: toEditorContent(document),
@@ -26,12 +30,16 @@ export function useRichEditor({ document, onChange }: UseRichEditorOptions): Edi
         'aria-label': 'Document text',
       },
     },
-    onUpdate: ({ editor: instance }) => onChange(toRichDocument(instance.getJSON())),
+    onUpdate: ({ editor: instance }) => {
+      const next = toRichDocument(instance.getJSON());
+      applied.current = next;
+      onChange(next);
+    },
   });
 
   // Replace the content when a *different* document arrives (import, version restore), without
-  // echoing it back as a user edit.
-  const applied = useRef<RichDocument>(document);
+  // echoing it back as a user edit. Without updating `applied` in `onUpdate`, every keystroke looks
+  // like an external document and `setContent` resets the selection to the end.
   useEffect(() => {
     if (!editor || applied.current === document) return;
     applied.current = document;

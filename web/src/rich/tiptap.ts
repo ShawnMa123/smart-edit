@@ -5,7 +5,7 @@
  * not a translation — one less place where the audit's text can drift from what the user sees.
  */
 
-import { Node, Extension } from '@tiptap/core';
+import { Node, Extension, mergeAttributes } from '@tiptap/core';
 import { FindAndReplace } from '@tiptap/extension-find-and-replace';
 import { TableKit } from '@tiptap/extension-table';
 import type { JSONContent } from '@tiptap/core';
@@ -49,6 +49,17 @@ const DisplayAttributes = Extension.create({
             renderHTML: (attributes) =>
               attributes.page ? { 'data-page': String(attributes.page) } : {},
           },
+          row: {
+            default: null,
+            parseHTML: (element) => element.getAttribute('data-pdf-row') === 'true',
+            renderHTML: (attributes) => (attributes.row ? { 'data-pdf-row': 'true' } : {}),
+          },
+          align: {
+            default: null,
+            parseHTML: (element) => element.getAttribute('data-pdf-align'),
+            renderHTML: (attributes) =>
+              attributes.align ? { 'data-pdf-align': String(attributes.align) } : {},
+          },
         },
       },
     ];
@@ -65,6 +76,46 @@ const PageBreak = Node.create({
   renderHTML: () => ['hr', { 'data-page-break': 'true', class: 'page-break' }],
 });
 
+/** A gap inside one visual row: a drawn blank or a spacer; it may hold user-entered text (D22/D25-D27). */
+const PdfGap = Node.create({
+  name: 'pdfGap',
+  group: 'inline',
+  inline: true,
+  content: 'text*',
+  selectable: false,
+  draggable: false,
+  addAttributes() {
+    return {
+      rule: { default: false },
+      grow: { default: 1 },
+    };
+  },
+  parseHTML: () => [
+    {
+      tag: 'span[data-pdf-gap]',
+      getAttrs: (element) => ({
+        rule: element.getAttribute('data-pdf-rule') === 'true',
+        grow: Number(element.getAttribute('data-pdf-grow') ?? 1),
+      }),
+    },
+  ],
+  renderHTML({ HTMLAttributes }) {
+    const { rule, grow, ...rest } = HTMLAttributes;
+    const visible = Boolean(rule);
+    return [
+      'span',
+      mergeAttributes(rest, {
+        'data-pdf-gap': 'true',
+        'data-pdf-rule': visible ? 'true' : 'false',
+        'data-pdf-grow': String(grow ?? 1),
+        class: visible ? 'pdf-gap pdf-gap--rule' : 'pdf-gap',
+        style: `flex-grow:${grow ?? 1}`,
+      }),
+      0,
+    ];
+  },
+});
+
 /** Everything ED-02 asks for that the library provides in one place. */
 export const extensions = [
   StarterKit.configure({
@@ -76,6 +127,7 @@ export const extensions = [
   FindAndReplace.configure({ searchTerm: '', searchDebounceMs: 0 }),
   DisplayAttributes,
   PageBreak,
+  PdfGap,
 ];
 
 type AnyNode = {

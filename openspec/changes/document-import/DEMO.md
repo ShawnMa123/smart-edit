@@ -160,6 +160,79 @@ VITE_E2E=1 VITE_E2E_RICH=1 VITE_API_BASE=http://127.0.0.1:8010 \
 - **可见字符仍然逐字相同**：`\xa0` 与全角空格保留（有断言）；只移除不可见的 `\x07` / `\x08` 并把 `\t` 变空格。
 - **只保证"同行"**：页码不右对齐、填空宽度会塌成一个空格——这是显示层方案 B，独立 change；跨 block 的表格行与 OCR 路径的行重组也不在本轮。
 
+## 第四轮：PDF 布局保真（2026-11-09）
+
+客户指出 `Beneficiary:` 后面的长下划线"没识别出来"，目录/页码的格式仍对不上。根因是 PDF 有两层内容：
+`get_text()` 只读**文字**，空白下划线是 `get_drawings()` 里的 0.3pt 描边线；"靠右"也只存在于坐标里。
+
+```bash
+.venv/bin/python -m pytest tests/test_pdf_layout.py -q          # 17 passed（行规则 + gap 规划）
+.venv/bin/python -m pytest tests/test_import_acceptance.py -q   # 13 passed（真实 25 页样本）
+.venv/bin/python -m pytest -q                                   # 401 passed
+npm --prefix web run test                                       # 153 passed / 12 skipped
+npm --prefix web run typecheck                                  # clean
+npm --prefix web run build                                      # 803.00 kB（gzip 255.02 kB）
+VITE_E2E=1 VITE_E2E_RICH=1 VITE_API_BASE=http://127.0.0.1:8010 \
+  npm --prefix web run test -- src/e2e.rich.test.ts             # 3 passed（739 块 / 24 页边界）
+```
+
+### 修前 / 修后（同一份 25 页样本，实测）
+
+| 指标 | 第三轮 | 第四轮 |
+|---|---|---|
+| `Beneficiary:` 后的下划线 | 不可见 | **可见（`pdfGap` rule=true，grow=479.1）** |
+| 目录 `Tender Guarantee Standard` + `4` | 同一行、数字紧跟 | **同一行、数字贴右边界（不可见 gap，grow=399.3）** |
+| `Page` 与 24 个页码 | 左对齐 | **右对齐（`align=right`）** |
+| 带下划线的行 | 0 显示 | **171 行**（226 条线；24 个页眉分隔线被排除） |
+| 右对齐单片段 | 0 | **26 个**（24 个页码 + `Page` + 一个占位符） |
+| 文本块 / 字符 / 换行 | 715 / 50022 / 735 | **不变** |
+| 页边界 | 24 | **24** |
+| 投影 vs `full_text` | 逐字相同 | **逐字相同** |
+| 构建体积 | 802.19 kB | **803.00 kB（+0.81 kB）** |
+
+### 规则与口径
+
+- 只读**水平、宽 > 20pt、高 < 1.5pt** 的绘制线；只关联到**单视觉行** block（线 y 在行带 ±3pt；线可紧邻行首/行尾 ≤40pt）；与文字 x 覆盖的线跳过；空片段（只剩 `\x07`）不挡住它后面的线。
+- 行首 / 行尾 / 片段之间的线 → 可见下划线；没有线的**大间距** → 不可见弹性间距（把后面的内容推到右边界）。
+- 单片段且贴着页面右边界（页码、`Page`、右侧占位符）→ `align=right`。
+- 显示节点/属性**不产生字符**：`full_text` 仍 50022 字符、715 块、24 页边界；审计 `counts`/`outcome` 不变。
+- **近似而非像素级**：编辑器字体通常不是 PDF 的 UniversNext，空白宽度按 flex-grow 比例分配；目标是"看得见下划线、页码在右"。
+- **Non-Goals**：空白作为可填写字段（A+）、绝对定位/像素级重排、跨 block 表格行、OCR 路径的绘制线。
+
+## 第五轮：可填写空白与光标稳定（2026-11-09）
+
+客户反馈：在导入后的下划线处输入时，光标会跳到文档最后一行，无法把光标放进下划线。两个独立原因：
+
+1. `useRichEditor` 在 `onUpdate` 里回调新的 rich 文档，但没有更新 `applied` ref；父组件把它作为 `document` 传回时，effect 当成外部文档并 `setContent`，选区被重置到文末。
+2. `pdfGap` 是 `atom: true` 且没有 content，里面没有文字位置。
+
+```bash
+.venv/bin/python -m pytest -q                                   # 402 passed
+npm --prefix web run test                                       # 156 passed / 12 skipped
+npm --prefix web run typecheck                                  # clean
+npm --prefix web run build                                      # 803.13 kB（gzip 255.08 kB）
+(cd web && PW_CHANNEL=chrome npx playwright test e2e/fillable-blank.spec.ts --project=desktop)
+                                                                 # 1 passed（真实 Chrome，导入真实 PDF）
+```
+
+### 修前 / 修后
+
+| 指标 | 修前 | 修后 |
+|---|---|---|
+| 在 `Beneficiary:` 的下划线内输入 | 光标跳到文末 / 不能落点 | **文字落在 gap 内，光标保持** |
+| 空 gap 的投影 | `Beneficiary:`（50022 字符） | **不变** |
+| 填入 `ACME Trading` 后 | — | **`Beneficiary: ACME Trading`，进入审计输入** |
+| 解析得到的 `full_text` | 50022 字符 | **不变**（填入只发生在客户端富文档） |
+| 旧快照 / 没有 content 的 gap | — | **渲染为空空白，兼容** |
+| 构建体积 | 803.00 kB | **803.13 kB（+0.13 kB）** |
+
+### 规则与口径
+
+- 回声守卫：`applied.current = next` 在 `onUpdate` 里更新；只有外部导入/版本恢复才 `setContent`。
+- `pdfGap` 变为可编辑内联容器（`content: text*`）：空时是装饰，填入的文字是文档内容；投影在文字↔gap 边界补一个空格。
+- **仍然不是结构化表单字段**：没有 key/value、没有自动抽取、没有 `<input>`；多行空白/大段填写不在本轮。
+- 验收用真实 Chrome 导入 25 页样本，点击下划线输入，断言文字在 gap 内且没有跳到文末；前端单测覆盖回声守卫与投影。
+
 ## 已知边界
 
 1. 导入的 run 与随后审计的 run 是两个 run（`design.md` Open Questions 1）；审计报告里没有原始文件的 `sha256`。

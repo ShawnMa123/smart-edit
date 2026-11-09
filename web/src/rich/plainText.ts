@@ -18,14 +18,24 @@
 
 import type {
   BlockNode,
+  InlineNode,
   ListItemNode,
   RichDocument,
   TableCellNode,
-  TextNode,
 } from './richDocument';
 
-const textOf = (nodes: TextNode[] | undefined): string =>
-  (nodes ?? []).map((node) => node.text ?? '').join('');
+const textOf = (nodes: InlineNode[] | undefined): string => {
+  let text = '';
+  for (const node of nodes ?? []) {
+    const piece = node.type === 'text' ? (node.text ?? '') : textOf(node.content);
+    if (!piece) continue;
+    // A filled blank is document text: keep one readable space at the text↔blank boundary. An empty
+    // gap contributes nothing, so an untouched import still projects exactly as before.
+    if (text && !/\s$/.test(text) && !/^\s/.test(piece)) text += ' ';
+    text += piece;
+  }
+  return text;
+};
 
 const cellText = (cell: TableCellNode): string =>
   (cell.content ?? []).map((paragraph) => textOf(paragraph.content)).join(' ');

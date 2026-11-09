@@ -12,6 +12,9 @@ A PDF carries no semantics, but it does carry *evidence of layout*: font size, f
   deleted, because "look like the original" and "quietly tidy up" are opposites;
 - **visual rows inside a block** (D17-D19): a title and its right-aligned page number, or a sentence
   split by an underlined blank, share one row and are joined with a single space;
+- **drawn blanks and right alignment** (D21-D23): thin horizontal rules become visible `pdfGap` nodes,
+  large gaps without a rule become invisible spacers (which push a TOC page number to the right), and
+  a right-aligned single fragment gets `align: "right"` — all display-only, no characters;
 - **nothing is rewritten** (D16): every block's *visible* characters survive, including `\\xa0`; the
   invisible `\\x07` / `\\x08` marks are dropped and a tab becomes one space.
 """
@@ -20,7 +23,13 @@ from __future__ import annotations
 
 from collections import Counter
 
-from app.parsing.pdf_layout import clean_text, visual_rows
+from app.parsing.pdf_layout import (
+    block_text,
+    clean_text,
+    horizontal_rules,
+    row_layout,
+    visual_rows,
+)
 
 HEADING_RANKS = 3
 PAGE_BREAK = "pageBreak"
@@ -93,6 +102,35 @@ def _text_nodes(block: dict) -> list[dict]:
         if row_index < len(rows) - 1:
             nodes[-1]["text"] += "\n"
     return nodes
+
+
+def _layout_nodes(items: list[dict]) -> list[dict]:
+    """Text nodes plus display-only gaps; the gaps contribute no characters to the projection."""
+    nodes: list[dict] = []
+    seen_text = False
+    for item in items:
+        if "line" in item:
+            if seen_text:
+                nodes.append({"type": "text", "text": " "})
+            nodes.extend(_fragment_nodes(item["line"]))
+            seen_text = True
+        else:
+            nodes.append(
+                {
+                    "type": "pdfGap",
+                    "attrs": {"rule": bool(item["rule"]), "grow": round(float(item["grow"]), 1)},
+                }
+            )
+    return nodes
+
+
+def _is_right_aligned(row: list[dict], content_right: float, page_width: float) -> bool:
+    """A single fragment hugging the page's right edge (a page number, 'Page', a right-side label)."""
+    if len(row) != 1:
+        return False
+    x0 = float(row[0]["bbox"][0])
+    x1 = float(row[0]["bbox"][2])
+    return content_right > 0 and x1 >= content_right - 6 and x0 > page_width * 0.5
 
 
 def _block_size(block: dict) -> float:
@@ -182,16 +220,26 @@ def document_to_rich(path: str) -> dict:
         every_size: list[float] = []
         for page_number, page in enumerate(document, start=1):
             blocks: list[dict] = []
+            content_right = 0.0
             for raw in page.get_text("dict").get("blocks", []):
                 if raw.get("type") != 0:  # 0 = text block; images are not this module's business
                     continue
-                nodes = _text_nodes(raw)
-                text = "".join(node["text"] for node in nodes)
-                if not text.strip():
+                if not block_text(raw).strip():
                     continue
-                blocks.append({"nodes": nodes, "size": _block_size(raw), "raw": raw})
-                every_size.append(_block_size(raw))
-            pages.append({"page": page_number, "blocks": blocks})
+                size = _block_size(raw)
+                blocks.append({"raw": raw, "size": size})
+                every_size.append(size)
+                for line in raw.get("lines") or []:
+                    content_right = max(content_right, float(line["bbox"][2]))
+            pages.append(
+                {
+                    "page": page_number,
+                    "blocks": blocks,
+                    "rules": horizontal_rules(page.get_drawings()),
+                    "content_right": content_right,
+                    "page_width": float(page.rect.width),
+                }
+            )
         toc = _toc_entries(document)
     finally:
         document.close()
@@ -212,20 +260,30 @@ def document_to_rich(path: str) -> dict:
         previous_page = page["page"]
 
         for block in page["blocks"]:
-            text = "".join(node["text"] for node in block["nodes"])
-            attrs = _block_attrs(block["raw"], page["page"])
+            raw = block["raw"]
+            rows = visual_rows(raw)
+            nodes = _text_nodes(raw)
+            attrs = _block_attrs(raw, page["page"])
+            if len(rows) == 1:
+                items = row_layout(rows[0], page["rules"])
+                if any("rule" in item for item in items):
+                    nodes = _layout_nodes(items)
+                    attrs["row"] = True
+                if _is_right_aligned(rows[0], page["content_right"], page["page_width"]):
+                    attrs["align"] = "right"
+            text = "".join(node["text"] for node in nodes if node["type"] == "text")
             level = _toc_level_for(text, page["page"], toc)
-            if level is None and _is_uniform(block["raw"]):
+            if level is None and _is_uniform(raw):
                 # A block that mixes sizes is not a heading: promoting it would turn a paragraph that
                 # merely starts with a large line into a title (and silently restyle its body text).
                 level = ranks.get(round(block["size"], 1))
             if level:
                 content.append(
-                    {"type": "heading", "attrs": {"level": level, **attrs}, "content": block["nodes"]}
+                    {"type": "heading", "attrs": {"level": level, **attrs}, "content": nodes}
                 )
                 heading_count += 1
             else:
-                content.append({"type": "paragraph", "attrs": attrs, "content": block["nodes"]})
+                content.append({"type": "paragraph", "attrs": attrs, "content": nodes})
 
     parts = [
         f"{len(pages)} pages",

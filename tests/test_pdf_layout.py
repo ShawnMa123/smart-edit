@@ -1,8 +1,17 @@
-"""Tasks 10.1-10.3 - visual rows inside one PDF block, and the characters they must not leak."""
+"""Tasks 10.1-10.3 and 13.1-13.2 - visual rows inside one PDF block, and layout gaps."""
 
 from __future__ import annotations
 
-from app.parsing.pdf_layout import block_text, clean_text, row_fragments, visual_rows
+import pytest
+
+from app.parsing.pdf_layout import (
+    block_text,
+    clean_text,
+    horizontal_rules,
+    row_fragments,
+    row_layout,
+    visual_rows,
+)
 from app.parsing.rich_pdf import _text_nodes
 
 
@@ -143,3 +152,77 @@ def test_rich_nodes_project_to_exactly_the_block_text():
     assert "".join(node["text"] for node in nodes) == block_text(block)
     assert block_text(block) == "Amount: USD 500.00 4"
     assert any("bold" in (node.get("marks") or []) for node in nodes)
+
+
+# --- 13.1 / 13.2 layout planning ------------------------------------------------------------------
+
+
+def test_horizontal_rules_keep_only_thin_wide_strokes():
+    drawings = [
+        {"rect": (10.0, 100.0, 200.0, 100.2)},
+        {"rect": (10.0, 100.0, 10.3, 200.0)},  # vertical
+        {"rect": (10.0, 100.0, 200.0, 120.0)},  # thick box
+    ]
+
+    assert horizontal_rules(drawings) == [(10.0, 100.0, 200.0, 100.2)]
+
+
+def test_a_trailing_rule_becomes_a_visible_gap():
+    row = visual_rows(_block(_line("Beneficiary:", x0=34.0, x1=83.0, y0=100.0, y1=112.0)))[0]
+
+    items = row_layout(row, [(82.2, 110.5, 561.3, 110.7)])
+
+    assert "line" in items[0]
+    assert items[1]["rule"] is True
+    assert items[1]["grow"] == pytest.approx(479.1)
+
+
+def test_a_leading_rule_becomes_a_visible_gap_before_the_text():
+    row = visual_rows(
+        _block(_line("[Name and Address of Purchaser]", x0=419.4, x1=558.5, y0=100.0, y1=112.0))
+    )[0]
+
+    items = row_layout(row, [(34.0, 110.5, 419.5, 110.7)])
+
+    assert items[0]["rule"] is True
+    assert items[0]["grow"] == pytest.approx(385.5)
+    assert "line" in items[1]
+
+
+def test_a_large_gap_without_a_rule_is_an_invisible_spacer():
+    row = visual_rows(
+        _block(
+            _line("Tender Guarantee Standard", x0=34.0, x1=157.0),
+            _line("4", x0=556.0, x1=561.0),
+        )
+    )[0]
+
+    items = row_layout(row, [])
+
+    assert [("line" in item) for item in items] == [True, False, True]
+    assert items[1]["rule"] is False
+    assert items[1]["grow"] == pytest.approx(399.0)
+
+
+def test_a_rule_between_two_fragments_is_visible():
+    row = visual_rows(
+        _block(
+            _line("We are informed by ", x0=34.0, x1=115.0),
+            _line(" (the “Tenderer”) that they are submitting", x0=284.9, x1=538.7),
+        )
+    )[0]
+
+    items = row_layout(row, [(115.0, 110.5, 284.9, 110.7)])
+
+    assert [("line" in item) for item in items] == [True, False, True]
+    assert items[1]["rule"] is True
+    assert items[1]["grow"] == pytest.approx(169.9)
+
+
+def test_a_rule_under_the_text_itself_is_not_a_blank():
+    row = visual_rows(_block(_line("Section", x0=34.0, x1=200.0)))[0]
+
+    items = row_layout(row, [(34.0, 110.5, 200.0, 110.7)])
+
+    assert len(items) == 1
+    assert "line" in items[0]

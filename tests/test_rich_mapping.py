@@ -171,7 +171,7 @@ def test_pdf_text_is_never_altered(tmp_path):
 
     rich = pdf_to_rich(str(path))
     joined = "\n".join(
-        "".join(node["text"] for node in block.get("content") or []) for block in rich["content"]
+        "".join(node.get("text", "") for node in block.get("content") or []) for block in rich["content"]
     )
 
     assert "Amount: USD 500,000.00" in joined

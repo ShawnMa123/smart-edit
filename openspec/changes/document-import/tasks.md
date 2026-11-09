@@ -1,6 +1,6 @@
 # Tasks
 
-> 依据：`proposal.md`（范围）、`specs/document-import/spec.md`（要求）、`design.md`（做法 D1–D24）、
+> 依据：`proposal.md`（范围）、`specs/document-import/spec.md`（要求）、`design.md`（做法 D1–D28）、
 > `TBD-image-recognition.md`（明确暂缓的视觉模型路线）。
 > 每组自带该组的测试与文档；第 6 组只做跨组集成与验收。
 >
@@ -9,8 +9,10 @@
 > 原第一版方案曾建议"删掉页脚与页码"，现已按客户要求改为**保留原样**（design D15）。
 > **第 10–12 组是第三轮**（PDF 视觉行，10/10 已完成）：Contents 页的页码被拆到下一行，根因是 `line` ≠ 视觉行
 > （138/717 个 block 受影响）；做法见 design D17–D20，Non-Goals 见 proposal。
-> **第 13 组是第四轮**（PDF 布局保真，0/6 未完成）：`Beneficiary:` 后面的下划线是矢量线，当前只读文字所以丢失；
-> 目录/页码也缺右对齐。做法见 design D21–D24。
+> **第 13 组是第四轮**（PDF 布局保真，6/6 已完成）：`Beneficiary:` 后面的下划线是矢量线，已读取并显示；
+> 目录/页码已右对齐。做法见 design D21–D24。
+> **第 14 组是第五轮**（可填写空白与光标稳定，0/6 未完成）：用户在下划线处输入时光标跳到文末、无法落点。
+> 根因是 `useRichEditor` 的回声 `setContent` 与 `pdfGap` 的原子模型；做法见 design D25–D28。
 
 ## 0. 契约与签字（最先做，且只做加法）
 
@@ -107,12 +109,21 @@
 
 ## 13. PDF 布局保真（第四轮）
 
-- [ ] 13.1 `app/parsing/rich_pdf.py` + `pdf_layout.py`：从 `page.get_drawings()` 过滤水平线（宽 > 20pt、高 < 1.5pt），只关联到**单视觉行** block（线 y 在行带 ±3pt、x 有交集；与文字 x 覆盖的线跳过）。Verify: 单测覆盖"水平线 / 竖线 / 页眉分隔线"过滤、行带关联、多行 block 不处理；fixture 统计 226 条线、187 个带线行、0 个多行布局 block。
-- [ ] 13.2 `rich_pdf` 生成显示用 `pdfGap` 节点：片段之间 / 行首 / 行尾的可见下划线（`rule=true`）与不可见间距（`rule=false`），`grow` 按 PDF 宽度；单行 block 加 `row=true`。Verify: 第 5 页 `Beneficiary:` 后有可见 gap、占位符行有行首可见 gap；第 3 页目录有不可见 gap；投影仍逐字等于 `full_text`，715 块 / 50022 字符 / 24 页边界不变。
-- [ ] 13.3 右对齐：目录页码通过不可见 gap 到右边界；单片段贴右边界的 block（24 个页码 + `Page`）加 `align="right"`。Verify: 第 3 页 `Tender Guarantee Standard` 的页码在右边界；第 2 页 `2`、第 3 页 `Page` 右对齐；投影不变。
-- [ ] 13.4 前端模型与 schema：`richDocument.ts` 增加 `pdfGap` 内联节点与 `row` / `align` 属性；`tiptap.ts` 注册原子节点与全局属性；`plainText.ts` 忽略 gap；`styles.css` 增加 flex 行、下划线、右对齐。Verify: `npm run typecheck` clean；`richToPlainText` 对含 gap 的文档投影不变。
-- [ ] 13.5 前端渲染测试：编辑器显示 `Beneficiary:` 下划线、目录页码在右边界、旧文档无变化；`pdfGap` 不产生字符、不可选。Verify: `RichEditor.test.tsx` / `plainText.test.ts` 新增用例；既有前端测试全绿。
-- [ ] 13.6 验收与记录：真实样本断言第 5 页 Beneficiary / 占位符、第 3 页目录、第 22 页、页码；715 块 / 50022 字符 / 24 页边界、投影 == `full_text`、审计 counts/outcome 不变；全量 pytest / web / typecheck / build；更新 DEMO 第四轮。Verify: 命令输出与 DEMO 数字一致。
+- [x] 13.1 `app/parsing/rich_pdf.py` + `pdf_layout.py`：从 `page.get_drawings()` 过滤水平线（宽 > 20pt、高 < 1.5pt），只关联到**单视觉行** block（线 y 在行带 ±3pt、x 与行相交或紧邻 ≤40pt；与文字 x 覆盖的线跳过）。Verify: 单测覆盖"水平线 / 竖线 / 页眉分隔线"过滤、行带关联、多行 block 不处理；fixture 统计 226 条线、171 个带线行（另有 24 个页眉分隔线被排除）、0 个多行布局 block。
+- [x] 13.2 `rich_pdf` 生成显示用 `pdfGap` 节点：片段之间 / 行首 / 行尾的可见下划线（`rule=true`）与不可见间距（`rule=false`），`grow` 按 PDF 宽度；单行 block 加 `row=true`。Verify: 第 5 页 `Beneficiary:` 后有可见 gap、占位符行有行首可见 gap；第 3 页目录有不可见 gap；投影仍逐字等于 `full_text`，715 块 / 50022 字符 / 24 页边界不变。
+- [x] 13.3 右对齐：目录页码通过不可见 gap 到右边界；单片段贴右边界的 block（26 个：24 个页码 + `Page` + 一个占位符）加 `align="right"`。Verify: 第 3 页 `Tender Guarantee Standard` 的页码在右边界；第 2 页 `2`、第 3 页 `Page` 右对齐；投影不变。
+- [x] 13.4 前端模型与 schema：`richDocument.ts` 增加 `pdfGap` 内联节点与 `row` / `align` 属性；`tiptap.ts` 注册原子节点与全局属性；`plainText.ts` 忽略 gap；`styles.css` 增加 flex 行、下划线、右对齐。Verify: `npm run typecheck` clean；`richToPlainText` 对含 gap 的文档投影不变。
+- [x] 13.5 前端渲染测试：编辑器显示 `Beneficiary:` 下划线、目录页码在右边界、旧文档无变化；`pdfGap` 不产生字符、不可选。Verify: `RichEditor.test.tsx` / `plainText.test.ts` 新增用例；既有前端测试全绿。
+- [x] 13.6 验收与记录：真实样本断言第 5 页 Beneficiary / 占位符、第 3 页目录、第 22 页、页码；715 块 / 50022 字符 / 24 页边界、投影 == `full_text`、审计 counts/outcome 不变；全量 pytest / web / typecheck / build；更新 DEMO 第四轮。Verify: 命令输出与 DEMO 数字一致。
+
+## 14. 可填写空白与光标稳定（第五轮）
+
+- [x] 14.1 `useRichEditor` 回声守卫：把 `applied` ref 前移，在 `onUpdate` 里先 `applied.current = next` 再 `onChange(next)`；effect 只在外部导入/恢复（`applied.current !== document`）时 `setContent`。Verify: 受控 React harness 或 Playwright 在中部连续键入后选区不跳；导入/恢复仍能替换内容。
+- [x] 14.2 `pdfGap` 可编辑内容模型：`richDocument.ts` 增加 `content?: TextNode[]`；`tiptap.ts` 改为 `atom: false`、`content: 'text*'`、`renderHTML` 保留内容洞；空/旧 gap 仍渲染为空下划线。Verify: headless Editor 在 gap 内插入文字后 `getJSON` 保留 content；空 gap 渲染不变；`npm run typecheck` clean。
+- [x] 14.3 投影与审计：`plainText.ts` 对空 gap 投影 `''`、对填入值投影其文字，并在文字↔gap 边界按需补一个空格；`full_text` 不变。Verify: `richToPlainText` 断言 `Beneficiary:`（空）与 `Beneficiary: ACME Trading`（填）；审计 `counts`/`outcome` 在空导入时不变、填入后包含该值。
+- [x] 14.4 交互与样式：点击下划线把光标放进 gap（必要时 NodeView/`handleClick`）；`flex` 宽度、`min-width`、`border-bottom`；空 gap 可见可点。Verify: 组件/浏览器测试断言 gap 可编辑、光标落点与宽度；`styles.css` 更新。
+- [x] 14.5 真实样本验收：第 5 页 `Beneficiary:` 的 gap 填入 `ACME Trading`，投影为 `Beneficiary: ACME Trading`，光标不跳到文末；空导入仍 50022 字符 / 715 块 / 24 页边界。Verify: pytest / 前端 / E2E 记录。
+- [x] 14.6 全量回归与 DEMO：`pytest -q`、`npm test`、typecheck、build；更新 `DEMO.md` 第五轮（光标 bug、可填写空白、填入值进入审计）。Verify: 命令输出与 DEMO 数字一致。
 
 ## Workflow follow-up
 
@@ -122,7 +133,7 @@
   "富文档可携带显示属性与页边界"要求（3 个 scenario）。
 - `ParsedDoc.form` 的两个新取值需要在归档前记录批准（与 `agent-audit` 0.2 同一张签字表）；未签字前不得把本 change 归档。
 - `editor-shell` 的 `document-editor` delta 把 "file import" 列为"present but marked not implemented"；本 change 落地后需要在那份 delta 里同步（改它自己 change 的规格，不是本 change 的）。**2026-11-09 已完成**：该 delta 已按实际能力区分 file import / formatting（可用）与 export / approval（仍不可用）。
-- **显示层对齐（第四轮，2026-11-09 已纳入）**：见第 13 组与 design D21–D23；不再是独立 change。空白作为可填写字段（A+）仍是 follow-up，需要字段模型与抽取语义。
+- **可填写空白（第五轮，2026-11-09 已纳入）**：见第 14 组与 design D25–D28；结构化字段/自动抽取仍是 follow-up。真正的 `<input>` NodeView 若需要，见 Open Questions 10。
 - **跨 block 表格行**：第一轮的 ` | ` 行为等有真实表格样本时单独提 change；第三轮明确只做 block 内。
 - **OCR 路径行重组**：`_blocks_from_pdf_ocr` 仍用 blocks 模式；等扫描版多栏/表格样本再统一。
 - 视觉模型图像识别见 `TBD-image-recognition.md`：独立 change，动手前必须先回答该文件第 4 节的五项待定。

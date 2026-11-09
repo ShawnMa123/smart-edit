@@ -141,6 +141,61 @@ describe('display attributes and page breaks (8.1)', () => {
 
     expect(richToPlainText(styled)).toBe('Amount: USD 500,000.00\n\n## Section');
   });
+
+  it('ignores display gaps, which never reach the audit text (13.4)', () => {
+    const withGaps = doc([
+      {
+        type: 'paragraph',
+        attrs: { row: true },
+        content: [
+          text('Tender Guarantee Standard'),
+          { type: 'pdfGap', attrs: { rule: false, grow: 399.3 } },
+          text(' '),
+          text('4'),
+        ],
+      },
+      {
+        type: 'paragraph',
+        attrs: { row: true },
+        content: [
+          text('Beneficiary:'),
+          { type: 'pdfGap', attrs: { rule: true, grow: 479.1 } },
+        ],
+      },
+    ]);
+
+    expect(richToPlainText(withGaps)).toBe('Tender Guarantee Standard 4\n\nBeneficiary:');
+  });
+
+  it('projects a filled gap as document text (14.3)', () => {
+    const filled = doc([
+      {
+        type: 'paragraph',
+        attrs: { row: true },
+        content: [
+          text('Beneficiary:'),
+          {
+            type: 'pdfGap',
+            attrs: { rule: true, grow: 479.1 },
+            content: [text('ACME Trading')],
+          },
+        ],
+      },
+      {
+        type: 'paragraph',
+        content: [
+          text('We are informed by'),
+          { type: 'pdfGap', attrs: { rule: true, grow: 1 }, content: [text('ACME')] },
+          text(' '),
+          text('(the Tenderer)'),
+        ],
+      },
+    ]);
+
+    expect(richToPlainText(filled)).toBe(
+      'Beneficiary: ACME Trading\n\nWe are informed by ACME (the Tenderer)',
+    );
+  });
 });
 
 describe('plain-text regression (0.3)', () => {

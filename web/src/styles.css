@@ -237,6 +237,29 @@ button.primary {
   line-height: 1.6;
 }
 
+/* PDF layout (design D22/D23): one visual row whose gaps are display-only. */
+.editor-rich [data-pdf-row='true'] {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+}
+
+.editor-rich [data-pdf-align='right'] {
+  text-align: right;
+}
+
+.editor-rich .pdf-gap {
+  display: inline-block;
+  flex: 1 1 auto;
+  min-width: 2ch;
+  align-self: stretch;
+  padding: 0 1px;
+}
+
+.editor-rich .pdf-gap--rule {
+  border-bottom: 1px solid currentColor;
+}
+
 .editor-footer,
 .version-actions,
 .assistant-footer {

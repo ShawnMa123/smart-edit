@@ -293,15 +293,23 @@
 - **WHEN** 文本包含 `\xa0` 或全角空格
 - **THEN** 这些字符 MUST 原样保留
 
-### Requirement: PDF 矢量空白必须保留为可见布局
+### Requirement: PDF 矢量空白必须保留为可见且可填写的布局
 
-系统 SHALL 读取 PDF 的矢量水平线并把它们作为**显示用**空白保留：单视觉行的文本行中，与绘制线对应的空白 MUST 在编辑器中可见（下划线）；空白 MUST NOT 向 `full_text` 或投影文本增加任何字符，MUST NOT 改变块数或页边界。
+系统 SHALL 读取 PDF 的矢量水平线并把它们作为**可见、可填写**的空白保留：单视觉行的文本行中，与绘制线对应的空白 MUST 在编辑器中可见（下划线），并且 MUST 接受用户输入的文字。空白为空时 MUST NOT 向 `full_text` 或投影文本增加任何字符；用户键入的文字 MUST 进入投影文本与审计输入；空白 MUST NOT 改变块数或页边界。
 
-#### Scenario: 标签后的下划线
+#### Scenario: 标签后的下划线（尚未填写）
 - **WHEN** 一行文本是 `Beneficiary:`，后面有一条从标签末尾到页面右边界的绘制线
 - **THEN** 编辑器 MUST 在标签后显示一条下划线
+- **AND** 编辑器 MUST 允许把光标放进该空白
 - **AND** 投影文本 MUST 仍只有 `Beneficiary:`
 - **AND** `full_text` MUST NOT 因该下划线增加任何字符
+
+#### Scenario: 在下划线中填入文字
+- **WHEN** 用户把光标放进 `Beneficiary:` 后面的空白并输入 `ACME Trading`
+- **THEN** 这些文字 MUST 显示在该空白的下划线上
+- **AND** 投影文本 MUST 包含 `Beneficiary: ACME Trading`
+- **AND** 审计输入 MUST 包含填入的文字
+- **AND** 解析得到的 `full_text` MUST NOT 被改写
 
 #### Scenario: 行首的下划线
 - **WHEN** 一行以一个绘制线开始、随后是占位符文字
@@ -336,3 +344,17 @@
 - **WHEN** 富文档没有 `align` 属性
 - **THEN** 编辑器 MUST 按左对齐渲染
 - **AND** 投影文本 MUST 不变
+
+### Requirement: 导入后的编辑不得重置光标
+
+富文本编辑器 SHALL 在处理用户输入后保持当前选区；MUST NOT 因为父组件回传编辑器自己产生的文档而重新加载内容或把光标移到文档末尾。只有外部导入或版本恢复 MAY 替换内容。
+
+#### Scenario: 在空白中键入
+- **WHEN** 用户把光标放进一个空白并连续键入
+- **THEN** 光标 MUST 停在该空白内
+- **AND** MUST NOT 跳到文档最后一行
+
+#### Scenario: 外部导入/恢复
+- **WHEN** 用户导入文件或恢复一个版本
+- **THEN** 编辑器 MUST 加载新文档
+- **AND** 只有该路径 MAY 重置光标

@@ -34,7 +34,7 @@ def _blocks(rich: dict) -> list[dict]:
 
 
 def _text(block: dict) -> str:
-    return "".join(node["text"] for node in block.get("content") or [])
+    return "".join(node.get("text", "") for node in block.get("content") or [])
 
 
 def _levels(rich: dict) -> list[int]:

@@ -202,7 +202,7 @@ OCR 文本进入 `docs[].full_text` 之后，`extract` 抽出的候选值仍按�
 
 PDF 的空白下划线是描边线，不是文字。`get_drawings()` 给出每条线的 rect 与 items；过滤"水平、宽 > 20pt、高 < 1.5pt"的线，然后只把它关联到**同一水平带内、单视觉行**的 block（线 y 在行带 ±3pt 内、x 有交集）。
 
-*为什么只做单行 block：* 实测 226 条线、187 个带线行、25 个带大间距的行，**含布局的多行 block 为 0**；这样"一个 PDF block = 一个段落"的模型不用改，块数守恒也就不受影响。*替代方案：* 合成 `_` 字符——已否决，会改 `full_text`/审计（D16/D19），且仍不解决右对齐。*替代方案：* 绝对定位/页面图——见 D24。
+*为什么只做单行 block：* 实测 226 条线、171 个带线行（另有 24 个页眉分隔线不计）、25 个带大间距的行，**含布局的多行 block 为 0**；这样"一个 PDF block = 一个段落"的模型不用改，块数守恒也就不受影响。*替代方案：* 合成 `_` 字符——已否决，会改 `full_text`/审计（D16/D19），且仍不解决右对齐。*替代方案：* 绝对定位/页面图——见 D24。
 
 ### D22. 显示用内联 `pdfGap` 节点 + 单行 flex
 
@@ -226,14 +226,45 @@ PDF 的空白下划线是描边线，不是文字。`get_drawings()` 给出每�
 - 不变量：715 块、50022 字符、735 换行、24 个页边界、投影 == `full_text`、审计 counts/outcome 不变。
 - 只改 PDF 文本层路径；DOCX、纯文本、OCR 不变。
 - 显示节点/属性缺失时老文档照常渲染。
-- Non-Goals：空白作为可填写字段（A+）、绝对定位/像素级、跨 block 表格、OCR 路径绘制线。
+- Non-Goals：结构化字段/自动抽取（第五轮只做可填写空白，见 D25–D28）、绝对定位/像素级、跨 block 表格、OCR 路径绘制线。
 - 测试：`pdf_layout` 纯函数（线过滤/关联/gap 规划）、`rich_pdf`（第 5 页 Beneficiary/占位符、第 3 页目录、第 22 页、页码）、前端（下划线/右对齐/投影忽略）、审计回归。
+
+### D25. 回声守卫：只有外部文档到达时才 `setContent`（第五轮）
+
+`useRichEditor` 的 `onUpdate` 会生成一份新的 `RichDocument`；父组件把它作为 `document` 传回时，effect 必须认出这是"自己刚发出的那份"，不能 `setContent`。做法：把 `applied` ref 移到 `useEditor` 之前，在 `onUpdate` 里 `applied.current = next` 再 `onChange(next)`；effect 只在 `applied.current !== document`（导入/版本恢复）时 `setContent`。
+
+*为什么这是 bug：* 现在 `applied` 只在 effect 里更新，回声对象永远是新的，effect 每次都 `setContent`，选区被重置到文末——这就是"光标跳到最后一页/最后一行"。*替代方案：* 比较 JSON 字符串（更贵，且仍需处理选区）。*替代方案：* 完全非受控、只依赖编辑器内部状态（导入/版本恢复就无法替换内容）。*测试：* 受控 React harness 或 Playwright：在文档中部连续键入，断言选区仍在该行；导入/恢复时仍能替换。
+
+### D26. `pdfGap` 从"原子装饰"变成"可编辑的内联容器"（第五轮）
+
+- `PdfGapNode` 增加可选 `content?: TextNode[]`；空 gap 与旧文档兼容。
+- TipTap `PdfGap`：`atom: false`、`content: 'text*'`、`inline: true`；`renderHTML` 用 `['span', attrs, 0]` 保留内容洞。
+- 空 gap 用 `min-width` + `flex: 1 1 0` 保持可见、可点击；有内容时文字落在 `border-bottom` 上，span 随内容/剩余空间增长。
+- *为什么不是 `<input>` NodeView：* 输入值要同步进 ProseMirror 才能有撤销/投影/复制；内联内容节点是库原生的编辑模型。*代价：* 空内联节点的点击/光标需要浏览器验证；必要时加 NodeView 的 click → `setTextSelection` 把光标放进 gap。
+
+### D27. 投影语义：空空白 0 字符，填入值进入审计（第五轮）
+
+- `richToPlainText` 对 `pdfGap`：空 content → `''`；有 content → 其文字。
+- 在文字与填入值的边界按需补**一个空格**（若两侧都没有空白），使 `Beneficiary:` + `ACME` 投影为 `Beneficiary: ACME`；空 gap 的投影不变（仍与 `full_text` 逐字相等）。
+- `full_text` 仍来自解析层（50022 字符）；只有用户实际填入时，富文档投影/审计输入才增加那些字。审计看到填入值是正确的——它已经是文档内容。
+- 不进入 `ParsedDoc`；不改变块数/键/页边界。
+
+### D28. 交互、宽度与兼容（第五轮）
+
+- 点击下划线：若内联内容节点不能自然落点，用 NodeView/`handleClick` 把选区放到 gap 内；空 gap 至少 `2ch` 宽。
+- `flex: 1 1 auto`（有内容时按内容宽度，空时填满剩余）；`min-width`；`border-bottom`。
+- 旧 `pdfGap`（无 content）渲染为空空白；`align=right`/`row` 行为不变。
+- 测试：headless Editor 在 gap 内插入文字并检查 JSON/投影；React/Playwright 验证光标不跳；真实样本验收。
 
 ## Risks / Trade-offs
 
 - **[真正的多栏文本被误判成一行]** → 规则只在 block 内生效，PyMuPDF 已按邻近/分栏分块；跨 block 合并被明确禁止（D17）。若后续出现单 block 内含两栏的样本，再引入列检测。
 - **[填空宽度塌成一个空格，句子读起来略怪]** → 第三轮接受（D19）；第四轮用显示层 gap 解决（D21–D23），文本层仍不变。
-- **[flex + contenteditable 的光标/换行]** → `pdfGap` 为原子、不可选（`selectable: false`），行用 `flex-wrap: nowrap`；组件测试 + 手工浏览器检查；若跨片段光标异常，退回 inline-block + margin（视觉略差）。
+- **[flex + contenteditable 的光标/换行]** → `pdfGap` 改为可编辑内联容器；空节点给 `min-width`，行用 `flex-wrap: nowrap`；React/Playwright 验证点击与光标；若内联节点体验不佳，改用 NodeView（D26/D28）。
+- **[回声守卫回归]** → 只有外部导入/恢复才 `setContent`；受控 React harness 断言连续输入后选区仍在该行。
+- **[填入值改变审计文本]** → 预期行为：只有用户实际填写时投影才变化；空导入仍 50022 字符 / 715 块 / 24 页边界，测试锁定。
+- **[旧文档的 `pdfGap` 没有 content]** → content 可选，渲染为空空白；旧快照/版本兼容。
+- **[flex 宽度/换行]** → `min-width` + `flex`；窄面板手工检查；不引入绝对定位。
 - **[字体回退导致空白位置只是近似]** → 接受；目标是"看得见下划线、页码在右"，不是像素级；DEMO 记录这一口径。
 - **[绘制线误判（表格边框/页眉分隔线）]** → 水平 + 行带 + 单行 block 过滤，且跳过与文字 x 范围重叠的线；样本测试锁定。
 - **[`full_text` 变化导致既有断言与 DEMO 数字失效]** → 同一轮更新 `tests/test_import_acceptance.py`、`tests/test_rich_pdf_fidelity.py` 与本 change 的 DEMO；不回改已归档的 change 文件。
@@ -256,6 +287,7 @@ PDF 的空白下划线是描边线，不是文字。`get_drawings()` 给出每�
 5. **回滚**：删掉两个新 `form` 取值、`documents` 键、DOCX/OCR 分支即可回到今天的行为；无数据迁移（run 是进程内的）。
 6. **第三轮（视觉行）**：新增 `pdf_layout.py` → `parse.py` 改 `get_text("dict")` + 共享层 → `rich_pdf.py` 改 text nodes → 更新 fidelity/acceptance 数字。回滚：删除 `pdf_layout.py`，把两个调用点恢复为原实现；无持久化影响。
 7. **第四轮（布局保真）**：`get_drawings()` 过滤/关联 → gap 规划 → `rich_pdf` 生成 `pdfGap` / `row` / `align` → 前端节点/属性/CSS → 测试与 DEMO。回滚：删掉节点与属性即可，文本层与 `full_text` 不动。
+8. **第五轮（可填写空白）**：`useRichEditor` 回声守卫 → `pdfGap` 内容模型/投影/CSS → 交互测试 → 验收。回滚：恢复 `applied` 原逻辑并让 `pdfGap` 回到 `atom: true`；文本层与解析不动。
 
 ## Open Questions
 
@@ -265,5 +297,7 @@ PDF 的空白下划线是描边线，不是文字。`get_drawings()` 给出每�
 4. **OCR 语言默认值** —— `chi_sim+eng` 是猜测；若客户材料以英文为主，质量与耗时都不同，等实测样本再调 `SMART_EDIT_OCR_LANGS`。
 5. **OCR 路径是否采用同一行规则** —— 第三轮不做。`_blocks_from_pdf_ocr` 仍用 `get_text("blocks", textpage=...)`，OCR 行通常已按识别行组织；等有扫描版多栏/表格样本时再统一，不影响本轮规格与任务。
 6. **显示层是否要做右对齐/保宽** —— 第四轮已实现（D21–D23：内联 gap + `align=right`）；仍是显示层近似，不是像素级；绝对定位见第 8 条。
-7. **空白是否要成为可填写字段** —— 属于 A+；需要字段模型、交互与抽取语义，独立 change；本轮只做装饰性下划线。
+7. **空白是否要成为可填写字段** —— 第五轮已实现最简形态（可填写空白，D25–D28）；把空白映射为 key/value 字段、自动抽取与模板校验仍是独立 change。
 8. **是否要像素级/绝对定位** —— 需要字体度量与绝对布局，编辑体验代价大；若要，另做 change；也可以先加一个"查看原始 PDF 页"的对照视图补足视觉参考。
+9. **多行空白/大段填写** —— 当前 gap 是单行 inline；多行表单字段需要不同节点与布局，等样本再定。
+10. **真正的 `<input>` NodeView** —— 若浏览器里的内联内容节点点击/光标体验不佳，改用 NodeView；见 D26。

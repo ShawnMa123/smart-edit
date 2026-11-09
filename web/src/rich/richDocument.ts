@@ -22,19 +22,36 @@ export interface BlockAttrs {
   fontSize?: number;
   fontFamily?: string;
   page?: number;
+  /** A single visual row: render it as a flex row so its gaps can grow (design D22). */
+  row?: boolean;
+  /** A single fragment hugging the page's right edge (design D23). */
+  align?: 'left' | 'right';
 }
 
 export interface ParagraphNode {
   type: 'paragraph';
   attrs?: BlockAttrs;
-  content?: TextNode[];
+  content?: InlineNode[];
 }
 
 export interface HeadingNode {
   type: 'heading';
   attrs: { level: 1 | 2 | 3 } & BlockAttrs;
+  content?: InlineNode[];
+}
+
+/**
+ * A gap inside one visual row (design D22/D25-D27): a drawn blank (`rule`) or an invisible spacer
+ * that pushes a TOC page number to the right. It is display-only when empty; a user may type a value
+ * into it, and that value is then part of the document text (and of the audit projection).
+ */
+export interface PdfGapNode {
+  type: 'pdfGap';
+  attrs: { rule: boolean; grow: number };
   content?: TextNode[];
 }
+
+export type InlineNode = TextNode | PdfGapNode;
 
 /** A page boundary: visible in the editor, contributes no characters to the audit text. */
 export interface PageBreakNode {

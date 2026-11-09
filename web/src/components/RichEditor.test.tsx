@@ -70,6 +70,72 @@ describe('formats (2.1)', () => {
     expect(redone).toBe(edited);
     editor.destroy();
   });
+
+  it('round-trips a display gap through the editor schema (13.5)', () => {
+    const editor = headless({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { row: true },
+          content: [
+            { type: 'text', text: 'Beneficiary:' },
+            { type: 'pdfGap', attrs: { rule: true, grow: 479.1 } },
+          ],
+        },
+      ],
+    });
+
+    const restored = toRichDocument(editor.getJSON());
+    const paragraph = restored.content[0];
+    expect(paragraph.type).toBe('paragraph');
+    if (paragraph.type !== 'paragraph') throw new Error('expected a paragraph');
+    expect(paragraph.attrs).toMatchObject({ row: true });
+
+    const gap = (paragraph.content ?? []).find((node) => node.type === 'pdfGap');
+    expect(gap).toBeTruthy();
+    if (!gap || gap.type !== 'pdfGap') throw new Error('expected a pdfGap');
+    expect(gap.attrs).toEqual({ rule: true, grow: 479.1 });
+
+    expect(richToPlainText(restored)).toBe('Beneficiary:');
+    editor.destroy();
+  });
+});
+
+describe('fillable blanks (14.2/14.3)', () => {
+  it('accepts typed text inside a gap and projects it', () => {
+    const editor = headless({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { row: true },
+          content: [
+            { type: 'text', text: 'Beneficiary:' },
+            { type: 'pdfGap', attrs: { rule: true, grow: 479.1 } },
+          ],
+        },
+      ],
+    });
+
+    let gapPos = -1;
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'pdfGap') {
+        gapPos = pos;
+        return false;
+      }
+      return true;
+    });
+    expect(gapPos).toBeGreaterThan(-1);
+
+    editor.commands.setTextSelection(gapPos + 1);
+    editor.commands.insertContent('ACME Trading');
+
+    const restored = toRichDocument(editor.getJSON());
+    expect(richToPlainText(restored)).toBe('Beneficiary: ACME Trading');
+    expect(JSON.stringify(restored)).toContain('ACME Trading');
+    editor.destroy();
+  });
 });
 
 describe('toolbar state (2.2)', () => {
@@ -249,6 +315,46 @@ describe('display attributes and page breaks in the editor (8.2)', () => {
     expect(surface.textContent).toContain('plain words');
     // The page marker contributes no characters: the projection is exactly the 11 characters of the text.
     expect(await screen.findByText('11 characters in the audit text')).toBeTruthy();
+  });
+
+  it('renders a drawn blank and a right-aligned number (13.5)', async () => {
+    const onChange = vi.fn();
+    render(
+      <RichEditor
+        document={{
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              attrs: { row: true, fontSize: 9 },
+              content: [
+                { type: 'text', text: 'Beneficiary:' },
+                { type: 'pdfGap', attrs: { rule: true, grow: 479.1 } },
+              ],
+            },
+            {
+              type: 'paragraph',
+              attrs: { align: 'right' },
+              content: [{ type: 'text', text: '4' }],
+            },
+          ],
+        }}
+        onChange={onChange}
+      />,
+    );
+
+    const surface = await screen.findByTestId('editor-rich');
+    const row = surface.querySelector('[data-pdf-row="true"]') as HTMLElement | null;
+    const gap = surface.querySelector('.pdf-gap--rule') as HTMLElement | null;
+    const right = surface.querySelector('[data-pdf-align="right"]') as HTMLElement | null;
+
+    expect(row).toBeTruthy();
+    expect(gap?.getAttribute('data-pdf-rule')).toBe('true');
+    expect(gap?.style.flexGrow).toBe('479.1');
+    expect(right).toBeTruthy();
+    expect(surface.textContent).toContain('Beneficiary:');
+    // The gap contributes no characters: 12 + the block separator + 1.
+    expect(await screen.findByText('15 characters in the audit text')).toBeTruthy();
   });
 });
 

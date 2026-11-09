@@ -74,8 +74,8 @@ def test_a_rich_document_cannot_change_the_verdict():
     assert formatted["findings"] == plain["findings"]
 
 
-def test_page_breaks_and_font_attributes_cannot_change_the_verdict():
-    """9.3 Page markers and display attributes are presentation only: the engine never sees them."""
+def test_page_breaks_font_attributes_and_gaps_cannot_change_the_verdict():
+    """9.3/13.6 Page markers, font attributes and display gaps are presentation only."""
     decorated = {
         "type": "doc",
         "provenance": "heuristic",
@@ -89,8 +89,11 @@ def test_page_breaks_and_font_attributes_cannot_change_the_verdict():
             *(
                 {
                     "type": "paragraph",
-                    "attrs": {"fontSize": 9.0, "fontFamily": "Helvetica", "page": 2},
-                    "content": [{"type": "text", "text": f"{key}: {value}"}],
+                    "attrs": {"fontSize": 9.0, "fontFamily": "Helvetica", "page": 2, "row": True},
+                    "content": [
+                        {"type": "text", "text": f"{key}: {value}"},
+                        {"type": "pdfGap", "attrs": {"rule": True, "grow": 120.0}},
+                    ],
                 }
                 for key, value in VALUES.items()
             ),

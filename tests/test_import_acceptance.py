@@ -1,4 +1,4 @@
-"""Tasks 9.1 and 11.2 - the real 25-page booklet: the numbers the customer complained about."""
+"""Tasks 9.1, 11.2 and 13.x - the real 25-page booklet: the numbers the customer complained about."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.parsing.parse import parse_file
+from app.parsing.pdf_layout import horizontal_rules, row_layout, visual_rows
 from app.parsing.rich_pdf import PAGE_BREAK, document_to_rich
 
 SAMPLE = Path("fixtures/imports/guarantee-and-standby-letters-of-credit-wording.pdf")
@@ -15,6 +16,22 @@ SAMPLE = Path("fixtures/imports/guarantee-and-standby-letters-of-credit-wording.
 
 def _rich():
     return document_to_rich(str(SAMPLE))
+
+
+def _page_blocks(rich, page: int) -> list[dict]:
+    return [
+        block
+        for block in rich["content"]
+        if block["type"] != PAGE_BREAK and (block.get("attrs") or {}).get("page") == page
+    ]
+
+
+def _block_text(block: dict) -> str:
+    return "".join(node.get("text", "") for node in block.get("content") or [])
+
+
+def _gaps(block: dict) -> list[dict]:
+    return [node for node in block.get("content") or [] if node.get("type") == "pdfGap"]
 
 
 def test_the_sections_are_no_longer_all_level_one():
@@ -52,7 +69,7 @@ def test_nothing_is_dropped_or_reworded():
     rich = _rich()
     blocks = [block for block in rich["content"] if block["type"] != PAGE_BREAK]
     from_rich = "\n".join(
-        "".join(node["text"] for node in block.get("content") or []) for block in blocks
+        "".join(node.get("text", "") for node in block.get("content") or []) for block in blocks
     )
     full_text = parsed["full_text"]
 
@@ -76,7 +93,7 @@ def test_nothing_is_dropped_or_reworded():
 def test_the_contents_page_keeps_each_number_on_its_title_row():
     """11.2 The complaint: the page number sat on the line below the chapter title."""
     page_three = [
-        "".join(node["text"] for node in block.get("content") or [])
+        "".join(node.get("text", "") for node in block.get("content") or [])
         for block in _rich()["content"]
         if (block.get("attrs") or {}).get("page") == 3
     ]
@@ -103,3 +120,97 @@ def test_each_font_size_in_the_sample_keeps_its_own_band(size):
         assert all(block["type"] == "paragraph" for block in with_size), "body text is not a heading"
     else:
         assert all(block["type"] == "heading" for block in with_size), "larger sizes are headings"
+
+
+# --- 13.2 / 13.3 layout on the real sample --------------------------------------------------------
+
+
+def test_the_beneficiary_blank_is_a_visible_gap():
+    """13.2 The customer's example: 'Beneficiary:' followed by a drawn rule."""
+    blocks = _page_blocks(_rich(), 5)
+    beneficiary = next(block for block in blocks if _block_text(block) == "Beneficiary:")
+
+    assert beneficiary["attrs"]["row"] is True
+    gaps = _gaps(beneficiary)
+    assert gaps and gaps[-1]["attrs"]["rule"] is True
+    assert gaps[-1]["attrs"]["grow"] > 100
+    assert _block_text(beneficiary) == "Beneficiary:", "the gap adds no characters"
+
+
+def test_the_placeholder_line_starts_with_a_visible_rule():
+    """13.2 The second line of the same form: a leading rule then the placeholder."""
+    blocks = _page_blocks(_rich(), 5)
+    placeholder = next(
+        block for block in blocks if "Name and Address of Purchaser" in _block_text(block)
+    )
+
+    assert placeholder["attrs"]["row"] is True
+    gaps = _gaps(placeholder)
+    assert gaps and gaps[0]["attrs"]["rule"] is True
+    assert gaps[0]["attrs"]["grow"] > 100
+
+
+def test_a_second_form_variant_keeps_its_rule():
+    """13.6 Page 22 has the same 'Beneficiary:' blank at a different position."""
+    blocks = _page_blocks(_rich(), 22)
+    beneficiary = next(block for block in blocks if _block_text(block) == "Beneficiary:")
+
+    assert beneficiary["attrs"]["row"] is True
+    gaps = _gaps(beneficiary)
+    assert gaps and gaps[-1]["attrs"]["rule"] is True
+
+
+def test_the_contents_row_pushes_the_page_number_right():
+    """13.3 Title left, page number right: an invisible flexible gap."""
+    blocks = _page_blocks(_rich(), 3)
+    row = next(
+        block for block in blocks if _block_text(block) == "Tender Guarantee Standard 4"
+    )
+
+    assert row["attrs"]["row"] is True
+    gaps = _gaps(row)
+    assert gaps and gaps[0]["attrs"]["rule"] is False
+    assert gaps[0]["attrs"]["grow"] == pytest.approx(399.3, abs=1.0)
+    assert _block_text(row) == "Tender Guarantee Standard 4"
+
+
+def test_page_numbers_and_the_page_header_are_right_aligned():
+    """13.3 A single fragment hugging the right edge gets `align=right`."""
+    page_two = _page_blocks(_rich(), 2)
+    number = next(block for block in page_two if _block_text(block) == "2")
+    page_three = _page_blocks(_rich(), 3)
+    header = next(block for block in page_three if _block_text(block) == "Page")
+
+    assert number["attrs"]["align"] == "right"
+    assert header["attrs"]["align"] == "right"
+
+
+def test_the_sample_has_the_layout_the_fourth_round_targets():
+    """13.1 The numbers the design was based on: 226 rules, 171 blank rows, 0 multi-row layout."""
+    fitz = pytest.importorskip("pymupdf")
+    document = fitz.open(str(SAMPLE))
+    rules = 0
+    rows_with_rule = 0
+    multi_row_layout = 0
+    try:
+        for page in document:
+            page_rules = horizontal_rules(page.get_drawings())
+            rules += len(page_rules)
+            for block in page.get_text("dict")["blocks"]:
+                if block.get("type") != 0:
+                    continue
+                rows = visual_rows(block)
+                has_rule = any(
+                    any(item.get("rule") for item in row_layout(row, page_rules)) for row in rows
+                )
+                if has_rule:
+                    if len(rows) == 1:
+                        rows_with_rule += 1
+                    else:
+                        multi_row_layout += 1
+    finally:
+        document.close()
+
+    assert rules == 226
+    assert rows_with_rule == 171
+    assert multi_row_layout == 0
