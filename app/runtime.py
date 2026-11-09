@@ -1,7 +1,8 @@
-"""Runtime seams between the HTTP layer and the stage nodes.
+"""Runtime seams between the legacy chain executor and the HTTP layer.
 
-Until `poc-skeleton` §8 lands there is no graph, so nothing applies the reducers that
-`app/state.py` declares. This module owns the two things that must exist exactly once:
+The legacy console triggers one stage chain per request (`execute_chain`). It shares the node
+implementations and the one production `merge_update()` with the checkpointed graph
+(`app/graph.py`), so the two paths cannot drift:
 
 1. `merge_update()` — the **single** production implementation of "merge a node update into state"
    (`findings` / `trail` / `stages` append; everything else overwrites). `tests/helpers.apply_update`

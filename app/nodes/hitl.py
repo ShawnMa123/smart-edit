@@ -121,6 +121,7 @@ def apply_resume(state: dict, resume: object) -> dict:
         edits = []
 
     fields = dict(state.get("fields") or {})
+    originals = dict(fields)
     entries: list[dict] = []
     resume_hash = _hash(payload)
     for edit in edits:
@@ -131,7 +132,7 @@ def apply_resume(state: dict, resume: object) -> dict:
             # The panel can only edit a field the contract already contains; an unknown key is
             # a client bug, not a new field.
             continue
-        old = fields[key]
+        old = originals[key]
         old_value = old.get("value")
         new_value = edit.get("value")
         if new_value is not None:

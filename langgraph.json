@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "smart-edit": "./app/studio.py:graph"
+  },
+  "env": ".env.example"
+}

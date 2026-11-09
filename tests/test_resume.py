@@ -67,6 +67,27 @@ def test_resume_edits_keep_old_value_and_write_a_transform_trail(tmp_path):
     assert transforms[0]["ref"] == "currency"
 
 
+def test_repeated_edits_to_one_field_keep_the_first_original_value(tmp_path):
+    runner, thread_id, state = _runner(tmp_path)
+    runner.start(thread_id)
+    original = state["fields"]["currency"]["value"]
+
+    runner.resume(
+        thread_id,
+        {
+            "edits": [
+                {"key": "currency", "value": "EUR"},
+                {"key": "currency", "value": "GBP"},
+            ],
+            "recheck": False,
+        },
+    )
+
+    field = state["fields"]["currency"]
+    assert field["value"] == "GBP"
+    assert field["normalized_from"] == original
+
+
 def test_duplicate_resume_is_applied_once(tmp_path):
     runner, thread_id, state = _runner(tmp_path)
     runner.start(thread_id)

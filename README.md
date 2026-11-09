@@ -112,6 +112,12 @@ export SMART_EDIT_LLM=fixture:fixtures/llm/extract_sample.json
 gate = nobody asked the gate. Neither is ever "clean". The audit decides no operation by itself — a
 decision appears only when one is asked for (`gate.evaluate(state, operation, digest)`).
 
+The main graph has the Agent 2 position, but this build does not contain Agent 2's business rules.
+Its default node records `StageReport(stage="agent2", status="failed")` with a reason and never
+fabricates findings, so the gate stays blocked until the real verifier is plugged in through
+`app.graph_factory.compile_graph(agent2=<node>)`. That is deliberate: "not checked" must never look
+like "no problems".
+
 ```bash
 # create a run from the bundled sample document, then audit it
 TID=$(curl -s -X POST localhost:8000/runs \
