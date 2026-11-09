@@ -3,8 +3,8 @@
 Spec: `openspec/changes/frontend-console/specs/console-api/spec.md`
 Design: `openspec/changes/frontend-console/design.md` D1, D3, D5, D7.
 
-Three endpoints only: create a run, trigger a stage, read a run. `HITL` / `resume` / `events` belong
-to `poc-skeleton` §8-§9 once the graph exists.
+Five endpoints: create a run, trigger a stage, ask the gate, append a disposition, read a run.
+`HITL` / `resume` / `events` belong to `poc-skeleton` §8-§9 once the graph exists.
 """
 
 from __future__ import annotations

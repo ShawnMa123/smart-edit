@@ -243,7 +243,7 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
 | `Port 5173 is in use` | 上一个 `npm run dev` 还活着 | 同上 |
 | 面板 `HTTP_500 … backend is not running` | 后端没起（vite 日志会有 `ECONNREFUSED 127.0.0.1:8000`） | 起终端 A |
 | `Checks did not run` | 后端没设 `SMART_EDIT_LLM` | 按 §1 带 fixture 重启，或接受诚实路径 |
-| Gate 一直是 `Not asked` | 正常：UI 目前不问闸门（`/audit/*` 属后续 change） | 想验闸门语义用 `scripts/audit_demo.py`，或 `app/audit/gate.py::evaluate(state, "start_approval", digest)` |
+| Gate 一直是 `Not asked` | 还没在报告页选 operation 并点 **Ask gate** | 选 operation 后点 **Ask gate**；HTTP 等价于 `POST /runs/{tid}/gate`，`GET /runs/{tid}` 会带上存储的 `gate` |
 | 刚点完就 `Report is stale` | 审计开始后编辑框内容变了（含末尾多一个换行） | 保持文本不动再跑一次 |
 
 两个 digest 不要混：面板底部的 `server digest` 是后端对"文件＋字段"做的规范化哈希，左侧快照的
