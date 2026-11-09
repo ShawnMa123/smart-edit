@@ -248,3 +248,47 @@
 - **WHEN** 富文档生成完成
 - **THEN** 每个块的文字 MUST 与解析结果逐字相同（含全角空格与不换行空格）
 - **AND** 结构推断 MUST NOT 修改文字
+
+### Requirement: PDF 文本层按视觉行重组
+
+系统 SHALL 在同一 PDF block 内按垂直重叠把文本片段（PyMuPDF 的 `line`）归并为视觉行：同一水平带的片段 MUST 处于同一行，不被换行拆开；行内片段 MUST 按 x 从左到右、用一个空格连接；不同视觉行之间 MUST 保持换行。重组 MUST NOT 跨 block，MUST NOT 改变块数。
+
+#### Scenario: 目录页的标题与页码同行
+- **WHEN** 一个 PDF 目录页的同一 block 中，标题与右对齐页码共享同一水平带
+- **THEN** 该标题与页码 MUST 出现在同一行
+- **AND** 两者之间 MUST 是一个空格
+- **AND** MUST NOT 出现"页码单独一行"
+
+#### Scenario: 正文填空行不被拆成多行
+- **WHEN** 一句话被下划线空白切成同一水平带上的多个片段
+- **THEN** 这些片段 MUST 在同一行、按原顺序用一个空格连接
+- **AND** MUST NOT 因片段数量增加换行
+
+#### Scenario: 块数与页边界不变
+- **WHEN** 一份 PDF 解析完成
+- **THEN** 重组后的块数 MUST 等于重组前的块数
+- **AND** 页边界数量 MUST 不变
+- **AND** 富文档投影 MUST 与 `full_text` 逐字相同
+
+#### Scenario: 不跨 block 合并
+- **WHEN** 两个 block 在页面上处于同一水平带但属于不同 block
+- **THEN** 它们 MUST 保持为两个独立块
+- **AND** MUST NOT 被合并成一行
+
+### Requirement: 不可见控制字符不进入文本
+
+系统 SHALL 在解析 PDF 文本层时规范化不可见控制字符：`\x07` 与 `\x08` MUST 被移除，`\t` MUST 被规范化为一个空格；其余可见字符（含 `\xa0` 与全角空格）MUST 保持不变。
+
+#### Scenario: 目录标题末尾的控制字符
+- **WHEN** 目录标题的文本以 `\x08` 结尾
+- **THEN** `blocks[].text` 与投影文本 MUST 不含该字符
+- **AND** 标题的可见文字 MUST 不变
+
+#### Scenario: 表单中的制表符
+- **WHEN** 文本片段包含 `\t`
+- **THEN** 它 MUST 以空格出现在 `blocks[].text` 与投影文本中
+- **AND** MUST NOT 以 `\t` 出现在审计输入里
+
+#### Scenario: 可见空白不受影响
+- **WHEN** 文本包含 `\xa0` 或全角空格
+- **THEN** 这些字符 MUST 原样保留

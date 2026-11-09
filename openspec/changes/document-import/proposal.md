@@ -24,6 +24,8 @@
   两处我们**做对了但不彻底**的：`page` 与 `bbox` 已经存在于每个块上（PDF 侧一直有），只是没有进入富文档。
 - **PDF 保真的具体做法**：① 按**字号排名**定层级（最大 → H1、次之 → H2、再 → H3，正文不入级），而不是固定倍率；② 从字体名与 span 标志位读**粗体/斜体**写成 marks；③ 每个块带**显示用属性**（`fontSize` / `fontFamily`），编辑器按原字号渲染；④ 块保留 `page`，并在页边界插入**不产生文本**的 `pageBreak` 节点，让读者看见"第 N 页到此为止"；⑤ **不删除任何内容**——页码与页脚作为独立块保留（它们是原文件的一部分），只是不再与正文粘连。
 - **与审计的边界不变**：以上属性与 `pageBreak` 都**不进入**投影文本（`richToPlainText` 只投影文字与结构标记），所以"保真"不会改变审计读到的字符；`full_text` 逐字不变。
+- **PDF 视觉行（第三轮加入，2026-11-09）**：Contents 页的页码被渲染到标题的下一行。实测根因不是目录特例：`get_text("dict")` 的 `line` 并不等于视觉行，25 页样本有 **138 / 717** 个 block 的 line 共享同一水平带（目录 19 行、正文填空 119 行）；当前实现按 line 补 `\n`，编辑器又用 `pre-wrap` 把它渲染成真实换行。做法：**同一 block 内**按垂直重叠归并为视觉行，行内片段按 x 用一个空格连接、行间保留换行；解析层与富文本层共用同一实现，`full_text` 与投影继续逐字相等；不可见控制字符（`\x07` / `\x08`）移除、`\t` 变空格，可见空白（`\xa0`、全角空格）保留。实测 `full_text` **50799 → 50022** 字符、换行 **915 → 735**，块数仍 **715**、页边界仍 **24**。
+- **第三轮不做**：跨 block 的表格行聚类（第一轮的 ` | ` 行为）、页码右对齐与填空保宽（显示层）、目录专用两列表格、OCR 路径的行重组。
 - **不做**：模板编辑页面与"另存为模板"、正文骨架/占位符/预填字段表、导出、批量多文件合并成一份文档、用视觉模型替代本地 OCR、把模型接进 `extract`（provider 是另一条切片）、异步任务队列与进度推送（POC 同步执行，前端显示阶段报告）。**富文本编辑**已由 `rich-text-editor` 交付，本 change 只负责"导入怎么把版面交出去"。
 
 ## Capabilities
@@ -39,6 +41,7 @@
 ## Impact
 
 - **代码**：`app/parsing/parse.py`（DOCX + OCR 分支、失败原因）、`app/state.py`（`ParsedDoc.form` 两个字面量，冻结文件需签字）、`app/api/envelope.py`（`documents`）、`app/nodes/parse.py`（聚合"部分成功/全失败"时的可读原因，已有 `partial`/`failed` 逻辑，仅需覆盖新错误码）、`web/src/api/client.ts`（multipart 上传）、`web/src/components/DocumentActions.tsx`（真按钮）、`web/src/App.tsx` / `EditorColumn.tsx`（填入文本 + 逐文件结果）、`web/src/api/types.ts`（`documents` 类型）
+- **第三轮代码与测试**：`app/parsing/pdf_layout.py`（新增共享视觉行层）、`app/parsing/parse.py`（PDF 文本层改 `get_text("dict")` + 共享层）、`app/parsing/rich_pdf.py`（text nodes 改用视觉行）；`tests/test_rich_pdf_fidelity.py` / `tests/test_import_acceptance.py` 更新为 50022 字符、735 换行，并断言目录行、填空句与控制字符；`tests/test_rich_honesty.py` 断言审计判定不变。
 - **系统依赖**：`tesseract` + 语言包（macOS：`brew install tesseract tesseract-lang`）；缺失时功能降级为明确报错，CI 不装也能跑（测试用 stub/跳过）
 - **测试**：DOCX 解析（构造最小 docx）、OCR 分支（引擎缺失 → 明确错误；注入假 OCR 结果 → 文本与 bbox）、失败语义、信封字段、前端上传流程与错误展示；既有 330+109 个测试必须保持全绿（导入不改变任何既有路径的行为）
 - **风险**：OCR 认错金额/公司名而被静默采用（→ 用 `inferred` + `image_ocr` 标注 + 面板提示"待核实"，且不覆盖已确认字段）；大文件/多页 OCR 拖慢同步请求（→ 页数/大小上限 + 一次一文件）；把 docx 标成 `pdf_text` 之类的"凑合"（→ 明确加字面量，禁止复用）；上传内容被执行（→ 只做文本抽取，绝不解析宏/嵌入对象）
