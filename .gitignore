@@ -1,0 +1,28 @@
+/.pi/
+
+# 内部沟通文档，不入库
+/docs/
+/agent-design.md
+/agent-design.fixed.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# 本地数据与产出
+runs.db
+runs.db-*
+*.sqlite3
+.env
+/eval/samples/
+# Uploaded files and pasted text for API runs (process-scoped, never committed)
+runs/
+
+# IDE
+/.idea/
+/.vscode/

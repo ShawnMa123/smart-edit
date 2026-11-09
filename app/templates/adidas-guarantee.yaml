@@ -1,0 +1,58 @@
+# Customer template pack — the first published template (design D14).
+#
+# A template is where the *expectations* come from; it never contains DSL. Field expectations are
+# compiled onto the closed op set by `app/rules/templates.py::compile_expectations`, and `body` is the
+# template's own text so `doctor` can prove every controlled clause is locatable in it.
+#
+# `synthetic: true` means: recorded for the POC, NOT a real Adidas contract. The report repeats this.
+template_id: adidas-guarantee
+version: 1.0.0
+published: true
+synthetic: true
+document_types: [guarantee]
+counterparty:
+  name: Adidas AG
+  match: exact_normalized
+  field: beneficiary_name
+policy_packs: [guarantee-core]
+
+body: |
+  DEMAND GUARANTEE — CUSTOMER TEMPLATE (synthetic)
+  Currency: the settlement currency of this guarantee shall be USD.
+  Payment shall be made in USD within 30 days of presentation.
+  This guarantee is governed by the laws of England and Wales.
+
+fields:
+  # Already in fields.yaml: the template only adds the expectation. `advisory` on purpose — the bank pack
+  # already gates `currency` (GR-CURRENCY-USD, advisory), and re-gating it harder here would be a policy
+  # conflict the reviewer must resolve, not something a template may decide on its own.
+  - key: currency
+    allowed_values: [USD]
+    gate_type: advisory
+  # Not in fields.yaml: the template introduces the field and its type (read from extra_fields).
+  - key: origin_country
+    type: country
+    allowed_values: [VN, TH]
+    gate_type: hard_block
+  # Conditional requirement: only when the settlement currency is USD.
+  - key: guarantee_amount
+    required_when:
+      field_id: currency
+      equals: USD
+    gate_type: hard_block
+
+clauses:
+  - clause_id: adidas-payment-clause
+    requirement: required
+    text: "Payment shall be made in USD within 30 days of presentation."
+    gate_type: hard_block
+  - clause_id: adidas-law-clause
+    requirement: controlled
+    text: "This guarantee is governed by the laws of England and Wales."
+    gate_type: hard_block
+
+internal_policy:
+  - declaration_id: lawful-source
+    text: "We confirm the funds are from lawful sources."
+    waivable: true
+    gate_type: human_review

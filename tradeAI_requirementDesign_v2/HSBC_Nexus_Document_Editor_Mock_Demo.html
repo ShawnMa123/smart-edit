@@ -1,0 +1,4659 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HSBC Nexus | Trade Document Workspace</title>
+    <style>
+      :root {
+        --red: #db0011;
+        --ink: #202528;
+        --muted: #647078;
+        --line: #dce1e3;
+        --bg: #f3f5f5;
+        --green: #167257;
+        --amber: #956300;
+        --blue: #29638d;
+        --serif: Georgia, "Noto Serif SC", serif;
+        --font: "Aptos", "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+        letter-spacing: 0;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 14px/1.55 var(--font);
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      [contenteditable]:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 3px;
+      }
+      button,
+      a,
+      input,
+      select {
+        touch-action: manipulation;
+      }
+      a {
+        color: var(--blue);
+      }
+      button {
+        border: 1px solid var(--line);
+        background: white;
+        border-radius: 4px;
+        min-height: 34px;
+        padding: 6px 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+      }
+      button:hover:not(:disabled) {
+        background: #f1f4f4;
+        border-color: #a8b2b7;
+      }
+      .primary {
+        background: var(--red);
+        border-color: var(--red);
+        color: white;
+      }
+      .primary:hover:not(:disabled) {
+        background: #b5000e;
+        border-color: #b5000e;
+      }
+      .quiet {
+        border-color: transparent;
+        background: transparent;
+      }
+      .danger {
+        color: #b90013;
+      }
+      .small {
+        font-size: 12px;
+        min-height: 28px;
+        padding: 3px 8px;
+      }
+      .icon {
+        width: 34px;
+        padding: 0;
+        font-size: 18px;
+        flex-shrink: 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .mono {
+        font-family: Consolas, monospace;
+        font-size: 12px;
+      }
+      .tiny {
+        font-size: 11px;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: 3px;
+        font-size: 11px;
+        line-height: 1.6;
+        padding: 2px 6px;
+        background: #edf0f1;
+        color: #51616c;
+        white-space: normal;
+      }
+      .tag.good {
+        background: #e7f3ed;
+        color: var(--green);
+      }
+      .tag.warn {
+        background: #fff2d8;
+        color: var(--amber);
+      }
+      .tag.bad {
+        background: #fdebed;
+        color: #b31222;
+      }
+      .tag.blue {
+        background: #eaf2f9;
+        color: var(--blue);
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        display: inline-block;
+        flex-shrink: 0;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 31px;
+        height: 31px;
+        border-radius: 50%;
+        background: #e8eeee;
+        color: #37544d;
+        font-weight: 600;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      .flex {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .between {
+        justify-content: space-between;
+      }
+      .wrap {
+        flex-wrap: wrap;
+      }
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
+      .section-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
+      .row {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      h1,
+      h2,
+      h3,
+      h4,
+      p {
+        margin: 0;
+      }
+      h2 {
+        font-size: 19px;
+      }
+      h3 {
+        font-size: 15px;
+      }
+      h4 {
+        font-size: 13px;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .topbar {
+        height: 60px;
+        background: white;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 0 22px;
+      }
+      .brand {
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        white-space: nowrap;
+      }
+      .brand-mark {
+        width: 30px;
+        height: 26px;
+        background: var(--red);
+        color: white;
+        display: grid;
+        place-items: center;
+        font-size: 19px;
+        font-weight: bold;
+      }
+      .brand strong {
+        font-weight: 650;
+      }
+      .brand .product {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+        border-left: 1px solid var(--line);
+        padding-left: 12px;
+      }
+      .top-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .identity {
+        max-width: 255px;
+        text-align: left;
+      }
+      .identity-copy {
+        display: grid;
+        line-height: 1.3;
+        text-align: left;
+        min-width: 0;
+      }
+      .identity-copy span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+      }
+      .prototype-strip {
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 22px;
+        background: #eef2f1;
+        border-bottom: 1px solid var(--line);
+        font-size: 11px;
+        color: #56635f;
+      }
+      .prototype-strip button {
+        font-size: 11px;
+        min-height: 22px;
+        padding: 0 5px;
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr);
+        min-height: calc(100vh - 86px);
+      }
+      .rail {
+        border-right: 1px solid var(--line);
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        align-items: center;
+        padding: 20px 0;
+      }
+      .rail button {
+        width: 38px;
+        height: 38px;
+        padding: 0;
+        font-size: 19px;
+        border-color: transparent;
+      }
+      .rail .active {
+        background: #fdecef;
+        color: var(--red);
+      }
+      .rail-bottom {
+        margin-top: auto;
+      }
+      .workspace {
+        min-width: 0;
+      }
+      .document-head {
+        padding: 17px 23px 14px;
+        background: white;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .crumb {
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 5px;
+      }
+      .document-title {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .document-title h1 {
+        font-size: 19px;
+        font-weight: 600;
+      }
+      .meta-line {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 5px;
+      }
+      .document-actions {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .mobile-tabs {
+        display: none;
+      }
+      .work-grid {
+        display: grid;
+        grid-template-columns: 208px minmax(320px, 1fr) 352px;
+        min-height: calc(100vh - 193px);
+      }
+      .sidebar {
+        background: #fbfcfc;
+        border-right: 1px solid var(--line);
+        padding: 18px 14px;
+        min-width: 0;
+      }
+      .side-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+      .versions {
+        display: grid;
+        gap: 0;
+      }
+      .version {
+        padding: 14px 10px 14px 15px;
+        border-left: 2px solid var(--line);
+        position: relative;
+      }
+      .version:before {
+        content: "";
+        position: absolute;
+        left: -5px;
+        top: 20px;
+        width: 8px;
+        height: 8px;
+        background: #c5cecf;
+        border-radius: 50%;
+      }
+      .version.current {
+        border-left-color: var(--green);
+        background: #edf5f2;
+      }
+      .version.current:before {
+        background: var(--green);
+      }
+      .version p {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 5px;
+        overflow-wrap: anywhere;
+      }
+      .version-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 6px;
+        align-items: center;
+      }
+      .version label {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        font-weight: 600;
+      }
+      .version input {
+        accent-color: var(--red);
+      }
+      .sidebar-footer {
+        margin-top: 25px;
+        padding-top: 15px;
+        border-top: 1px solid var(--line);
+      }
+      .sidebar-footer .row {
+        font-size: 12px;
+      }
+      .editor-column {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: #e9edee;
+      }
+      .lock-line {
+        min-height: 39px;
+        padding: 8px 18px;
+        background: #f5f8f7;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+      .lock-line.locked {
+        background: #eaf4ef;
+        color: var(--green);
+      }
+      .lock-line.blocked {
+        background: #fff6e8;
+        color: #856015;
+      }
+      .toolbar {
+        background: white;
+        display: flex;
+        gap: 2px;
+        align-items: center;
+        padding: 7px 12px;
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .toolbar .sep {
+        height: 19px;
+        width: 1px;
+        background: var(--line);
+        margin: 0 6px;
+      }
+      .toolbar button {
+        min-height: 30px;
+        height: 30px;
+        width: 30px;
+        padding: 0;
+        font-size: 15px;
+        border-color: transparent;
+      }
+      .toolbar .wide {
+        width: auto;
+        padding: 0 8px;
+        font-size: 12px;
+      }
+      .toolbar select {
+        font-size: 12px;
+        border: 0;
+        background: transparent;
+        max-width: 90px;
+      }
+      .paper-wrap {
+        padding: 25px 25px 40px;
+        flex: 1;
+        overflow: auto;
+        background-image: linear-gradient(#e9edee, #f0f2f2);
+      }
+      .paper {
+        max-width: 790px;
+        min-height: 710px;
+        margin: 0 auto;
+        background: #fff;
+        padding: 43px 47px;
+        box-shadow: 0 2px 6px #2435380c;
+        position: relative;
+        border: 1px solid #dce0e1;
+      }
+      .paper-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 2px solid #202528;
+        padding-bottom: 15px;
+        margin-bottom: 28px;
+      }
+      .paper-brand {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .paper-head .ref {
+        text-align: right;
+        font-size: 10px;
+      }
+      .paper h2 {
+        font: 24px/1.2 var(--serif);
+        margin-bottom: 5px;
+      }
+      .paper-sub {
+        font-size: 10px;
+        color: var(--muted);
+        margin-bottom: 25px;
+      }
+      .paper-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 26px;
+        padding: 17px 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+      }
+      .paper-meta strong {
+        display: block;
+        font-size: 10px;
+        color: var(--muted);
+        font-weight: 400;
+        margin-bottom: 3px;
+      }
+      .document-body {
+        font: 14px/1.95 var(--serif);
+        min-height: 295px;
+        outline: none;
+        overflow-wrap: anywhere;
+      }
+      .document-body p {
+        margin: 0 0 15px;
+      }
+      .document-body h3 {
+        font: 600 14px var(--font);
+        margin: 22px 0 12px;
+      }
+      .document-body table {
+        border-collapse: collapse;
+        width: 100%;
+        table-layout: fixed;
+      }
+      .document-body td,
+      .document-body th {
+        border: 1px solid var(--line);
+        padding: 8px;
+        overflow-wrap: anywhere;
+      }
+      .document-body [data-var] {
+        padding: 2px 4px;
+        background: #fff1d5;
+        border-bottom: 1px dashed #ad810e;
+        font-family: var(--font);
+        font-size: 12px;
+        white-space: normal;
+      }
+      .document-body [data-var].confirmed {
+        background: #eaf4ef;
+        border-color: #438971;
+      }
+      .document-body [contenteditable="false"] {
+        cursor: default;
+      }
+      .document-body[contenteditable="true"] {
+        background: linear-gradient(white, white);
+        outline: 1px dashed #9ab8aa;
+        outline-offset: 10px;
+      }
+      .paper-foot {
+        margin-top: 35px;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 9px;
+        color: var(--muted);
+      }
+      .editor-footer {
+        padding: 11px 15px;
+        background: white;
+        border-top: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .editor-footer .status {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .assistant {
+        background: white;
+        border-left: 1px solid var(--line);
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .assistant-head {
+        padding: 17px 18px 13px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .assistant-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ai-symbol {
+        width: 26px;
+        height: 26px;
+        background: #eef3f2;
+        border: 1px solid #d5e3de;
+        color: #2c7058;
+        border-radius: 5px;
+        display: grid;
+        place-items: center;
+        font-size: 18px;
+      }
+      .assistant-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--line);
+        padding: 0 9px;
+        gap: 1px;
+      }
+      .assistant-tabs button {
+        flex: 1;
+        font-size: 12px;
+        min-width: 0;
+        padding: 9px 4px;
+        border: 0;
+        border-radius: 0;
+        color: var(--muted);
+        border-bottom: 2px solid transparent;
+      }
+      .assistant-tabs button[aria-selected="true"] {
+        color: var(--ink);
+        font-weight: 600;
+        border-bottom-color: var(--red);
+        background: white;
+      }
+      .assistant-body {
+        padding: 16px 17px;
+        flex: 1;
+        min-width: 0;
+      }
+      .assistant-body p {
+        font-size: 12px;
+        line-height: 1.8;
+      }
+      .scope {
+        display: flex;
+        justify-content: space-between;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 16px;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        margin: 12px 0 16px;
+        padding: 10px 0;
+      }
+      .metric {
+        text-align: center;
+        border-right: 1px solid var(--line);
+      }
+      .metric:last-child {
+        border: 0;
+      }
+      .metric b {
+        font-size: 22px;
+        font-weight: 500;
+        display: block;
+      }
+      .metric span {
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .finding {
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 13px;
+        margin: 10px 0;
+        background: white;
+      }
+      .finding.bad {
+        border-left: 3px solid #c13e4a;
+      }
+      .finding.warn {
+        border-left: 3px solid #c29428;
+      }
+      .finding.good {
+        border-left: 3px solid #288669;
+      }
+      .finding h4 {
+        margin: 8px 0 5px;
+      }
+      .finding-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .notice {
+        padding: 10px 12px;
+        background: #f0f5f3;
+        border-left: 2px solid #73998b;
+        font-size: 12px;
+        margin: 10px 0;
+        overflow-wrap: anywhere;
+      }
+      .notice.warn {
+        background: #fff6e8;
+        border-color: #be973d;
+      }
+      .notice.bad {
+        background: #fdf0f1;
+        border-color: #bc6670;
+      }
+      .empty {
+        padding: 28px 6px;
+        text-align: center;
+        color: var(--muted);
+      }
+      .empty .empty-icon {
+        font-size: 28px;
+        color: #839c92;
+        margin-bottom: 12px;
+      }
+      .empty h3 {
+        color: var(--ink);
+        margin-bottom: 8px;
+      }
+      .empty button {
+        margin-top: 16px;
+      }
+      .assistant-bottom {
+        border-top: 1px solid var(--line);
+        padding: 11px 17px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .field-grid {
+        display: grid;
+        gap: 13px;
+      }
+      .field-label {
+        font-size: 12px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 5px;
+      }
+      .field-control {
+        display: flex;
+        gap: 6px;
+      }
+      .field-control input,
+      .field-control select {
+        min-width: 0;
+        flex: 1;
+      }
+      .field-source {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      input:not([type="checkbox"]),
+      select,
+      textarea {
+        border: 1px solid #bdc8ca;
+        border-radius: 3px;
+        padding: 8px 10px;
+        width: 100%;
+        background: #fff;
+      }
+      input[type="checkbox"] {
+        accent-color: var(--red);
+      }
+      textarea {
+        min-height: 85px;
+        resize: vertical;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .form-field {
+        min-width: 0;
+      }
+      .form-field label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 5px;
+      }
+      .full {
+        grid-column: 1/-1;
+      }
+      .assistant-body .full-button {
+        width: 100%;
+        margin-top: 14px;
+      }
+      .source-link {
+        font-size: 11px;
+        color: var(--blue);
+        text-align: left;
+        padding: 3px 0;
+        min-height: 25px;
+        background: none;
+        border: 0;
+        justify-content: flex-start;
+      }
+      .chat-msg {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .chat-msg.user {
+        padding: 10px;
+        background: #f1f5f4;
+        margin-top: 12px;
+        border-radius: 4px;
+      }
+      .chat-msg p {
+        white-space: pre-wrap;
+      }
+      .question-form {
+        margin-top: 15px;
+        display: flex;
+        gap: 6px;
+      }
+      .question-form input {
+        min-width: 0;
+        font-size: 12px;
+      }
+      .task-step {
+        padding: 13px 0;
+        display: flex;
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .step-number {
+        width: 27px;
+        height: 27px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #eaf0ee;
+        flex-shrink: 0;
+        font-size: 12px;
+      }
+      .comment {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .comment blockquote {
+        margin: 7px 0;
+        border-left: 2px solid #b9c7c1;
+        padding-left: 9px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      dialog {
+        border: 0;
+        border-radius: 6px;
+        padding: 0;
+        width: min(760px, calc(100vw - 30px));
+        max-height: 88vh;
+        box-shadow: 0 15px 70px #0003;
+        color: var(--ink);
+      }
+      dialog::backdrop {
+        background: #18222666;
+      }
+      .dialog-head {
+        padding: 19px 23px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: white;
+      }
+      .dialog-body {
+        padding: 21px 23px;
+        overflow: auto;
+        max-height: calc(88vh - 145px);
+      }
+      .dialog-foot {
+        padding: 13px 23px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        background: #fbfcfc;
+      }
+      .dialog-tabs {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .dialog-tabs .active {
+        border-color: #8da79c;
+        background: #eef5f1;
+      }
+      .people-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 13px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .people-row p {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .check-label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 12px;
+      }
+      .diff-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+      }
+      .diff-column {
+        min-width: 0;
+      }
+      .diff-block {
+        padding: 10px;
+        font-size: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        border-bottom: 1px solid var(--line);
+      }
+      .diff-block.changed {
+        background: #fff3d9;
+      }
+      .diff-block.added {
+        background: #e8f4ed;
+      }
+      .diff-block.removed {
+        background: #faeeee;
+      }
+      .code {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        padding: 13px;
+        background: #f2f5f4;
+        border: 1px solid var(--line);
+        font:
+          11px/1.7 Consolas,
+          monospace;
+      }
+      .mapping {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .mapping td,
+      .mapping th {
+        text-align: left;
+        padding: 10px 7px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+      .mapping th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .error {
+        color: #b51022;
+        font-size: 12px;
+        margin-top: 9px;
+        min-height: 18px;
+      }
+      .toast {
+        position: fixed;
+        bottom: 22px;
+        left: 50%;
+        transform: translate(-50%, 20px);
+        background: #243931;
+        color: white;
+        padding: 11px 19px;
+        border-radius: 5px;
+        box-shadow: 0 5px 20px #0002;
+        opacity: 0;
+        pointer-events: none;
+        transition: 0.2s;
+        z-index: 10;
+        max-width: calc(100vw - 35px);
+        font-size: 13px;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+      .no-access {
+        min-height: 470px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 25px;
+      }
+      .spin {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid #cbd8d1;
+        border-top-color: var(--green);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .view-only {
+        opacity: 0.8;
+      }
+      .print-note {
+        display: none;
+      }
+      @media (min-width: 1500px) {
+        .work-grid {
+          grid-template-columns: 228px minmax(400px, 1fr) 390px;
+        }
+        .assistant-body {
+          padding: 20px 24px;
+        }
+        .paper-wrap {
+          padding: 33px 45px;
+        }
+      }
+      @media (max-width: 1180px) {
+        .work-grid {
+          grid-template-columns: 170px minmax(290px, 1fr) 310px;
+        }
+        .paper {
+          padding: 30px 26px;
+        }
+        .paper-wrap {
+          padding: 18px 15px;
+        }
+        .document-head {
+          padding: 14px 16px;
+          align-items: flex-start;
+        }
+        .document-title h1 {
+          font-size: 17px;
+        }
+        .topbar {
+          gap: 10px;
+          padding: 0 15px;
+        }
+        .brand .product {
+          display: none;
+        }
+        .identity {
+          max-width: 180px;
+        }
+        .document-actions .optional {
+          display: none;
+        }
+        .sidebar {
+          padding: 15px 10px;
+        }
+      }
+      @media (max-width: 960px) {
+        .work-grid {
+          grid-template-columns: minmax(280px, 1fr) 325px;
+        }
+        .sidebar {
+          display: none;
+        }
+        .rail {
+          display: none;
+        }
+        .shell {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .top-actions .optional {
+          display: none;
+        }
+        .document-head {
+          flex-wrap: wrap;
+        }
+        .document-actions {
+          justify-content: flex-start;
+        }
+        .meta-line {
+          gap: 10px;
+        }
+        .prototype-strip {
+          padding: 0 15px;
+        }
+      }
+      @media (max-width: 700px) {
+        .topbar {
+          height: 56px;
+          padding: 0 12px;
+        }
+        .brand {
+          font-size: 17px;
+          gap: 7px;
+        }
+        .brand-mark {
+          width: 24px;
+          height: 23px;
+          font-size: 16px;
+        }
+        .top-actions {
+          gap: 2px;
+        }
+        .top-actions > .small {
+          display: none;
+        }
+        .identity {
+          max-width: 144px;
+          padding: 3px 5px;
+          border: 0;
+        }
+        .identity .avatar {
+          display: none;
+        }
+        .identity-copy span {
+          font-size: 10px;
+        }
+        .prototype-strip {
+          font-size: 10px;
+          padding: 0 12px;
+          height: auto;
+          min-height: 27px;
+          gap: 6px;
+        }
+        .prototype-strip > span {
+          max-width: 70%;
+        }
+        .document-head {
+          padding: 13px 14px;
+          gap: 10px;
+        }
+        .document-title h1 {
+          font-size: 17px;
+        }
+        .meta-line {
+          font-size: 10px;
+        }
+        .document-actions {
+          width: 100%;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 5px;
+        }
+        .document-actions button {
+          font-size: 11px;
+          padding: 5px 3px;
+          min-width: 0;
+        }
+        .document-actions .optional {
+          display: none;
+        }
+        .mobile-tabs {
+          display: flex;
+          background: white;
+          border-bottom: 1px solid var(--line);
+          padding: 0 10px;
+        }
+        .mobile-tabs button {
+          flex: 1;
+          border: 0;
+          border-radius: 0;
+          font-size: 12px;
+          padding: 10px;
+          border-bottom: 2px solid transparent;
+        }
+        .mobile-tabs button.active {
+          border-bottom-color: var(--red);
+          font-weight: 600;
+        }
+        .work-grid {
+          display: block;
+          min-height: 0;
+        }
+        .sidebar {
+          display: none;
+        }
+        .assistant {
+          display: none;
+          border-left: 0;
+        }
+        .work-grid[data-mobile="assistant"] .editor-column {
+          display: none;
+        }
+        .work-grid[data-mobile="assistant"] .assistant {
+          display: flex;
+          min-height: 550px;
+        }
+        .work-grid[data-mobile="versions"] .editor-column {
+          display: none;
+        }
+        .work-grid[data-mobile="versions"] .sidebar {
+          display: block;
+        }
+        .paper-wrap {
+          padding: 14px 10px 24px;
+        }
+        .paper {
+          padding: 25px 22px;
+          min-height: 630px;
+        }
+        .paper h2 {
+          font-size: 22px;
+        }
+        .paper-brand {
+          font-size: 17px;
+        }
+        .document-body {
+          font-size: 13px;
+        }
+        .lock-line {
+          padding: 8px 13px;
+          font-size: 11px;
+          align-items: flex-start;
+        }
+        .lock-line > span {
+          flex: 1;
+        }
+        .toolbar {
+          padding: 6px 10px;
+        }
+        .toolbar .sep {
+          margin: 0 3px;
+        }
+        .editor-footer {
+          padding: 10px;
+          position: sticky;
+          bottom: 0;
+        }
+        .editor-footer .flex {
+          gap: 5px;
+        }
+        .editor-footer button {
+          font-size: 11px;
+          padding: 6px 8px;
+        }
+        .editor-footer .status {
+          width: 100%;
+          order: 2;
+        }
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+        .dialog-body {
+          padding: 16px;
+        }
+        .dialog-head {
+          padding: 15px 16px;
+        }
+        .dialog-foot {
+          padding: 11px 16px;
+        }
+        .dialog-tabs button {
+          font-size: 11px;
+          padding: 6px 8px;
+        }
+        .people-row {
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+        .diff-grid {
+          grid-template-columns: 1fr;
+        }
+        .mapping {
+          font-size: 11px;
+        }
+        .mapping td,
+        .mapping th {
+          padding: 8px 4px;
+        }
+        .assistant-body {
+          padding: 18px;
+        }
+        .paper-foot {
+          gap: 10px;
+        }
+        .brand .product {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+      @media print {
+        body {
+          background: white;
+        }
+        .topbar,
+        .prototype-strip,
+        .rail,
+        .document-head,
+        .mobile-tabs,
+        .sidebar,
+        .assistant,
+        .toolbar,
+        .lock-line,
+        .editor-footer,
+        dialog,
+        .toast {
+          display: none !important;
+        }
+        .shell,
+        .work-grid,
+        .editor-column {
+          display: block !important;
+        }
+        .paper-wrap {
+          padding: 0;
+          background: white;
+        }
+        .paper {
+          box-shadow: none;
+          border: 0;
+          max-width: none;
+          padding: 20mm;
+          min-height: 0;
+        }
+        .document-body[contenteditable="true"] {
+          outline: 0;
+        }
+        .print-note {
+          display: block;
+          font: 12px var(--font);
+          padding: 10px;
+          border: 1px solid #999;
+          margin-bottom: 15px;
+        }
+        .document-body [data-var] {
+          background: transparent;
+        }
+        html {
+          print-color-adjust: exact;
+        }
+      }
+      .api-mapping {
+        border-bottom: 2px solid var(--line);
+        margin-bottom: 22px;
+        padding-bottom: 20px;
+      }
+      .api-mapping > .field-label { margin-top: 14px; }
+      .api-mapping > .flex.wrap { margin-top: 10px; }
+      .api-mapping h3, .api-mapping h4 { margin: 0; }
+      .api-mapping .flex.between { flex-wrap: wrap; gap: 8px; }
+      .mapping-field { padding: 13px 0; border-bottom: 1px solid var(--line); }
+      .mapping-field code, .mapping-meta, .mapping-value { overflow-wrap: anywhere; }
+      .mapping-value { margin: 7px 0; font-weight: 600; font-size: 13px; }
+      .mapping-meta { color: var(--muted); font-size: 11px; line-height: 1.6; margin: 9px 0; }
+      .mapping-field .source-link { margin-bottom: 6px; }
+      .mapping-summary { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0 8px; }
+      .mapping-json { white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; background: #f3f6f5; border: 1px solid var(--line); border-radius: 3px; font-size: 12px; line-height: 1.6; }
+      .mapping-evidence { border-left: 3px solid var(--line); padding: 10px 14px; margin: 12px 0; overflow-wrap: anywhere; }
+      .mapping-decision { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; font-size: 12px; }
+      .mapping-decision input { margin-top: 3px; }
+      .mapping-reason { margin: 10px 0; }
+      .mapping-field button, .api-mapping button { white-space: normal; }
+      .voice-workspace { padding-bottom: 20px; margin-bottom: 20px; border-bottom: 2px solid var(--line); }
+      .work-grid { overflow-anchor: none; }
+      @media (min-width: 701px) {
+        .work-grid { height: max(560px, calc(100dvh - 193px)); min-height: 0; }
+        .editor-column, .assistant { min-height: 0; }
+        .paper-wrap, .assistant-body { min-height: 0; overflow: auto; }
+        .sidebar { overflow: auto; }
+        .assistant-head, .assistant-tabs, .assistant-footer, .editor-footer, #voiceDock { flex-shrink: 0; }
+      }
+      .voice-workspace .flex { flex-wrap: wrap; gap: 7px; }
+      .voice-workspace .field-label { margin-top: 12px; }
+      .voice-workspace textarea { min-height: 76px; margin-bottom: 8px; }
+      .voice-workspace button { white-space: normal; }
+      .voice-transcript { white-space: pre-wrap; overflow-wrap: anywhere; border-left: 3px solid #9a690b; padding-left: 10px; margin: 12px 0; }
+      .voice-selection-text { max-height: 110px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; margin: 9px 0; }
+      #voiceOverlay { position: fixed; inset: 0; pointer-events: none; z-index: 35; overflow: hidden; }
+      .voice-rectangle { position: absolute; background: #198d9833; outline: 2px solid #147c86; border-radius: 1px; }
+      .voice-rectangle.provisional { background: #e3aa2420; outline: 2px dashed #9a690b; }
+      .voice-rectangle.confirmed { background: #16834826; outline-color: #168348; }
+      .voice-line-number { position: absolute; color: #536163; background: #fff; font: 10px monospace; width: 25px; text-align: right; }
+      #voiceDock { border-top: 1px solid var(--line); padding: 8px 14px; background: #f1f8f6; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      #voiceDock[hidden] { display: none; }
+      #voiceDock .voice-dock-label { font-size: 12px; flex: 1; min-width: 120px; overflow-wrap: anywhere; }
+      #voiceDockForm { display: none; }
+      @media (max-width: 700px) {
+        #voiceDock { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; max-height: 220px; overflow: auto; box-shadow: 0 -2px 8px #00000012; }
+        #voiceDock .voice-dock-label { flex-basis: 100%; max-height: 36px; overflow: auto; }
+        #voiceDockForm { display: flex; flex: 1 0 100%; gap: 6px; }
+        #voiceDockForm input { min-width: 0; flex: 1; }
+        #voiceDock button { font-size: 11px; }
+        .editor-column:has(#voiceDock:not([hidden])) .paper-wrap { padding-bottom: 230px; }
+      }
+      @media print { #voiceOverlay, #voiceDock { display: none !important; } }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">H</span><strong>HSBC</strong
+        ><span style="font-weight: 300">NEXUS</span
+        ><span class="product">Trade workspace</span>
+      </div>
+      <div class="top-actions">
+        <button class="small optional" data-action="activity">
+          活动记录 <span id="activityCount" class="tag">0</span></button
+        ><button class="small" data-action="people">组织与成员</button
+        ><button
+          class="icon quiet"
+          data-action="inbox"
+          title="通知与待办"
+          aria-label="通知与待办"
+        >
+          ☷</button
+        ><button
+          class="identity"
+          data-action="identity"
+          id="identityButton"
+        ></button>
+      </div>
+    </header>
+    <div class="prototype-strip">
+      <span>交互原型 · 合成数据 · 单标签页本地模拟</span
+      ><button class="quiet" data-action="developer">开发对照 ↗</button>
+    </div>
+    <div class="shell">
+      <nav class="rail" aria-label="工作区">
+        <button
+          class="active"
+          data-action="document"
+          title="当前文档"
+          aria-label="当前文档"
+        >
+          ▤</button
+        ><button data-action="versions" title="版本历史" aria-label="版本历史">
+          ◷</button
+        ><button data-action="workflow" title="审批流程" aria-label="审批流程">
+          ✓</button
+        ><button data-action="comments" title="评论" aria-label="评论">≡</button
+        ><button
+          data-action="people"
+          title="组织与成员"
+          aria-label="组织与成员"
+        >
+          ♙
+        </button>
+        <div class="rail-bottom">
+          <button
+            data-action="developer"
+            title="开发对照"
+            aria-label="开发对照"
+          >
+            ⌘
+          </button>
+        </div>
+      </nav>
+      <main class="workspace">
+        <section class="document-head">
+          <div>
+            <div class="crumb">
+              Trade documents / Guarantees / DG-2026-00417
+            </div>
+            <div class="document-title">
+              <h1>Demand Guarantee · 见索即付保函</h1>
+              <span id="businessBadge" class="tag">草稿</span>
+            </div>
+            <div class="meta-line">
+              <span>Alpha Tech → Beta Construction</span
+              ><span>模板 DEMO-DG / 1.0</span
+              ><span id="headVersion">v3 · 当前版本</span>
+            </div>
+          </div>
+          <div class="document-actions">
+            <button data-action="import">导入文件</button
+            ><button data-action="comments">
+              评论 <span id="commentCount" class="tag">0</span></button
+            ><button data-action="export">导出</button
+            ><button class="primary" data-action="workflow" id="workflowButton">
+              发起审批
+            </button>
+          </div>
+        </section>
+        <div class="mobile-tabs" role="tablist" aria-label="工作面板">
+          <button role="tab" data-mobile="document" class="active">文档</button
+          ><button role="tab" data-mobile="assistant">AI 助手</button
+          ><button role="tab" data-mobile="versions">版本历史</button
+          ><button data-action="people">协作成员</button>
+        </div>
+        <div class="work-grid" id="workGrid" data-mobile="document">
+          <aside class="sidebar">
+            <div class="side-title">
+              <h3>版本历史</h3>
+              <span class="tag" id="versionCount">3</span>
+            </div>
+            <div class="versions" id="versionList"></div>
+            <button style="width: 100%; margin-top: 17px" data-action="compare">
+              ⇄ 比较所选版本
+            </button>
+            <div class="sidebar-footer">
+              <div class="section-label">文档信息</div>
+              <div class="row flex between">
+                <span>工作区</span><span class="tag">跨组织共享</span>
+              </div>
+              <div class="row">
+                <div class="muted tiny">参与组织</div>
+                <div>Alpha Tech Ltd.</div>
+                <div>HSBC · Trade Operations</div>
+              </div>
+              <div class="row">
+                <div class="muted tiny">内容范围</div>
+                <div>共享正文 · 独立内部层</div>
+              </div>
+              <button class="small quiet" data-action="people">
+                管理协作者 ↗
+              </button>
+            </div>
+          </aside>
+          <section class="editor-column" aria-label="文档编辑器">
+            <div class="lock-line" id="lockLine">
+              <span id="lockText"></span
+              ><span class="mono" id="snapshotLabel"></span>
+            </div>
+            <div class="toolbar" role="toolbar" aria-label="格式工具">
+              <select id="blockFormat" aria-label="段落样式">
+                <option value="p">正文</option>
+                <option value="h3">标题</option>
+                <option value="blockquote">引用</option></select
+              ><span class="sep"></span
+              ><button data-format="bold" title="粗体" aria-label="粗体">
+                <b>B</b></button
+              ><button data-format="italic" title="斜体" aria-label="斜体">
+                <i>I</i></button
+              ><button
+                data-format="underline"
+                title="下划线"
+                aria-label="下划线"
+              >
+                <u>U</u></button
+              ><span class="sep"></span
+              ><button
+                data-format="insertUnorderedList"
+                title="无序列表"
+                aria-label="无序列表"
+              >
+                ≡</button
+              ><button
+                data-format="insertOrderedList"
+                title="有序列表"
+                aria-label="有序列表"
+              >
+                ≣</button
+              ><button
+                data-action="table"
+                title="插入表格"
+                aria-label="插入表格"
+              >
+                ▦</button
+              ><span class="sep"></span
+              ><button data-format="undo" title="撤销" aria-label="撤销">
+                ↶</button
+              ><button data-format="redo" title="重做" aria-label="重做">
+                ↷</button
+              ><span class="spacer"></span
+              ><button class="wide" data-action="find">查找</button
+              ><button class="wide" data-action="variables">变量</button>
+            </div>
+            <div class="paper-wrap">
+              <article class="paper" id="paper">
+                <div class="print-note" id="printNote"></div>
+                <div class="paper-head">
+                  <div class="paper-brand">
+                    HSBC <span style="color: var(--red)">/</span> TRADE
+                  </div>
+                  <div class="ref">
+                    DOCUMENT WORKING COPY<br />DG-2026-00417
+                  </div>
+                </div>
+                <h2>Demand Guarantee</h2>
+                <div class="paper-sub">
+                  见索即付保函 · 合成条款样例 / NOT FOR EXECUTION
+                </div>
+                <div class="paper-meta">
+                  <div>
+                    <strong>APPLICANT / 申请人</strong>Shenzhen Alpha Tech Ltd.
+                  </div>
+                  <div>
+                    <strong>BENEFICIARY / 受益人</strong>Hanoi Beta Construction
+                  </div>
+                </div>
+                <div
+                  id="docEditor"
+                  class="document-body"
+                  contenteditable="false"
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-label="保函正文"
+                ></div>
+                <div class="paper-foot">
+                  <span>DEMO-DG · Template 1.0 · Shared document</span
+                  ><span id="paperVersion">v3 / 1</span>
+                </div>
+              </article>
+              <div id="accessDenied" class="no-access" hidden></div>
+            </div>
+            <div id="voiceDock" hidden aria-live="polite"></div>
+            <footer class="editor-footer">
+              <span class="status" id="saveStatus">共享快照 · 只读</span>
+              <div class="flex">
+                <button id="releaseButton" data-action="release">释放锁</button
+                ><button id="editButton" data-action="edit">开始编辑</button
+                ><button class="primary" id="submitButton" data-action="submit">
+                  提交新版本
+                </button>
+              </div>
+            </footer>
+          </section>
+          <aside class="assistant" aria-label="AI助手">
+            <div class="assistant-head">
+              <div class="assistant-title">
+                <span class="ai-symbol">✦</span>
+                <h3>Nexus AI</h3>
+              </div>
+              <span class="tag good">人类决策</span>
+            </div>
+            <div class="assistant-tabs" role="tablist" aria-label="助手类型">
+              <button data-tab="knowledge" role="tab">知识问答</button
+              ><button data-tab="automation" role="tab">自动化</button
+              ><button data-tab="audit" role="tab" aria-selected="true">
+                规则审计</button
+              ><button data-tab="legal" role="tab">法律建议</button>
+            </div>
+            <div class="assistant-body" id="assistantBody"></div>
+            <div class="assistant-bottom">
+              <span class="dot" style="color: var(--green)"></span
+              ><span>固定快照 · 来源可追溯 · AI 不代替审批</span>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <dialog id="dialog">
+      <div class="dialog-head">
+        <h2 id="dialogTitle"></h2>
+        <button
+          class="icon quiet"
+          data-action="close"
+          title="关闭"
+          aria-label="关闭对话框"
+        >
+          ×
+        </button>
+      </div>
+      <div class="dialog-body" id="dialogBody"></div>
+      <div class="dialog-foot" id="dialogFoot"></div>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <input
+      id="fileInput"
+      type="file"
+      accept=".txt,.pdf,.docx,.png,.jpg,.jpeg"
+      hidden
+    />
+    <script>
+      "use strict";
+      const STORAGE_KEY = "nexus-interactive-demo-v4";
+      const USERS = {
+        applicant: {
+          name: "Chen Rui",
+          initials: "CR",
+          org: "Alpha Tech Ltd.",
+          role: "申请人经办",
+          edit: true,
+          ai: true,
+        },
+        ops: {
+          name: "Emma Wong",
+          initials: "EW",
+          org: "HSBC · Trade Operations",
+          role: "银行经办 / 一级审批",
+          edit: true,
+          ai: true,
+        },
+        compliance: {
+          name: "Daniel Lee",
+          initials: "DL",
+          org: "HSBC · Compliance",
+          role: "合规 / 二级审批",
+          edit: true,
+          ai: true,
+        },
+        lawyer: {
+          name: "Lin Yan",
+          initials: "LY",
+          org: "Independent legal counsel",
+          role: "外部律师 · 访客",
+          edit: false,
+          ai: false,
+        },
+      };
+      const FIELD_LABELS = {
+        amount: "保函金额",
+        currency: "币种",
+        expiry: "到期日期",
+      };
+      const BASE_HTML =
+        '<h3 data-node="heading-1">01 / Undertaking</h3><p data-node="clause-1">At the request of Shenzhen Alpha Tech Ltd. (the Applicant), this demonstration guarantee is issued in favour of Hanoi Beta Construction (the Beneficiary).</p><p data-node="clause-2">The aggregate liability under this guarantee shall not exceed <span data-var="currency">{{currency}}</span> <span data-var="amount">{{amount}}</span>.</p><h3 data-node="heading-2">02 / Demand and payment</h3><p data-node="clause-3">A demand must identify this guarantee and include the Beneficiary\'s signed statement describing the obligation that remains unfulfilled. Payment will be made within a reasonable time after examination.</p><h3 data-node="heading-3">03 / Expiry</h3><p data-node="clause-4">This guarantee expires on <span data-var="expiry">{{expiry}}</span>. Any demand must be received before expiry at the address specified in the final executed document.</p><h3 data-node="heading-4">04 / Document status</h3><p data-node="clause-5">This document is a synthetic working draft for collaborative review. Applicable rules, governing law and execution details remain subject to authorized human confirmation.</p>';
+      function seed() {
+        const fields = {
+          amount: { value: "", confirmed: false },
+          currency: { value: "USD", confirmed: true },
+          expiry: { value: "2027-06-30", confirmed: true },
+        };
+        return {
+          schema: 4,
+          user: "applicant",
+          tab: "audit",
+          status: "DRAFT",
+          versions: [
+            {
+              no: 1,
+              html: BASE_HTML.replace(
+                "A demand must identify this guarantee and include the Beneficiary's signed statement describing the obligation that remains unfulfilled.",
+                "A demand must identify this guarantee.",
+              ),
+              fields: structuredClone(fields),
+              user: "applicant",
+              time: "2026-11-01 09:10",
+              note: "初始模板",
+              hash: "",
+            },
+            {
+              no: 2,
+              html: BASE_HTML,
+              fields: {
+                ...structuredClone(fields),
+                expiry: { value: "2027-03-31", confirmed: true },
+              },
+              user: "ops",
+              time: "2026-11-02 14:35",
+              note: "补充索赔声明，原到期日 2027-03-31",
+              hash: "",
+            },
+            {
+              no: 3,
+              html: BASE_HTML,
+              fields: structuredClone(fields),
+              user: "applicant",
+              time: "2026-11-03 10:20",
+              note: "调整到期日，金额仍待确认",
+              hash: "",
+            },
+          ],
+          selected: [2, 3],
+          lock: null,
+          drafts: {},
+          reports: {},
+          chats: {},
+          comments: [],
+          events: [],
+          invitations: [],
+          guest: null,
+          tasks: [],
+          approval: null,
+          approvalHistory: [],
+          forceRequest: null,
+          joinRequests: [],
+          network: true,
+          nextFailure: false,
+          token: 0,
+        };
+      }
+      let state;
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        state =
+          stored &&
+          stored.schema === 4 &&
+          Array.isArray(stored.versions) &&
+          stored.versions.length
+            ? stored
+            : seed();
+      } catch {
+        state = seed();
+      }
+      let storageOk = true,
+        saveTimer,
+        toastTimer,
+        runToken = 0,
+        runBusy = false,
+        savedSelection = "",
+        modalKind = "",
+        mobileView = "document",
+        saveMessage = "",
+        submitting = false;
+      const editor = document.getElementById("docEditor");
+      const dialog = document.getElementById("dialog");
+      function esc(value) {
+        return String(value ?? "").replace(
+          /[&<>"']/g,
+          (character) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[character],
+        );
+      }
+      function now() {
+        return new Date().toLocaleString("zh-CN", { hour12: false });
+      }
+      function uid() {
+        return crypto.randomUUID
+          ? crypto.randomUUID()
+          : Date.now().toString(36) + "-" + ++state.token;
+      }
+      function currentUser() {
+        return state.user === "lawyer" && state.guest
+          ? { ...USERS.lawyer, name: state.guest.name, org: state.guest.org }
+          : USERS[state.user];
+      }
+      function latest() {
+        return state.versions.at(-1);
+      }
+      function guestActive() {
+        return (
+          !!state.guest &&
+          state.guest.status === "active" &&
+          new Date(state.guest.expires) > new Date()
+        );
+      }
+      function canRead() {
+        return state.user !== "lawyer" || guestActive();
+      }
+      function canAI() {
+        return canRead() && (state.user !== "lawyer" || state.guest.ai);
+      }
+      function canEdit() {
+        return (
+          canRead() &&
+          (state.user !== "lawyer" || state.guest.edit) &&
+          state.status !== "IN_REVIEW"
+        );
+      }
+      function mine() {
+        return (
+          !!state.lock &&
+          state.lock.user === state.user &&
+          state.lock.until > Date.now()
+        );
+      }
+      function draft() {
+        return mine() ? state.drafts[state.user] : null;
+      }
+      function snapshot() {
+        return draft() || latest();
+      }
+      function contentSignature(source) {
+        return JSON.stringify({
+          html: source.html,
+          fields: source.fields,
+          template: "DEMO-DG/1.0",
+        });
+      }
+      function signature(source = snapshot()) {
+        return JSON.stringify({
+          checkpoint: source.no
+            ? "version-" + source.no
+            : "draft-from-" + source.base,
+          content: contentSignature(source),
+        });
+      }
+      function eventLog(action, detail = "") {
+        state.events.unshift({
+          id: uid(),
+          user: state.user,
+          action,
+          detail,
+          time: now(),
+        });
+        state.events = state.events.slice(0, 100);
+      }
+      function persist() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          storageOk = true;
+        } catch {
+          storageOk = false;
+        }
+        return storageOk;
+      }
+      function toast(message) {
+        const target = document.getElementById("toast");
+        target.textContent = message;
+        target.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => target.classList.remove("show"), 3200);
+      }
+      function safeHtml(html) {
+        const parsed = new DOMParser().parseFromString(
+          String(html),
+          "text/html",
+        );
+        const allowed = new Set([
+          "P",
+          "DIV",
+          "H3",
+          "H2",
+          "B",
+          "STRONG",
+          "I",
+          "EM",
+          "U",
+          "UL",
+          "OL",
+          "LI",
+          "TABLE",
+          "THEAD",
+          "TBODY",
+          "TR",
+          "TD",
+          "TH",
+          "BR",
+          "SPAN",
+          "BLOCKQUOTE",
+        ]);
+        for (const node of [...parsed.body.querySelectorAll("*")]) {
+          if (!allowed.has(node.tagName)) {
+            node.remove();
+            continue;
+          }
+          for (const attr of [...node.attributes])
+            if (!["data-node", "data-var"].includes(attr.name))
+              node.removeAttribute(attr.name);
+          if (node.hasAttribute("data-var")) {
+            const key = node.getAttribute("data-var");
+            if (FIELD_LABELS[key]) node.textContent = "{{" + key + "}}";
+            else node.removeAttribute("data-var");
+          }
+        }
+        for (const child of parsed.body.children)
+          if (!child.dataset.node) child.dataset.node = "node-" + uid();
+        return parsed.body.innerHTML;
+      }
+      function textOf(html) {
+        return (
+          new DOMParser().parseFromString(html, "text/html").body.textContent ||
+          ""
+        );
+      }
+      async function digest(source) {
+        const bytes = new TextEncoder().encode(contentSignature(source));
+        const hash = await crypto.subtle.digest("SHA-256", bytes);
+        return [...new Uint8Array(hash)]
+          .map((value) => value.toString(16).padStart(2, "0"))
+          .join("");
+      }
+      function shownHtml(source) {
+        const parsed = new DOMParser().parseFromString(
+          safeHtml(source.html),
+          "text/html",
+        );
+        for (const node of parsed.querySelectorAll("[data-var]")) {
+          const field = source.fields[node.dataset.var];
+          node.textContent =
+            field?.value || FIELD_LABELS[node.dataset.var] + "待确认";
+          node.contentEditable = "false";
+          node.className = field?.confirmed ? "confirmed" : "";
+        }
+        return parsed.body.innerHTML;
+      }
+      function getChecks(source = snapshot()) {
+        return Object.keys(FIELD_LABELS).map((key) => {
+          const field = source.fields[key];
+          let valid = !!field?.value && field.confirmed;
+          if (key === "amount")
+            valid =
+              valid &&
+              /^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(field.value) &&
+              /[1-9]/.test(field.value);
+          if (key === "expiry") {
+            const parsed = Date.parse(field?.value);
+            valid =
+              valid &&
+              /^\d{4}-\d{2}-\d{2}$/.test(field.value) &&
+              !Number.isNaN(parsed) &&
+              new Date(parsed).toISOString().slice(0, 10) === field.value;
+          }
+          if (key === "currency")
+            valid = valid && ["USD", "EUR", "CNY", "HKD"].includes(field.value);
+          return {
+            id: key,
+            label: FIELD_LABELS[key],
+            status: valid ? "pass" : field?.value ? "needs_input" : "finding",
+            valid,
+            reason: valid
+              ? "已确认并符合合成模板约束"
+              : !field?.value
+                ? "缺少必填值"
+                : "待确认或格式不满足合成规则",
+          };
+        });
+      }
+      function activeReport() {
+        const report = state.reports[state.user];
+        return report && report.signature === signature() ? report : null;
+      }
+      function reportStale() {
+        return !!state.reports[state.user] && !activeReport();
+      }
+      function workflowLabel() {
+        return {
+          DRAFT: "讨论草稿",
+          IN_REVIEW: "审批中",
+          CHANGES_REQUESTED: "待修改",
+          APPROVED: "已批准",
+          HANDED_OFF: "已交接",
+        }[state.status];
+      }
+      function expireLock() {
+        if (state.lock && state.lock.until <= Date.now()) {
+          eventLog("锁租约到期", "恢复草稿保留");
+          state.lock = null;
+          persist();
+          render();
+        }
+      }
+      function render() {
+        document.getElementById("identityButton").innerHTML =
+          '<span class="avatar">' +
+          esc(currentUser().initials) +
+          '</span><span class="identity-copy"><strong>' +
+          esc(currentUser().name) +
+          "</strong><span>" +
+          esc(currentUser().org) +
+          '</span></span><span class="muted">⌄</span>';
+        document.getElementById("businessBadge").textContent = workflowLabel();
+        document.getElementById("businessBadge").className =
+          "tag " +
+          (["APPROVED", "HANDED_OFF"].includes(state.status)
+            ? "good"
+            : state.status === "IN_REVIEW"
+              ? "blue"
+              : "warn");
+        document.getElementById("headVersion").textContent =
+          "v" +
+          latest().no +
+          " · " +
+          (mine() ? "个人草稿编辑中" : "当前共享版本");
+        document.getElementById("versionCount").textContent =
+          state.versions.length;
+        document.getElementById("activityCount").textContent =
+          state.events.length;
+        document.getElementById("commentCount").textContent =
+          state.comments.length;
+        document.getElementById("workflowButton").textContent =
+          state.status === "APPROVED"
+            ? "交接"
+            : state.status === "IN_REVIEW"
+              ? "审批进度"
+              : state.status === "HANDED_OFF"
+                ? "交接回执"
+                : "发起审批";
+        renderEditor();
+        renderVersions();
+        renderAssistant();
+      }
+      function renderEditor() {
+        const allowed = canRead();
+        document.getElementById("paper").hidden = !allowed;
+        const denied = document.getElementById("accessDenied");
+        denied.hidden = allowed;
+        denied.style.display = allowed ? "none" : "grid";
+        if (!allowed)
+          denied.innerHTML =
+            '<div><h2>此文档暂不可访问</h2><p class="muted">访客邀请尚未接受、已撤销或已到期。</p><button data-action="identity" style="margin-top:15px">查看当前身份</button></div>';
+        if (allowed && document.activeElement !== editor)
+          editor.innerHTML = shownHtml(snapshot());
+        if (!allowed) editor.replaceChildren();
+        editor.contentEditable =
+          mine() && canEdit() && state.network ? "true" : "false";
+        document.getElementById("paperVersion").textContent =
+          "v" +
+          latest().no +
+          (mine() ? " · PERSONAL DRAFT" : " · SHARED SNAPSHOT");
+        document.getElementById("snapshotLabel").textContent =
+          "v" + latest().no + (mine() ? " / draft" : " / snapshot");
+        document.getElementById("lockLine").className =
+          "lock-line " + (mine() ? "locked" : state.lock ? "blocked" : "");
+        document.getElementById("lockText").textContent = !state.network
+          ? "离线 · 仅本地恢复副本，保存未确认"
+          : mine()
+            ? "● " + currentUser().name + " 持锁 · 5 分钟演示租约"
+            : state.lock
+              ? "● " +
+                USERS[state.lock.user].name +
+                " 正在编辑 · 显示已提交快照"
+              : "○ 共享快照只读 · 获取锁后编辑";
+        document.getElementById("editButton").disabled =
+          !!state.lock || !canEdit() || !state.network;
+        document.getElementById("editButton").textContent = state.drafts[
+          state.user
+        ]
+          ? "恢复草稿"
+          : "开始编辑";
+        document.getElementById("releaseButton").disabled = !mine();
+        document.getElementById("submitButton").disabled =
+          !mine() || !state.network || submitting;
+        document
+          .querySelectorAll("[data-format],#blockFormat,[data-action=table]")
+          .forEach((button) => (button.disabled = !mine() || !state.network));
+        renderSaveStatus();
+      }
+      function renderSaveStatus() {
+        document.getElementById("saveStatus").textContent = !storageOk
+          ? "本地保存失败 · 请保留当前页面"
+          : !state.network
+            ? "离线恢复副本 · 未确认保存"
+            : saveMessage ||
+              (mine() ? "草稿仅本地保存 · 不共享" : "共享快照 · 只读");
+      }
+      function renderVersions() {
+        document.getElementById("versionList").innerHTML = canRead()
+          ? [...state.versions]
+              .reverse()
+              .map(
+                (version) =>
+                  '<div class="version ' +
+                  (version.no === latest().no ? "current" : "") +
+                  '"><div class="version-title"><label><input type="checkbox" data-version="' +
+                  version.no +
+                  '" ' +
+                  (state.selected.includes(version.no) ? "checked" : "") +
+                  ">v" +
+                  version.no +
+                  "</label>" +
+                  (version.no === latest().no
+                    ? '<span class="tag good">当前</span>'
+                    : "") +
+                  "</div><p>" +
+                  esc(USERS[version.user]?.name || version.user) +
+                  " · " +
+                  esc(version.time) +
+                  "</p><p>" +
+                  esc(version.note) +
+                  '</p><p class="mono">' +
+                  (version.hash
+                    ? version.hash.slice(0, 12) + "…"
+                    : "计算摘要中") +
+                  '</p><button class="quiet small" data-view-version="' +
+                  version.no +
+                  '">查看快照 ↗</button></div>',
+              )
+              .join("")
+          : '<div class="notice">当前身份无文档权限</div>';
+      }
+      function renderAssistant() {
+        if (!canAI()) {
+          stopVoiceCapture('AI 权限已失效，语音上下文已清除', true);
+          voiceState.command = ''; voiceState.history = []; voiceState.undo = null;
+          if (modalKind.startsWith('voice-')) closeModal();
+        } else if (!state.network) stopVoiceCapture('离线，语音采集及未执行计划已停止', true);
+        else if ((voiceState.selection && voiceState.selection.signature !== signature()) || (voiceState.pending && voiceState.pending.signature !== signature())) invalidateVoice('文档检查点已变化，请重新定位 / 确认');
+        document
+          .querySelectorAll("[data-tab]")
+          .forEach((button) =>
+            button.setAttribute(
+              "aria-selected",
+              String(button.dataset.tab === state.tab),
+            ),
+          );
+        const body = document.getElementById("assistantBody");
+        if (!canAI()) {
+          apiMapping = null;
+          clearTimeout(apiMappingTimer);
+          if (modalKind.startsWith("mapping-")) closeModal();
+          body.innerHTML =
+            '<div class="empty"><div class="empty-icon">◇</div><h3>AI 访问未授权</h3><p>外部协作者的 AI 使用需独立授权。</p><button data-action="people">查看访客授权</button></div>';
+          return;
+        }
+        const scope =
+          '<div class="scope"><span>DG-00417 · v' +
+          latest().no +
+          (mine() ? " / 个人检查点" : " / 共享快照") +
+          "</span><span>仅当前身份可见</span></div>";
+        body.innerHTML =
+          scope +
+          {
+            audit: auditPanel,
+            automation: automationPanel,
+            knowledge: knowledgePanel,
+            legal: legalPanel,
+          }[state.tab]();
+      }
+      function auditPanel() {
+        if (runBusy)
+          return '<div class="notice"><span class="spin"></span> 固定快照已捕获 · 正在执行规则与样例复核</div><button data-action="cancel-audit">取消运行</button>';
+        const report = state.reports[state.user];
+        if (!report)
+          return '<div class="empty"><div class="empty-icon">▤</div><h3>检查当前文档</h3><p>DEMO-DG / 1.0<br>必填字段、格式与条款一致性</p><button class="primary" data-action="audit">运行审计</button></div><div class="notice"><strong>本次范围</strong><p>3 项确定性检查 + 1 项语义样例。真实规则包和模型待接入。</p></div><button class="source-link" data-action="rules">查看已发布演示规则 ↗</button>';
+        if (report.error)
+          return '<div class="notice bad"><strong>审计执行失败</strong><p>演示服务不可用，未生成通过结论。</p></div><button data-action="audit">重新运行</button>';
+        const stale = reportStale();
+        const failed = report.checks.filter((check) => !check.valid);
+        return (
+          (stale
+            ? '<div class="notice warn">结果已过期 · 文档或变量已变化。审批不能使用旧结果。</div>'
+            : '<div class="flex between"><span class="tag ' +
+              (failed.length ? "bad" : "good") +
+              '">' +
+              (failed.length ? "存在待处理项" : "确定性检查完成") +
+              '</span><button class="small quiet" data-action="audit">重新审计 ↻</button></div>') +
+          '<div class="metrics"><div class="metric"><b>' +
+          report.checks.filter((check) => check.valid).length +
+          '/3</b><span>确定性通过</span></div><div class="metric"><b style="color:#b51022">' +
+          failed.length +
+          '</b><span>必填 / 格式</span></div><div class="metric"><b style="color:var(--amber)">' +
+          (report.semantic ? 1 : 0) +
+          "</b><span>语义样例意见</span></div></div>" +
+          report.checks
+            .map(
+              (check) =>
+                '<section class="finding ' +
+                (check.valid ? "good" : "bad") +
+                '"><div class="flex between"><span class="tag ' +
+                (check.valid ? "good" : "bad") +
+                '">' +
+                (check.valid
+                  ? "PASS"
+                  : check.status === "needs_input"
+                    ? "NEEDS INPUT"
+                    : "CRITICAL") +
+                '</span><span class="tiny muted">确定性 · DEMO-' +
+                check.id.toUpperCase() +
+                "</span></div><h4>" +
+                esc(check.label) +
+                (check.valid ? "已确认" : "需处理") +
+                '</h4><p class="muted">' +
+                esc(check.reason) +
+                "</p>" +
+                (!check.valid
+                  ? '<p class="tiny">拦截：审批 / 正式导出 / 交接</p>'
+                  : "") +
+                '<div class="finding-actions"><button class="small" data-locate="' +
+                check.id +
+                '">定位字段</button>' +
+                (!check.valid
+                  ? '<button class="small" data-action="variables">补充变量</button>'
+                  : "") +
+                '<button class="source-link" data-evidence="' +
+                check.id +
+                '">依据 ↗</button></div></section>',
+            )
+            .join("") +
+          (report.semantic
+            ? '<section class="finding warn"><div class="flex between"><span class="tag warn">WARNING</span><span class="tiny muted">语义样例 · 非硬阻断</span></div><h4>付款期限表述待确认</h4><p class="muted">“within a reasonable time” 未给出明确期限。此意见为预置语义样例，不是法律结论。</p><div class="finding-actions"><button class="small" data-action="locate-clause">定位原文</button><button class="small" data-action="disposition">' +
+              (report.disposition
+                ? "已处理 · " + esc(report.disposition.label)
+                : "处理意见") +
+              '</button><button class="small" data-action="human-review">人工复核</button></div></section>'
+            : "") +
+          '<div class="notice"><p>无命中不代表合法合规。报告绑定 v' +
+          report.version +
+          " · " +
+          esc(report.time) +
+          "，未覆盖法域适用性。</p></div>" +
+          (stale
+            ? '<button class="primary full-button" data-action="audit">基于当前快照重新审计</button>'
+            : "") +
+          '<button class="source-link" data-action="rules">规则包与覆盖明细 ↗</button>'
+        );
+      }
+      function automationPanel() {
+        return (
+          voicePanel() +
+          apiMappingPanel() +
+          '<div class="flex between"><h3>结构化变量</h3><span class="tag">' +
+          getChecks().filter((check) => check.valid).length +
+          '/3 已确认</span></div><p class="muted" style="margin:9px 0 17px">字段来源与所有出现位置绑定同一变量 ID。</p><div class="field-grid">' +
+          Object.keys(FIELD_LABELS)
+            .map(
+              (key) =>
+                '<div><label class="field-label" for="field-' +
+                key +
+                '">' +
+                FIELD_LABELS[key] +
+                ' <span class="tag ' +
+                (snapshot().fields[key].confirmed ? "good" : "warn") +
+                '">' +
+                (snapshot().fields[key].confirmed ? "已确认" : "待确认") +
+                '</span></label><div class="field-control">' +
+                (key === "currency"
+                  ? '<select id="field-currency" ' +
+                    (!mine() ? "disabled" : "") +
+                    ">" +
+                    ["USD", "EUR", "CNY", "HKD"]
+                      .map(
+                        (value) =>
+                          "<option " +
+                          (value === snapshot().fields[key].value
+                            ? "selected"
+                            : "") +
+                          ">" +
+                          value +
+                          "</option>",
+                      )
+                      .join("") +
+                    "</select>"
+                  : '<input id="field-' +
+                    key +
+                    '" ' +
+                    (key === "expiry" ? 'type="date"' : 'inputmode="decimal"') +
+                    ' value="' +
+                    esc(snapshot().fields[key].value) +
+                    '" placeholder="' +
+                    (key === "amount" ? "例如 100000.00" : "") +
+                    '" ' +
+                    (!mine() ? "disabled" : "") +
+                    ">") +
+                '<button class="small" data-confirm-field="' +
+                key +
+                '" ' +
+                (!mine() ? "disabled" : "") +
+                '>确认</button></div><div class="field-source">' +
+                esc(snapshot().fields[key].source ||
+                  "模板字段 · " + key + " · 1 处引用") +
+                "</div></div>",
+            )
+            .join("") +
+          "</div>" +
+          (!mine()
+            ? '<button class="full-button" data-action="edit" ' +
+              (!canEdit() || state.lock ? "disabled" : "") +
+              ">获取编辑锁后填充</button>"
+            : "") +
+          '<div class="row" style="margin-top:17px"><h4>建议修改</h4><p class="muted">先预览差异，再由持锁用户确认写入。</p><button class="small" style="margin-top:8px" data-action="suggestion">查看条款建议</button></div><button class="source-link" data-action="import">导入文档 / 核对提取结果 ↗</button>'
+        );
+      }
+      function voicePanel() {
+        return '<section class="voice-workspace"><div class="flex between"><h3>语音与文字指令</h3><span class="tag">P1 交互预览</span></div>' +
+          '<p class="mapping-meta">本地限定指令 · 当前视窗行号 · 非固定文档页码</p>' +
+          '<form id="voiceCommandForm"><label class="field-label" for="voice-command">指令 / 最终转写</label><textarea id="voice-command" name="command" maxlength="2000" required placeholder="选择“synthetic working draft”">' + esc(voiceState.command) + '</textarea>' +
+          '<div class="flex wrap"><button type="submit">解析指令</button><button type="button" data-action="voice-microphone">麦克风</button><button type="button" data-action="voice-stop">停止</button></div></form>' +
+          '<div class="flex wrap" style="margin-top:8px"><button class="small" type="button" data-action="voice-layout">查看视窗行号</button><button class="small" type="button" data-action="voice-history">操作记录</button></div>' +
+          '<div id="voice-state" aria-live="polite">' + voiceStateHtml() + '</div></section>';
+      }
+      let voiceState = { command: "", message: "尚未开始 · 麦克风关闭", selection: null, proposal: null, pending: null, matches: [], history: [], undo: null, interim: "", recording: false };
+      let voiceRecognizer = null, voiceStream = null, voiceCaptureEpoch = 0, voiceTimer;
+      let voiceProvisional = null;
+      let voiceLayoutRevision = 1, voiceShowLines = false;
+      function voiceStateHtml() {
+        const selected = voiceState.selection;
+        return '<div class="mapping-meta">' + (voiceState.recording ? '<span class="tag warn">正在本地识别 / 录音</span> ' : '') + esc(voiceState.message) + '</div>' +
+          (voiceState.interim ? '<div class="voice-transcript">临时转写 · ' + esc(voiceState.interim) + '</div>' : '') +
+          (selected ? '<div class="tag ' + (selected.confirmed ? 'good' : 'warn') + '">' + (selected.confirmed ? '已确认选区' : '选区待确认') + '</div><div class="voice-selection-text">' + esc(selected.anchors.map(anchor => anchor.text).join('\n')) + '</div>' +
+            '<button class="small" data-action="voice-confirm-selection" ' + (selected.confirmed ? 'disabled' : '') + '>' + (selected.confirmed ? '范围已确认' : '确认所选范围') + '</button>' : '') +
+          voiceState.matches.map((match, index) => '<button class="source-link" data-voice-match="' + index + '">' + (index + 1) + '. ' + esc(match.text.slice(0, 100)) + ' · ' + esc(match.nodeId) + '</button>').join('') +
+          (voiceState.proposal ? '<button class="full-button" data-action="voice-preview">查看修改差异</button>' : '') +
+          (voiceState.pending ? '<button class="full-button" data-action="voice-dispatch">确认' + esc(voiceState.pending.label) + '</button>' : '') +
+          (voiceState.undo ? '<button class="source-link" data-action="voice-undo" ' + (voiceState.undo.signature !== signature() || !mine() ? 'disabled' : '') + '>撤销最近一次语音 / 指令修改</button>' : '');
+      }
+      function refreshVoice() {
+        const target = document.getElementById('voice-state');
+        if (target) target.innerHTML = voiceStateHtml();
+        const dock = document.getElementById('voiceDock');
+        const active = canAI() && (voiceState.selection || voiceState.pending);
+        dock.hidden = !active;
+        if (active) dock.innerHTML = '<span class="voice-dock-label">' + esc(voiceState.selection ? (voiceState.selection.confirmed ? '选区已确认' : '选区待确认') + ' · ' + voiceState.selection.anchors.map(anchor => anchor.text).join(' ').slice(0, 90) : voiceState.pending.label) + '</span>' +
+          (voiceState.selection ? '<button class="small" data-action="voice-confirm-selection" ' + (voiceState.selection.confirmed ? 'disabled' : '') + '>确认范围</button>' : '') +
+          '<button class="small" data-action="voice-preview" ' + (!voiceState.proposal ? 'disabled' : '') + '>查看差异</button><button class="small" data-action="voice-return">返回指令</button><button class="small" data-action="voice-clear">清除</button>' +
+          '<form id="voiceDockForm"><input aria-label="选区操作指令" name="command" maxlength="2000" required placeholder="删除它 / 改成…"><button type="submit">解析</button></form>';
+        drawVoiceSelection();
+      }
+      function invalidateVoice(reason) {
+        voiceLayoutRevision++;
+        voiceProvisional = null;
+        const hadSelection = !!(voiceState.selection || voiceState.proposal || voiceState.pending || voiceState.matches.length);
+        voiceState.selection = null;
+        voiceState.proposal = null;
+        voiceState.pending = null;
+        voiceState.matches = [];
+        voiceShowLines = false;
+        if (hadSelection) voiceState.message = reason;
+        if (modalKind === 'voice-preview') closeModal();
+        refreshVoice();
+      }
+      function voiceBlocks() {
+        return [...editor.querySelectorAll('[data-node]')].filter(node => !node.parentElement.closest('[data-node]'));
+      }
+      function voiceRange(anchor, root = editor) {
+        const block = [...root.querySelectorAll('[data-node]')].find(node => node.dataset.node === anchor.nodeId);
+        if (!block || block.textContent.slice(anchor.start, anchor.end) !== anchor.text) return null;
+        const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+        const range = document.createRange();
+        let offset = 0, started = false, node;
+        while ((node = walker.nextNode())) {
+          const end = offset + node.length;
+          if (!started && anchor.start >= offset && anchor.start <= end) {
+            range.setStart(node, anchor.start - offset);
+            started = true;
+          }
+          if (started && anchor.end >= offset && anchor.end <= end) {
+            range.setEnd(node, anchor.end - offset);
+            return range;
+          }
+          offset = end;
+        }
+        return null;
+      }
+      function voiceClip() {
+        let bounds = {top: 0, bottom: innerHeight, left: 0, right: innerWidth};
+        const dock = document.getElementById('voiceDock');
+        if (innerWidth <= 700 && !dock.hidden) bounds.bottom = Math.min(bounds.bottom, dock.getBoundingClientRect().top);
+        for (let node = editor; node; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (/(auto|scroll|hidden)/.test(style.overflow + style.overflowY + style.overflowX)) {
+            const rect = node.getBoundingClientRect();
+            bounds = {top: Math.max(bounds.top, rect.top), bottom: Math.min(bounds.bottom, rect.bottom), left: Math.max(bounds.left, rect.left), right: Math.min(bounds.right, rect.right)};
+          }
+        }
+        return bounds;
+      }
+      function voiceLines() {
+        if (!editor.getClientRects().length || editor.textContent.length > 20000) return [];
+        const clip = voiceClip(), lines = [];
+        const segmenter = new Intl.Segmenter(undefined, {granularity: 'grapheme'});
+        for (const block of voiceBlocks()) {
+          let current = null;
+          for (const segment of segmenter.segment(block.textContent)) {
+            const anchor = {nodeId: block.dataset.node, start: segment.index, end: segment.index + segment.segment.length, text: segment.segment};
+            const rect = voiceRange(anchor)?.getBoundingClientRect();
+            if (!rect?.width || rect.top < clip.top || rect.bottom > clip.bottom) continue;
+            if (!current || Math.abs(current.top - rect.top) > 3) {
+              current = {...anchor, top: rect.top, bottom: rect.bottom, left: rect.left};
+              lines.push(current);
+            } else { current.end = anchor.end; current.text = block.textContent.slice(current.start, current.end); }
+          }
+        }
+        return lines;
+      }
+      function drawVoiceSelection(provisional = voiceProvisional) {
+        let overlay = document.getElementById('voiceOverlay');
+        if (!overlay) { overlay = document.createElement('div'); overlay.id = 'voiceOverlay'; overlay.setAttribute('aria-hidden', 'true'); document.body.append(overlay); }
+        overlay.replaceChildren();
+        if (!canAI() || dialog.open || !editor.getClientRects().length) return;
+        const clip = voiceClip();
+        const selection = provisional || voiceState.selection;
+        if (selection) for (const anchor of selection.anchors) {
+          const range = voiceRange(anchor);
+          if (!range) continue;
+          for (const rect of range.getClientRects()) {
+            const top = Math.max(clip.top, rect.top), left = Math.max(clip.left, rect.left);
+            const width = Math.min(clip.right, rect.right) - left, height = Math.min(clip.bottom, rect.bottom) - top;
+            if (width <= 0 || height <= 0) continue;
+            const mark = document.createElement('div');
+            mark.className = 'voice-rectangle' + (provisional ? ' provisional' : selection.confirmed ? ' confirmed' : '');
+            Object.assign(mark.style, {top: top + 'px', left: left + 'px', width: width + 'px', height: height + 'px'});
+            overlay.append(mark);
+          }
+        }
+        if (voiceShowLines) voiceLines().forEach((line, index) => {
+          const label = document.createElement('span'); label.className = 'voice-line-number'; label.textContent = index + 1;
+          Object.assign(label.style, {top: line.top + 'px', left: Math.max(clip.left, line.left - 29) + 'px'}); overlay.append(label);
+        });
+      }
+      function voiceSelectionCurrent() {
+        const selected = voiceState.selection;
+        return selected && canAI() && selected.user === state.user && selected.signature === signature() && selected.layoutRevision === voiceLayoutRevision && selected.layoutKey === voiceLayoutKey() && selected.anchors.every(anchor => voiceRange(anchor));
+      }
+      function voiceLayoutKey() {
+        const style = getComputedStyle(editor);
+        return JSON.stringify([innerWidth, innerHeight, window.visualViewport?.scale, style.fontFamily, style.fontSize, style.lineHeight,
+          ...voiceBlocks().map(node => { const rect = node.getBoundingClientRect(); return [rect.top, rect.left, rect.width, rect.height]; })]);
+      }
+      function voiceLineRequest(text) {
+        const digits = {零:0,一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9};
+        const normalized = text.replace(/[零一二两三四五六七八九十]+/g, value => {
+          if (value.length === 1 && value !== '十') return String(digits[value]);
+          if (/^[一二两三四五六七八九]?十[一二三四五六七八九]?$/.test(value)) {
+            const parts = value.split('十');
+            return String((parts[0] ? digits[parts[0]] : 1) * 10 + (parts[1] ? digits[parts[1]] : 0));
+          }
+          return value;
+        });
+        return normalized.match(/^(?:选择|选中)(?:当前视窗)?\s*第?\s*(\d+)\s*行?\s*(?:到|至|-)\s*第?\s*(\d+)\s*行$/);
+      }
+      function voiceLineAnchors(start, end) {
+        const rendered = voiceLines();
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start || end > rendered.length) return [];
+        const anchors = [];
+        for (const line of rendered.slice(start - 1, end)) {
+          const previous = anchors.at(-1);
+          if (previous?.nodeId === line.nodeId) { previous.end = line.end; previous.text = voiceBlocks().find(node => node.dataset.node === line.nodeId).textContent.slice(previous.start, previous.end); }
+          else anchors.push({nodeId: line.nodeId, start: line.start, end: line.end, text: line.text});
+        }
+        return anchors;
+      }
+      function setVoiceSelection(anchors) {
+        const range = voiceRange(anchors[0]);
+        const rect = range?.getBoundingClientRect();
+        const clip = voiceClip();
+        if (rect && (rect.top < clip.top || rect.bottom > clip.bottom))
+          voiceBlocks().find(node => node.dataset.node === anchors[0].nodeId)?.scrollIntoView({block: 'center', behavior: 'instant'});
+        voiceState.matches = [];
+        voiceState.proposal = null;
+        voiceState.selection = {id: uid(), user: state.user, signature: signature(), layoutRevision: voiceLayoutRevision, anchors, confirmed: false};
+        voiceState.message = '已按实际原文定位，尚未修改正文';
+        refreshVoice();
+        voiceState.selection.layoutKey = voiceLayoutKey();
+        requestAnimationFrame(() => drawVoiceSelection());
+      }
+      function findVoiceText(query) {
+        const matches = [];
+        if (!query.trim()) return matches;
+        for (const block of voiceBlocks()) {
+          const boundaries = new Set([...new Intl.Segmenter(undefined, {granularity: 'grapheme'}).segment(block.textContent)].map(segment => segment.index));
+          boundaries.add(block.textContent.length);
+          let start = block.textContent.indexOf(query);
+          while (start !== -1 && matches.length < 20) {
+            if (boundaries.has(start) && boundaries.has(start + query.length)) matches.push({nodeId: block.dataset.node, start, end: start + query.length, text: query});
+            start = block.textContent.indexOf(query, start + query.length);
+          }
+        }
+        return matches;
+      }
+      function parseVoiceCommand(text) {
+        if (!canAI() || !state.network) return toast('当前身份无 AI 权限或处于离线状态');
+        if (text.length > 2000) return toast('指令超过 2,000 字符');
+        voiceState.command = text.trim();
+        voiceState.interim = '';
+        voiceProvisional = null;
+        voiceState.proposal = null;
+        voiceState.pending = null;
+        voiceState.matches = [];
+        const command = text.trim();
+        const quoted = command.match(/^(选择|选中|查找|select|find)\s*[“"「](.+)[”"」]$/i);
+        const lines = voiceLineRequest(command);
+        if (/^(停止|取消|cancel|stop)$/i.test(command)) return stopVoiceCapture('语音会话已停止', true);
+        if (quoted || lines) {
+          invalidateVoice('正在定位新选区');
+          if (innerWidth <= 700) setMobile('document');
+          if (quoted) {
+            const matches = findVoiceText(quoted[2]);
+            if (matches.length === 1 && !/查找|find/i.test(quoted[1])) setVoiceSelection(matches);
+            else { voiceState.matches = matches; voiceState.message = matches.length ? '找到 ' + matches.length + (matches.length === 20 ? '+ ' : ' ') + '处匹配，请选择具体范围' : '未找到逐字匹配的原文'; refreshVoice(); }
+          } else {
+            const anchors = voiceLineAnchors(Number(lines[1]), Number(lines[2]));
+            if (!anchors.length) { voiceState.message = '行范围无效或不在当前完整可见文本中'; refreshVoice(); return; }
+            voiceShowLines = true;
+            setVoiceSelection(anchors);
+          }
+          return;
+        }
+        const assistant = command.match(/^打开(知识|自动化|规则审计|规范审计|法律)助手$/);
+        if (assistant || /^(?:运行|调用)(?:规范|规则)审计(?:助手)?$/.test(command)) {
+          voiceState.pending = {kind: assistant ? 'open' : 'audit', group: assistant ? ({知识:'knowledge',自动化:'automation',规则审计:'audit',规范审计:'audit',法律:'legal'})[assistant[1]] : 'audit', signature: signature(), user: state.user, label: assistant ? command : '运行规则审计（不发起审批）'};
+          voiceState.message = '动作待确认'; refreshVoice(); return;
+        }
+        const replace = command.match(/^(?:把(?:这段|它|选中文本))?\s*(?:改成|替换为|replace with)\s*([\s\S]+)$/i);
+        const insert = command.match(/^在(?:这段|它|选区)?(?:的)?(前面|后面|前|后)插入\s*([\s\S]+)$/);
+        const deleting = /^(?:删除|delete)(?:它|这段|选中文本|刚才选中的文本)?$/i.test(command);
+        if (replace || insert || deleting) {
+          if (!voiceSelectionCurrent() || !voiceState.selection.confirmed) { voiceState.message = '需要先定位并确认当前选区；不会回退到全文'; refreshVoice(); return; }
+          const anchors = voiceState.selection.anchors;
+          const replacement = deleting ? '' : (replace?.[1] || insert[2]).replace(/^[“"]|[”"]$/g, '');
+          const block = voiceBlocks().find(node => node.dataset.node === anchors[0].nodeId);
+          const protectedText = anchors.map(anchor => anchor.text).join(' ') + ' ' + replacement;
+          if (anchors.length !== 1 || block.tagName !== 'P' || block.querySelector('[data-var]') || block.closest('td,th') || /\d|\b(?:shall|must|not|no|unless|except|liability|payment|guarantee|beneficiary|applicant|law|jurisdiction)\b|金额|日期|不得|必须|责任|申请人|受益人/i.test(protectedText)) {
+            voiceState.message = '范围涉及跨块、结构变量或受保护事实 / 条款，需人工专业复核；未生成可应用提案'; refreshVoice(); return;
+          }
+          voiceState.proposal = {id: uid(), selectionId: voiceState.selection.id, signature: signature(), user: state.user, layoutRevision: voiceLayoutRevision, anchor: {...anchors[0]}, replacement, intent: deleting ? 'delete' : insert ? 'insert' : 'replace', position: insert ? (/前/.test(insert[1]) ? 'before' : 'after') : null};
+          voiceState.message = '修改提案已生成，正文未改变';
+          refreshVoice(); return;
+        }
+        voiceState.message = /当前页|页面/.test(command) ? '当前编辑器没有固定分页；可按当前视窗行号或原文短语定位' : '未识别为批准动作。提交、审批、授权和外部发送不支持语音执行';
+        refreshVoice();
+      }
+      function confirmVoiceSelection() {
+        if (!voiceSelectionCurrent()) return invalidateVoice('选区已失效，请重新定位');
+        voiceState.selection.confirmed = true;
+        voiceState.message = '范围已确认；内容真实性与写入权限仍需分别核验';
+        refreshVoice();
+      }
+      function voicePreview() {
+        const proposal = voiceState.proposal;
+        if (!proposal || !voiceSelectionCurrent() || proposal.selectionId !== voiceState.selection.id || proposal.signature !== signature()) return invalidateVoice('提案基线已变化，请重新定位');
+        const after = proposal.intent === 'insert' ? (proposal.position === 'before' ? proposal.replacement + proposal.anchor.text : proposal.anchor.text + proposal.replacement) : proposal.replacement;
+        openModal('指令修改 · 差异预览', '<span class="tag warn">本地提案 · 未提交 / 未审批</span><p class="mapping-meta">保护检查为合成规则；未接入真实 Reviewer 或法律判断。</p><h4 style="margin-top:14px">原文</h4><div class="diff-block removed">' + esc(proposal.anchor.text) + '</div><h4>修改后</h4><div class="diff-block added">' + (after ? esc(after) : '（删除所选文本）') + '</div>', '<button data-action="close">返回核对</button><button class="primary" data-action="voice-apply" ' + (!mine() || !canEdit() || !state.network ? 'disabled' : '') + '>确认应用到草稿</button>', 'voice-preview');
+        drawVoiceSelection();
+      }
+      function applyVoiceProposal() {
+        const proposal = voiceState.proposal;
+        if (!proposal || !canAI() || !requireEdit() || !voiceSelectionCurrent() || !voiceState.selection.confirmed || proposal.selectionId !== voiceState.selection.id || proposal.signature !== signature() || proposal.user !== state.user || proposal.layoutRevision !== voiceLayoutRevision) return toast('提案、选区或编辑权限已失效');
+        const parsed = new DOMParser().parseFromString(draft().html, 'text/html');
+        const range = voiceRange(proposal.anchor, parsed.body);
+        if (!range) return invalidateVoice('原文锚点已变化');
+        const previousHtml = draft().html;
+        if (proposal.intent === 'insert') range.collapse(proposal.position === 'before');
+        else range.deleteContents();
+        if (proposal.replacement) range.insertNode(parsed.createTextNode(proposal.replacement));
+        draft().html = safeHtml(parsed.body.innerHTML);
+        draft().updated = now();
+        const receipt = {id: uid(), intent: proposal.intent, user: state.user, time: now()};
+        voiceState.history.push(receipt);
+        voiceState.undo = {previousHtml, signature: signature(), user: state.user, lockToken: state.lock.token};
+        eventLog('应用语音 / 文字修改', proposal.intent + ' · 显式确认 · ' + receipt.id);
+        closeModal();
+        invalidateVoice('已应用到个人草稿；旧选区失效');
+        persist(); render();
+      }
+      function undoVoiceEdit() {
+        const undo = voiceState.undo;
+        if (!undo || !canAI() || !requireEdit() || undo.user !== state.user || undo.signature !== signature() || undo.lockToken !== state.lock.token) return toast('仅能撤销当前头部、同一编辑锁下的指令修改');
+        draft().html = undo.previousHtml; draft().updated = now(); voiceState.undo = null;
+        voiceState.history.push({id: uid(), intent: 'undo', user: state.user, time: now()});
+        eventLog('撤销语音 / 文字修改', '生成新草稿状态，不删除事件记录');
+        invalidateVoice('已撤销最近指令修改'); persist(); render();
+      }
+      function dispatchVoiceAction() {
+        const pending = voiceState.pending;
+        if (!pending || !canAI() || !state.network || pending.user !== state.user || pending.signature !== signature()) return invalidateVoice('动作上下文已变化');
+        voiceState.pending = null;
+        voiceState.history.push({id: uid(), intent: pending.kind, user: state.user, time: now()});
+        state.tab = pending.group; renderAssistant();
+        if (pending.kind === 'audit') runAudit();
+        refreshVoice();
+      }
+      function stopVoiceCapture(message = '麦克风已关闭', discard = false) {
+        voiceCaptureEpoch++;
+        clearTimeout(voiceTimer);
+        const recognizer = voiceRecognizer; voiceRecognizer = null;
+        if (recognizer) { recognizer.onresult = null; recognizer.onend = null; recognizer.onerror = null; try { recognizer.abort(); } catch {} }
+        voiceStream?.getTracks().forEach(track => track.stop()); voiceStream = null;
+        voiceProvisional = null;
+        voiceState.recording = false; voiceState.interim = ''; voiceState.message = message;
+        if (discard) invalidateVoice(message); else refreshVoice();
+      }
+      function microphoneModal() {
+        if (!canAI() || !state.network) return;
+        openModal('本地语音识别', '<div class="notice">仅允许浏览器本地识别。不会调用远程语音服务，也不保存音频；本地语音包不可用时使用文字指令。</div><form id="voiceMicrophoneForm"><label class="field-label" for="voice-language">识别语言</label><select id="voice-language" name="language"><option value="zh-CN">中文</option><option value="en-US">English</option></select><label class="mapping-decision"><input type="checkbox" name="consent" required>同意本次麦克风采集及本机转写</label></form>', '<button data-action="close">取消</button><button form="voiceMicrophoneForm" type="submit">开启本地识别</button>', 'voice-microphone');
+      }
+      async function startVoiceMicrophone(language) {
+        if (!canAI() || !state.network) return;
+        stopVoiceCapture('正在检查本地语音能力', true);
+        const epoch = voiceCaptureEpoch, user = state.user;
+        closeModal();
+        try {
+          const Engine = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!Engine || typeof Engine.available !== 'function' || !navigator.mediaDevices?.getUserMedia) throw new Error('本地识别不可用，请使用文字指令');
+          const recognizer = new Engine();
+          if (!('processLocally' in recognizer)) throw new Error('浏览器不保证本地识别，未开启麦克风');
+          const availability = await Engine.available({langs: [language], processLocally: true});
+          if (availability !== 'available') throw new Error('本地语音包未就绪，未开启麦克风；文字指令可用');
+          if (epoch !== voiceCaptureEpoch || user !== state.user || !canAI() || document.hidden) return;
+          const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+          if (epoch !== voiceCaptureEpoch || user !== state.user || !canAI() || document.hidden) { stream.getTracks().forEach(track => track.stop()); return; }
+          voiceStream = stream; voiceRecognizer = recognizer;
+          recognizer.processLocally = true; recognizer.lang = language; recognizer.interimResults = true; recognizer.continuous = false;
+          stream.getTracks().forEach(track => track.addEventListener('ended', () => { if (epoch === voiceCaptureEpoch) stopVoiceCapture('麦克风设备已断开', true); }));
+          recognizer.onresult = event => {
+            if (epoch !== voiceCaptureEpoch || !canAI() || user !== state.user) return;
+            let finalText = '', interim = '';
+            for (let index = event.resultIndex; index < event.results.length; index++) {
+              if (event.results[index].isFinal) finalText += event.results[index][0].transcript;
+              else interim += event.results[index][0].transcript;
+            }
+            if (finalText) {
+              voiceState.command = finalText.slice(0, 2000);
+              const input = document.getElementById('voice-command'); if (input) input.value = voiceState.command;
+              stopVoiceCapture('最终转写待核对；尚未执行指令');
+            } else {
+              voiceState.interim = interim.slice(0, 2000);
+              voiceProvisional = null;
+              const quote = interim.match(/(?:选择|选中)[“"](.+)[”"]/);
+              if (quote) { const matches = findVoiceText(quote[1]); if (matches.length === 1) voiceProvisional = {anchors: matches, layoutKey: voiceLayoutKey()}; }
+              const lines = voiceLineRequest(interim.trim());
+              if (lines) {
+                const anchors = voiceLineAnchors(Number(lines[1]), Number(lines[2]));
+                if (anchors.length) voiceProvisional = {anchors, layoutKey: voiceLayoutKey()};
+              }
+              refreshVoice();
+            }
+          };
+          recognizer.onerror = event => { if (epoch === voiceCaptureEpoch) stopVoiceCapture('识别未完成（' + event.error + '），可使用文字指令', true); };
+          recognizer.onend = () => { if (epoch === voiceCaptureEpoch) stopVoiceCapture('麦克风已关闭；请核对转写或输入文字'); };
+          recognizer.start(); voiceState.recording = true; voiceState.message = '本地识别中 · 最长 60 秒'; refreshVoice();
+          voiceTimer = setTimeout(() => stopVoiceCapture('录音达到 60 秒上限', true), 60000);
+        } catch (error) { if (epoch === voiceCaptureEpoch) stopVoiceCapture(error.message || '无法开启本地识别', true); }
+      }
+      function voiceHistoryModal() {
+        if (!canAI()) return;
+        openModal('指令操作记录', voiceState.history.length ? voiceState.history.map(item => '<div class="row"><strong>' + esc(item.intent) + '</strong><p>' + esc(item.time) + ' · ' + esc(USERS[item.user].name) + '</p><code>' + esc(item.id) + '</code></div>').join('') : '<div class="notice">尚无已应用修改或已确认动作。记录仅保存在当前页面内存。</div>');
+      }
+      let apiMapping = null;
+      let apiTemplateVersion = "demo-api-v1";
+      let apiMappingTimer;
+      let apiMappingFailNext = false;
+      const API_TEMPLATES = Object.freeze({
+        "demo-api-v1": { version: "demo-api-v1", guarantee: "guarantee", standby: "standby_dc" },
+        "demo-api-v2": { version: "demo-api-v2", guarantee: "DG", standby: "SBLC" },
+      });
+      const API_FIELD_LABELS = { application_type: "申请类型", amount: "金额", currency: "币种", expiry_date: "到期日" };
+      function apiTemplateSchema(template) {
+        return {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          additionalProperties: false,
+          required: Object.keys(API_FIELD_LABELS),
+          properties: {
+            application_type: { type: "string", enum: [template.guarantee, template.standby] },
+            amount: { type: "string", pattern: "^(0|[1-9][0-9]*)(\\.[0-9]{1,2})?$", description: "Positive decimal string; no rounding" },
+            currency: { type: "string", enum: ["USD", "EUR", "CNY", "HKD"] },
+            expiry_date: { type: "string", format: "date" },
+          },
+        };
+      }
+      function apiMappingCurrent() {
+        if (!apiMapping || apiMapping.user !== state.user || !canAI()) return false;
+        if (apiMapping.signature !== signature() || apiMapping.template.version !== apiTemplateVersion)
+          apiMapping.invalidated = true;
+        return !apiMapping.invalidated;
+      }
+      function canConfirmMapping() {
+        return canAI() && state.user !== "lawyer" && state.network;
+      }
+      function refreshApiMapping() {
+        const target = document.getElementById("api-mapping-result");
+        if (target) target.innerHTML = apiMappingResultHtml();
+        if (modalKind.startsWith("mapping-") && apiMapping && !apiMappingCurrent()) closeModal();
+      }
+      function apiMappingPanel() {
+        return '<section class="api-mapping"><div class="flex between"><h3>外部 API 映射</h3><span class="tag">本地模拟</span></div>' +
+          '<label class="field-label" for="api-template">Trade Intake / prepare_application</label>' +
+          '<select id="api-template" class="full-button"><option value="demo-api-v1" ' +
+          (apiTemplateVersion === "demo-api-v1" ? "selected" : "") +
+          '>申请模板 v1 · guarantee / standby_dc</option><option value="demo-api-v2" ' +
+          (apiTemplateVersion === "demo-api-v2" ? "selected" : "") +
+          '>申请模板 v2 · DG / SBLC</option></select>' +
+          '<div class="flex wrap"><button class="small" data-action="mapping-template">模板详情</button>' +
+          '<button class="small" data-action="mapping-start" ' + (!state.network ? "disabled" : "") + '>全文匹配</button></div>' +
+          '<div class="mapping-meta">合成模板 · 本地词规则 · 无模型 / OCR / 外部调用</div>' +
+          '<div id="api-mapping-result" aria-live="polite">' + apiMappingResultHtml() + '</div></section>';
+      }
+      function apiMappingResultHtml() {
+        if (!apiMapping || apiMapping.user !== state.user || !canAI())
+          return '<div class="notice">尚无映射结果</div>';
+        if (!apiMappingCurrent())
+          return '<div class="notice warn"><strong>映射已失效</strong><p>文档检查点或 API 模板已变化。旧确认和 payload 不可复用。</p></div>';
+        if (apiMapping.status === "running")
+          return '<div class="notice"><span class="spin"></span> 正在核对固定全文与模板字段</div><button class="small" data-action="mapping-cancel">取消匹配</button>';
+        if (apiMapping.status === "cancelled") return '<div class="notice">匹配已取消，未生成结果。</div>';
+        if (apiMapping.status === "failed") return '<div class="notice warn">' + esc(apiMapping.error) + '</div>';
+        const confirmed = apiMapping.fields.filter(field => field.confirmed).length;
+        const ready = apiMappingReady();
+        const blocked = apiMapping.fields.some(field => field.status !== "matched");
+        const headline = apiMapping.outOfScope ? "超出试点范围 · 待业务接手" : apiMapping.coverageGap ? "全文覆盖不完整" : blocked ? "待补充 / 澄清" : ready ? "待复核 payload 可生成" : "候选待人工确认";
+        return '<div class="mapping-summary"><span class="tag ' + (ready ? "good" : "warn") + '">' + headline + '</span><span class="tag">' + confirmed + '/4 已确认</span></div>' +
+          '<div class="mapping-meta">' + esc(apiMapping.checkpoint) + ' · ' + esc(apiMapping.template.version) + ' · 文本块 ' + apiMapping.units.length + ' · 目标字段 4/4<br>附件 / 图像 / 真实语义判断不在本地覆盖范围</div>' +
+          apiMapping.fields.map(field => '<div class="mapping-field"><div class="flex between"><code>' + field.key + '</code><span class="tag ' + (field.confirmed ? "good" : "warn") + '">' +
+            (field.confirmed ? "已确认" : ({matched: "待确认", ambiguous: "有歧义", missing: "缺失", invalid: "未确认 / 无效"})[field.status]) + '</span></div>' +
+            '<div class="mapping-value">' + esc(field.value || "未匹配") + '</div><div class="mapping-meta">' + esc(field.reason) + '</div>' +
+            '<div class="flex wrap"><button class="source-link" data-mapping-field="' + field.key + '">原文与候选 / 核对</button>' +
+            (field.status === "matched" && !field.confirmed ? '<button class="small" data-mapping-confirm="' + field.key + '" ' + (!canConfirmMapping() ? "disabled" : "") + '>人工确认</button>' : '') +
+            (field.key !== "application_type" && field.status !== "matched" ? '<button class="small" data-mapping-source="' + field.key + '">定位源变量</button>' : '') + '</div></div>').join("") +
+          (!canConfirmMapping() ? '<div class="notice warn">当前身份无映射确认权限或处于离线状态。</div>' : '') +
+          '<button class="full-button" data-action="mapping-payload" ' + (!ready || !canConfirmMapping() ? "disabled" : "") + '>' + (apiMapping.payload ? "查看待复核 payload" : "生成待复核 payload") + '</button>' +
+          '<button class="source-link" data-action="mapping-history">确认记录 · ' + apiMapping.decisions.length + '</button>';
+      }
+      function apiMappingReady() {
+        return apiMappingCurrent() && apiMapping.status === "succeeded" && !apiMapping.coverageGap && !apiMapping.outOfScope &&
+          apiMapping.fields.every(field => field.status === "matched" && field.confirmed);
+      }
+      function apiTemplateModal() {
+        if (!canAI()) return;
+        const template = API_TEMPLATES[apiTemplateVersion];
+        openModal("外部 API 模板", '<div class="flex wrap"><span class="tag">固定演示样本</span><span class="tag">' + template.version + '</span></div>' +
+          '<p class="mapping-meta">Trade Intake · prepare_application<br>模板发布、独立审核和撤回服务尚未接入。此处不代表真实系统批准。</p>' +
+          '<pre class="mapping-json">' + esc(JSON.stringify(apiTemplateSchema(template), null, 2)) + '</pre>' +
+          '<div class="notice">无预设业务值。金额采用此合成契约指定的 decimal string；并非所有外部 API 均接受字符串金额。</div>', '', 'mapping-template');
+      }
+      function startApiMapping() {
+        if (!canAI() || !state.network) return toast("当前无法执行映射");
+        captureDraft();
+        clearTimeout(apiMappingTimer);
+        if (modalKind.startsWith("mapping-")) closeModal();
+        const source = structuredClone(snapshot());
+        const run = {
+          id: uid(), user: state.user, signature: signature(source), source,
+          template: structuredClone(API_TEMPLATES[apiTemplateVersion]),
+          checkpoint: source.no ? "共享快照 v" + source.no : "个人检查点 / 基于 v" + source.base,
+          status: "running", invalidated: false, fields: [], units: [], decisions: [], revision: 1, payload: null,
+        };
+        const shouldFail = apiMappingFailNext;
+        apiMappingFailNext = false;
+        apiMapping = run;
+        refreshApiMapping();
+        apiMappingTimer = setTimeout(() => {
+          if (apiMapping !== run || !apiMappingCurrent() || run.status !== "running") return refreshApiMapping();
+          if (!state.network || shouldFail) {
+            run.status = "failed";
+            run.error = "本地模拟运行失败。可重新匹配；未发布候选或 payload。";
+            refreshApiMapping();
+            return;
+          }
+          const parsed = new DOMParser().parseFromString(shownHtml(source), "text/html");
+          const allText = parsed.body.textContent.trim();
+          const elements = [...parsed.body.querySelectorAll("h1,h2,h3,h4,p,td,th,li")].filter(node => !node.parentElement.closest("p,td,th,li"));
+          run.units = elements.map((node, index) => ({ id: node.dataset.node || "text-block-" + (index + 1), text: node.textContent.trim(), heading: /^H[1-4]$/.test(node.tagName) })).filter(unit => unit.text);
+          const coveredText = elements.map(node => node.textContent).join("").replace(/\s/g, "");
+          run.coverageGap = !allText || !run.units.length || coveredText !== allText.replace(/\s/g, "") || !!parsed.querySelector("img,iframe,object,svg");
+          if (allText.length > 100000 || run.units.length > 500) {
+            run.status = "failed";
+            run.error = "全文超过本地演示上限（100,000 字符 / 500 块）。未截断执行。";
+            refreshApiMapping();
+            return;
+          }
+          const bodyUnits = run.units.filter(unit => !unit.heading);
+          const guarantee = bodyUnits.filter(unit => /\bguarantee\b|保函/i.test(unit.text));
+          const standby = bodyUnits.filter(unit => /standby\s+(?:(?:documentary|letter\s+of)\s+)?credit|standby\s+dc|备用信用证/i.test(unit.text));
+          const issue = /\b(?:issued?|undertak\w*)\b|签发|开立|兹承诺/i;
+          const caution = /\b(?:not|no|example|reference|quoted|sample)\b|并非|不是|仅供|示例|引用/i;
+          const hasGuarantee = guarantee.some(unit => issue.test(unit.text) && !caution.test(unit.text));
+          const hasStandby = standby.some(unit => issue.test(unit.text) && !caution.test(unit.text));
+          const ambiguous = (guarantee.length && standby.length) || ((!hasGuarantee && guarantee.length) || (!hasStandby && standby.length));
+          const candidates = [];
+          if (guarantee.length) candidates.push({ value: run.template.guarantee, evidence: guarantee.map(unit => unit.id), meaning: "Guarantee / 保函" });
+          if (standby.length) candidates.push({ value: run.template.standby, evidence: standby.map(unit => unit.id), meaning: "Standby DC / 备用信用证" });
+          const matched = !ambiguous && (hasGuarantee || hasStandby);
+          run.outOfScope = matched && hasStandby;
+          run.fields.push({ key: "application_type", value: matched ? (hasGuarantee ? run.template.guarantee : run.template.standby) : "", candidates,
+            status: matched ? "matched" : candidates.length ? "ambiguous" : "missing", confirmed: false,
+            reason: matched ? "全文本地词规则候选；需核对条款及业务含义。" : "关键词不足或存在冲突，不自动选枚举或默认值。" });
+          for (const key of Object.keys(FIELD_LABELS)) {
+            const field = source.fields[key];
+            const check = getChecks(source).find(item => item.id === key);
+            const target = key === "expiry" ? "expiry_date" : key;
+            const refs = [...parsed.querySelectorAll('[data-var="' + key + '"]')].map(node => node.closest("[data-node]")?.dataset.node).filter(Boolean);
+            run.fields.push({ key: target, value: field.value, candidates: field.value ? [{ value: field.value, evidence: refs, meaning: FIELD_LABELS[key] }] : [],
+              status: check.valid && refs.length ? "matched" : field.value ? "invalid" : "missing", confirmed: false,
+              reason: !refs.length ? "正文无有效变量绑定；不能仅凭字段面板视为全文依据。" : check.reason + "；外部映射仍需单独确认。" });
+          }
+          run.status = "succeeded";
+          eventLog("API 映射候选已生成", run.template.version + " · 本地模拟 · 无外部调用");
+          persist();
+          refreshApiMapping();
+        }, 550);
+      }
+      function cancelApiMapping() {
+        if (!apiMappingCurrent() || apiMapping.status !== "running") return;
+        clearTimeout(apiMappingTimer);
+        apiMapping.status = "cancelled";
+        refreshApiMapping();
+      }
+      function mappingFieldModal(key) {
+        if (!apiMappingCurrent() || apiMapping.status !== "succeeded") return toast("映射已不可用，请重新匹配");
+        const field = apiMapping.fields.find(item => item.key === key);
+        if (!field) return;
+        const canConfirm = canConfirmMapping();
+        const editable = field.status === "matched" || (key === "application_type" && field.candidates.length);
+        const body = '<div class="mapping-meta">' + esc(apiMapping.checkpoint) + ' · ' + esc(apiMapping.template.version) + '</div><h4>' + esc(API_FIELD_LABELS[key]) + ' / ' + key + '</h4>' +
+          '<p class="mapping-meta">' + esc(field.reason) + '</p>' +
+          (field.candidates.length ? field.candidates.map(candidate => '<div class="mapping-evidence"><strong>' + esc(candidate.value) + '</strong><div class="mapping-meta">' + esc(candidate.meaning) + '</div>' +
+            candidate.evidence.map(id => {
+              const unit = apiMapping.units.find(item => item.id === id);
+              return unit ? '<div class="mapping-meta">' + esc(id) + '</div><p>' + esc(unit.text) + '</p>' : '';
+            }).join('') + '</div>').join('') : '<div class="notice warn">无有效原文候选。请补充正文或确认源变量后重新匹配。</div>') +
+          (editable && canConfirm ? '<form id="mappingDecisionForm"><input type="hidden" name="mapping_id" value="' + apiMapping.id + '"><input type="hidden" name="revision" value="' + apiMapping.revision + '"><input type="hidden" name="field" value="' + key + '">' +
+            '<label class="field-label" for="mapping-value">确认值</label><select id="mapping-value" name="value">' + field.candidates.map(candidate => '<option value="' + esc(candidate.value) + '" ' + (candidate.value === field.value ? 'selected' : '') + '>' + esc(candidate.value) + '</option>').join('') + '</select>' +
+            '<label class="field-label mapping-reason" for="mapping-reason">核对 / 纠正理由</label><textarea id="mapping-reason" name="reason" maxlength="500" required placeholder="说明所依据的条款及对冲突的判断"></textarea>' +
+            '<label class="mapping-decision"><input type="checkbox" name="reviewed" required>已核对该候选的全部原文、否定语义及相反证据</label>' +
+            '<div class="flex wrap"><button type="submit">确认此字段</button><button type="button" data-mapping-reject="' + key + '">拒绝候选</button></div></form>' : '<div class="notice">' + (canConfirm ? '需先补充源事实，不能在映射中猜值。' : '当前身份仅可查看，不能确认映射。') + '</div>');
+        openModal("映射字段核对", body, '', 'mapping-field');
+      }
+      function confirmMapping(form, rejected = false) {
+        if (!apiMappingCurrent() || !canConfirmMapping() || apiMapping.status !== "succeeded") return toast("映射已失效或当前身份无确认权限");
+        const data = new FormData(form);
+        if (data.get("mapping_id") !== apiMapping.id || Number(data.get("revision")) !== apiMapping.revision) return toast("确认版本已变化，请重新核对");
+        const field = apiMapping.fields.find(item => item.key === data.get("field"));
+        const candidate = field?.candidates.find(item => item.value === data.get("value"));
+        const reason = String(data.get("reason") || "").trim();
+        if (!candidate || !candidate.evidence.length || !reason || !data.get("reviewed") || (field.status !== "matched" && field.key !== "application_type")) return toast("需要有效候选、原文核对及确认理由");
+        apiMapping.decisions.push({ id: uid(), revision: ++apiMapping.revision, field: field.key, decision: rejected ? "reject" : field.value !== candidate.value ? "correct" : "confirm", previous_value: field.value, value: candidate.value, evidence_ids: candidate.evidence, reason, actor: currentUser().name, time: now() });
+        field.value = candidate.value;
+        field.confirmed = !rejected;
+        field.status = rejected ? "invalid" : "matched";
+        field.reason = (rejected ? "候选已拒绝，需重新匹配 · " : "人工确认 · ") + currentUser().name + " · " + reason;
+        if (field.key === "application_type") apiMapping.outOfScope = candidate.value === apiMapping.template.standby;
+        apiMapping.payload = null;
+        eventLog(rejected ? "拒绝 API 映射候选" : "确认 API 映射字段", field.key + " · 未写正文");
+        persist();
+        closeModal();
+        refreshApiMapping();
+      }
+      async function mappingPayloadModal() {
+        if (!apiMappingReady() || !canConfirmMapping()) return toast("仍有缺失、未确认字段或范围限制");
+        const run = apiMapping;
+        const revision = run.revision;
+        const payload = Object.fromEntries(run.fields.map(field => [field.key, field.value]));
+        const schema = apiTemplateSchema(run.template);
+        const valid = Object.keys(payload).length === schema.required.length && schema.required.every(key => typeof payload[key] === "string") &&
+          schema.properties.application_type.enum.includes(payload.application_type) && schema.properties.currency.enum.includes(payload.currency) &&
+          getChecks({fields: {amount: {value: payload.amount, confirmed: true}, currency: {value: payload.currency, confirmed: true}, expiry: {value: payload.expiry_date, confirmed: true}}}).every(check => check.valid);
+        if (!valid) return toast("合成 Schema 校验失败，未生成 payload");
+        try {
+          const hash = async value => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(value))))].map(byte => byte.toString(16).padStart(2, "0")).join("");
+          const payloadHash = await hash(payload);
+          const templateHash = await hash(schema);
+          const sourceHash = await digest(run.source);
+          if (apiMapping !== run || run.revision !== revision || !apiMappingReady() || !canConfirmMapping()) return toast("生成期间上下文已变化，payload 已丢弃");
+          if (!run.payload) {
+            run.payload = { payload_id: uid(), mapping_id: run.id, mapping_revision: revision, snapshot: run.checkpoint, content_sha256: sourceHash, template_version_id: run.template.version, template_sha256: templateHash, payload_sha256: payloadHash, status: "ready_for_review", target_system_id: "demo_trade_intake", operation_id: "prepare_application", decision_receipt_ids: run.decisions.map(item => item.id), payload, generated_at: new Date().toISOString() };
+            eventLog("生成待复核 API payload", run.template.version + " · 无外部调用");
+            persist();
+          }
+          openModal("待复核 API payload", '<div class="flex wrap"><span class="tag good">Schema 校验通过</span><span class="tag warn">未审批 · 未发送</span></div>' +
+            '<pre class="mapping-json" id="mapping-payload-json">' + esc(JSON.stringify(run.payload.payload, null, 2)) + '</pre><h4>基线与确认回执</h4><pre class="mapping-json">' + esc(JSON.stringify({...run.payload, payload: undefined}, null, 2)) + '</pre>', '', 'mapping-payload');
+          refreshApiMapping();
+        } catch {
+          toast("无法生成 SHA-256，未发布 payload");
+        }
+      }
+      function mappingHistoryModal() {
+        if (!apiMappingCurrent()) return toast("映射已不可用");
+        openModal("映射确认记录", apiMapping.decisions.length ? apiMapping.decisions.map(item => '<div class="mapping-evidence"><strong>' + esc(item.field) + ' → ' + esc(item.value) + '</strong><p>' + esc(item.reason) + '</p><div class="mapping-meta">' + esc(item.decision) + ' · ' + esc(item.actor) + ' · ' + esc(item.time) + ' · revision ' + item.revision + '</div></div>').join('') : '<div class="notice">尚无确认记录</div>', '', 'mapping-history');
+      }
+      function knowledgePanel() {
+        const chats = state.chats[state.user] || [];
+        const current = chats.filter(
+          (message) => message.signature === signature(),
+        );
+        return (
+          '<h3>知识问答</h3><div class="notice"><strong>批准的演示知识</strong><p>流程说明 / 产品操作。真实知识库与法规检索未接入。</p></div><div class="flex wrap"><button class="small" data-question="如何获取编辑锁？">如何获取编辑锁？</button><button class="small" data-question="提交是否等于审批？">提交是否等于审批？</button><button class="small" data-question="缺少金额可以提交吗？">缺少金额怎么办？</button></div>' +
+          current
+            .map(
+              (message) =>
+                '<div class="chat-msg user"><p>' +
+                esc(message.question) +
+                '</p></div><div class="chat-msg"><div class="tiny muted">NEXUS · ' +
+                esc(message.outcome) +
+                "</div><p>" +
+                esc(message.answer) +
+                "</p>" +
+                (message.source
+                  ? '<button class="source-link" data-evidence="knowledge">[1] 演示产品流程手册 ↗</button>'
+                  : "") +
+                "</div>",
+            )
+            .join("") +
+          (chats.length && !current.length
+            ? '<div class="notice warn">快照已变化，新问题将创建独立上下文。</div>'
+            : "") +
+          '<form id="questionForm" class="question-form"><input id="questionInput" aria-label="知识问题" placeholder="输入流程或规则问题" maxlength="600" required><button class="primary" type="submit">发送</button></form>'
+        );
+      }
+      function legalPanel() {
+        const facts = state.legalFacts || {};
+        return (
+          '<h3>法规适用性</h3><div class="notice warn"><strong>无法评估 · 覆盖待发布</strong><p>真实法域清单、法规来源与标准许可尚未批准。不输出“合法合规”或最终法律意见。</p></div><div class="field-grid">' +
+          [
+            ["export", "出口地"],
+            ["import", "进口地"],
+            ["law", "拟适用法律"],
+          ]
+            .map(
+              ([key, label]) =>
+                '<div><label class="field-label" for="legal-' +
+                key +
+                '">' +
+                label +
+                '</label><input id="legal-' +
+                key +
+                '" value="' +
+                esc(facts[key] || "") +
+                '" placeholder="待业务确认" ' +
+                (state.user === "lawyer" ? "disabled" : "") +
+                "></div>",
+            )
+            .join("") +
+          '</div><button class="full-button" data-action="legal-check" ' +
+          (state.user === "lawyer" ? "disabled" : "") +
+          '>确认适用信息</button><div class="row"><h4>覆盖矩阵</h4><p>法域规则：未发布<br>出口管制：需物项、用途和最终用户证据<br>SWIFT：未启用具体报文版本</p></div><button class="full-button" data-action="human-review">请求人工复核</button><button class="source-link" data-action="legal-history">查看人工复核任务 ↗</button>'
+        );
+      }
+      function openModal(title, body, foot = "", kind = "") {
+        modalKind = kind;
+        document.getElementById("dialogTitle").textContent = title;
+        document.getElementById("dialogBody").innerHTML = body;
+        document.getElementById("dialogFoot").innerHTML =
+          foot || '<button data-action="close">关闭</button>';
+        if (!dialog.open) dialog.showModal();
+      }
+      function closeModal() {
+        dialog.close();
+        modalKind = "";
+        requestAnimationFrame(() => drawVoiceSelection());
+      }
+      function requireEdit() {
+        if (!mine() || !canEdit() || !state.network) {
+          toast("需要当前身份持有有效编辑锁并处于在线状态");
+          return false;
+        }
+        return true;
+      }
+      function captureDraft() {
+        if (!mine()) return;
+        state.drafts[state.user].html = safeHtml(editor.innerHTML);
+        state.drafts[state.user].updated = now();
+        if (apiMapping) refreshApiMapping();
+        if (voiceState.selection && voiceState.selection.signature !== signature()) invalidateVoice('正文变化，语音选区与提案已失效');
+      }
+      function acquire() {
+        expireLock();
+        if (!canEdit() || state.lock || !state.network)
+          return toast("当前不能获取编辑锁");
+        const stored = state.drafts[state.user];
+        if (stored && stored.base !== latest().no) {
+          openModal(
+            "恢复草稿基线冲突",
+            '<div class="notice warn">恢复草稿基于 v' +
+              stored.base +
+              "，共享文档已更新为 v" +
+              latest().no +
+              "。旧草稿保留，可先查看差异，不自动覆盖新版本。</div>",
+            '<button data-action="close">保留草稿</button><button data-action="rebase-draft">以旧草稿创建修订</button>',
+          );
+          return;
+        }
+        state.lock = {
+          user: state.user,
+          token: ++state.token,
+          until: Date.now() + 300000,
+        };
+        state.drafts[state.user] = stored || {
+          base: latest().no,
+          html: latest().html,
+          fields: structuredClone(latest().fields),
+          updated: now(),
+        };
+        eventLog("获取编辑锁", "演示 token " + state.lock.token);
+        saveMessage = "恢复草稿已载入 · 本地模拟";
+        persist();
+        render();
+        toast("已获取个人编辑锁");
+      }
+      function releasePrompt() {
+        if (!mine()) return;
+        captureDraft();
+        openModal(
+          "释放编辑锁",
+          "<p>未提交内容不对其他参与方可见。选择保留恢复草稿，或明确丢弃。</p>",
+          '<button data-action="close">继续编辑</button><button class="danger" data-action="discard-draft">丢弃并释放</button><button class="primary" data-action="keep-draft">保留草稿并释放</button>',
+        );
+      }
+      function release(keep = true) {
+        if (!mine()) return;
+        captureDraft();
+        if (!keep) delete state.drafts[state.user];
+        state.lock = null;
+        eventLog("释放编辑锁", keep ? "保留个人恢复草稿" : "明确丢弃草稿");
+        saveMessage = "";
+        persist();
+        closeModal();
+        render();
+      }
+      async function submitVersion() {
+        if (!requireEdit() || submitting) return;
+        captureDraft();
+        const owner = state.user,
+          lockToken = state.lock.token,
+          source = structuredClone(draft());
+        if (source.base !== latest().no)
+          return toast("共享基线变化，请先处理恢复冲突");
+        submitting = true;
+        renderEditor();
+        try {
+          const hash = await digest(source);
+          if (
+            !mine() ||
+            state.user !== owner ||
+            state.lock.token !== lockToken ||
+            signature(source) !== signature() ||
+            !state.network
+          )
+            return toast("提交期间上下文改变，未创建版本");
+          const number = latest().no + 1;
+          state.versions.push({
+            no: number,
+            html: source.html,
+            fields: source.fields,
+            user: owner,
+            time: now(),
+            note: "提交讨论版本",
+            hash,
+          });
+          if (state.approval) state.approvalHistory.push(state.approval);
+          state.approval = null;
+          state.status = "DRAFT";
+          state.lock = null;
+          delete state.drafts[owner];
+          state.selected = [number - 1, number];
+          saveMessage = "";
+          eventLog("提交新版本", "v" + number + " · 快照生成并释放锁");
+          persist();
+          render();
+          toast("v" + number + " 已提交；尚未批准业务");
+        } catch {
+          toast("摘要生成失败，草稿保留且未提交");
+        } finally {
+          submitting = false;
+          renderEditor();
+        }
+      }
+      function runAudit() {
+        if (!canAI() || !state.network)
+          return toast("当前无 AI 权限或处于离线");
+        const token = ++runToken,
+          owner = state.user,
+          source = structuredClone(snapshot()),
+          key = signature(source),
+          version = latest().no;
+        runBusy = true;
+        renderAssistant();
+        const fail = state.nextFailure;
+        state.nextFailure = false;
+        setTimeout(() => {
+          if (token !== runToken) return;
+          runBusy = false;
+          if (state.user !== owner || !canAI()) return;
+          state.reports[owner] = fail
+            ? { error: true, signature: key }
+            : {
+                signature: key,
+                version,
+                time: now(),
+                checks: getChecks(source),
+                semantic: textOf(source.html).includes("reasonable time"),
+                disposition: null,
+              };
+          eventLog(
+            fail ? "审计失败" : "完成规则审计",
+            "固定快照 v" + version + " · 合成规则",
+          );
+          persist();
+          renderAssistant();
+        }, 650);
+      }
+      function updateField(key) {
+        if (!requireEdit()) return;
+        const input = document.getElementById("field-" + key);
+        const value = input.value.trim();
+        const candidate = structuredClone(snapshot());
+        candidate.fields[key] = { value, confirmed: true };
+        if (!getChecks(candidate).find((check) => check.id === key).valid)
+          return toast("请输入符合合成格式的值，金额须大于 0 且最多两位小数");
+        captureDraft();
+        draft().fields[key] = {
+          value,
+          confirmed: true,
+          source: "用户确认 · " + currentUser().name + " · " + now(),
+        };
+        eventLog("确认变量", FIELD_LABELS[key]);
+        persist();
+        render();
+        toast("字段已确认，旧审计结果失效");
+      }
+      function switchUser(user) {
+        if (!USERS[user]) return;
+        stopVoiceCapture('身份已切换，语音上下文已清除', true);
+        voiceState.command = ''; voiceState.history = []; voiceState.undo = null;
+        clearTimeout(apiMappingTimer);
+        apiMapping = null;
+        if (mine()) {
+          captureDraft();
+          state.lock = null;
+          eventLog("切换身份并释放锁", "保留个人恢复草稿");
+        }
+        runToken++;
+        runBusy = false;
+        state.user = user;
+        saveMessage = "";
+        persist();
+        closeModal();
+        render();
+        toast("已切换演示身份；这不是真实身份认证");
+      }
+      function identityModal() {
+        openModal(
+          "身份与组织",
+          '<div class="notice warn">演示身份切换，不是登录认证。真实系统须接入批准的 IdP、邮箱验证及 MFA。</div>' +
+            Object.entries(USERS)
+              .map(
+                ([id, user]) =>
+                  '<div class="people-row"><div class="flex"><span class="avatar">' +
+                  user.initials +
+                  "</span><div><strong>" +
+                  esc(
+                    id === "lawyer" && state.guest
+                      ? state.guest.name
+                      : user.name,
+                  ) +
+                  "</strong><p>" +
+                  esc(
+                    id === "lawyer" && state.guest ? state.guest.org : user.org,
+                  ) +
+                  " · " +
+                  esc(user.role) +
+                  '</p></div></div><button class="small ' +
+                  (id === state.user ? "primary" : "") +
+                  '" data-user="' +
+                  id +
+                  '">' +
+                  (id === state.user ? "当前身份" : "切换") +
+                  "</button></div>",
+              )
+              .join("") +
+            '<div class="row"><h4>申请加入组织</h4><div class="field-control" style="margin-top:9px"><select id="joinOrg"><option>HSBC</option><option>Alpha Tech Ltd.</option><option>Independent law firm</option></select><button data-action="join-org">申请加入</button></div><p class="muted tiny">选择组织仅创建申请，不赋予组织成员权限。</p></div>' +
+            state.joinRequests
+              .map(
+                (request) =>
+                  '<div class="notice">' +
+                  esc(request.name) +
+                  " → " +
+                  esc(request.org) +
+                  " · 待组织审核</div>",
+              )
+              .join(""),
+        );
+      }
+      function peopleModal() {
+        const manager = state.user !== "lawyer";
+        openModal(
+          "组织、成员与外部协作",
+          '<div class="flex between wrap"><div><h3>' +
+            esc(currentUser().org) +
+            '</h3><p class="muted">' +
+            (state.user === "lawyer"
+              ? "访客事项 · 不属于邀请方员工"
+              : "已核验组织 · 演示成员目录") +
+            '</p></div><button data-action="identity">切换组织身份</button></div>' +
+            Object.entries(USERS)
+              .filter(([id]) => id !== "lawyer")
+              .map(
+                ([id, user]) =>
+                  '<div class="people-row"><div class="flex"><span class="avatar">' +
+                  user.initials +
+                  "</span><div><strong>" +
+                  esc(user.name) +
+                  "</strong><p>" +
+                  esc(user.org) +
+                  " · " +
+                  esc(user.role) +
+                  '</p></div></div><span class="tag good">已核验成员</span></div>',
+              )
+              .join("") +
+            '<div class="row flex between"><h3>外部协作者</h3><button class="primary small" data-action="invite" ' +
+            (!manager ? "disabled" : "") +
+            ">邀请律师 / 顾问</button></div>" +
+            (state.guest
+              ? '<div class="people-row"><div><strong>' +
+                esc(state.guest.name) +
+                "</strong><p>" +
+                esc(state.guest.email) +
+                " · " +
+                esc(state.guest.org) +
+                "</p><p>指定文档 · 阅读 / 评论" +
+                (state.guest.ai ? " / AI" : "") +
+                (state.guest.edit ? " / 编辑" : "") +
+                (state.guest.export ? " / 导出" : "") +
+                "</p><p>到期：" +
+                esc(new Date(state.guest.expires).toLocaleDateString()) +
+                '</p></div><span class="tag ' +
+                (guestActive() ? "good" : "bad") +
+                '">' +
+                (guestActive() ? "有效访客" : "授权失效") +
+                "</span>" +
+                (manager
+                  ? '<button class="small danger" data-action="revoke-guest">撤销授权</button>'
+                  : "") +
+                "</div>"
+              : '<p class="muted" style="padding:12px 0">尚无已接受邀请的外部协作者。</p>') +
+            state.invitations
+              .map(
+                (invite) =>
+                  '<div class="row"><div class="flex between wrap"><div><strong>' +
+                  esc(invite.email) +
+                  '</strong><p class="muted tiny">邀请有效期 72 小时 · ' +
+                  esc(invite.status) +
+                  "</p></div>" +
+                  (invite.status === "pending"
+                    ? '<button class="small" data-accept-invite="' +
+                      invite.id +
+                      '">模拟打开邀请</button>'
+                    : "") +
+                  "</div></div>",
+              )
+              .join(""),
+        );
+      }
+      function inviteModal() {
+        if (state.user === "lawyer") return toast("访客没有再邀请权限");
+        if (guestActive()) return toast("此演示固定一个外部访客身份，请先撤销已有授权再邀请");
+        openModal(
+          "邀请外部协作者",
+          '<form id="inviteForm"><div class="form-grid"><div class="form-field"><label for="inviteEmail">受邀邮箱</label><input type="email" id="inviteEmail" required placeholder="lawyer@example.com"></div><div class="form-field"><label for="invitePurpose">协作目的</label><input id="invitePurpose" required value="复核保函条款"></div><div class="full notice">范围：仅 DG-2026-00417 共享正文，不含银行内部资料、未来文档或私有附件。</div><div class="full flex wrap"><label class="check-label"><input type="checkbox" checked disabled>阅读 / 评论</label><label class="check-label"><input type="checkbox" id="inviteAI">AI 与人工复核</label><label class="check-label"><input type="checkbox" id="inviteEdit">编辑</label><label class="check-label"><input type="checkbox" id="inviteExport">导出</label></div><div class="full tiny muted">邀请 72 小时失效，接受后授权 30 天。此操作只创建本地邀请，不发送邮件。</div></div><div class="error" id="formError"></div></form>',
+          '<button data-action="people">取消</button><button class="primary" type="submit" form="inviteForm">创建演示邀请</button>',
+        );
+      }
+      function acceptInvite(id) {
+        const invite = state.invitations.find((item) => item.id === id);
+        if (!invite || invite.status !== "pending") return toast("邀请不可用");
+        openModal(
+          "受邀注册与接受",
+          '<form id="acceptForm" data-invite="' +
+            id +
+            '"><div class="notice">邀请至 ' +
+            esc(invite.email) +
+            ' · 邮件验证使用本地模拟，不发送验证码。</div><div class="form-grid"><div class="form-field"><label>姓名<input id="guestName" required value="Lin Yan"></label></div><div class="form-field"><label>实际所属组织<input id="guestOrg" required value="Harbour Legal Partners"></label></div><div class="full form-field"><label>模拟已验证邮箱<input type="email" id="verifiedEmail" required placeholder="必须与邀请邮箱一致"></label></div><div class="full"><label class="check-label"><input id="acceptTerms" type="checkbox" required>接受指定文档的访客协作范围</label></div></div><div class="error" id="formError"></div></form>',
+          '<button data-action="close">取消</button><button class="primary" form="acceptForm" type="submit">验证并接受邀请</button>',
+        );
+      }
+      function versionModal(number) {
+        if (!canRead()) return;
+        const version = state.versions.find((item) => item.no === number);
+        openModal(
+          "v" + number + " · 不可变快照",
+          '<div class="flex between wrap"><span>' +
+            esc(version.note) +
+            '</span><span class="tag">' +
+            esc(version.user) +
+            '</span></div><div class="code" style="margin:12px 0">SHA-256 ' +
+            esc(version.hash || "计算中") +
+            '</div><div class="document-body">' +
+            shownHtml(version) +
+            "</div>",
+          '<button data-action="close">关闭</button><button data-restore-version="' +
+            number +
+            '" ' +
+            (!canEdit() || state.lock ? "disabled" : "") +
+            ">基于此版本创建草稿</button>",
+        );
+      }
+      function compareModal() {
+        if (!canRead()) return toast("当前无文档权限");
+        if (state.selected.length !== 2) return toast("请选择两个版本");
+        const versions = state.selected
+          .map((number) =>
+            state.versions.find((version) => version.no === number),
+          )
+          .sort((first, second) => first.no - second.no);
+        const blocks = versions.map((version) =>
+          [
+            ...new DOMParser().parseFromString(shownHtml(version), "text/html")
+              .body.children,
+          ].map((node) => ({ id: node.dataset.node, text: node.textContent })),
+        );
+        const ids = [
+          ...new Set([
+            ...blocks[0].map((block) => block.id),
+            ...blocks[1].map((block) => block.id),
+          ]),
+        ];
+        let changed = 0;
+        const rows = ids.map((id) => {
+          const before = blocks[0].find((block) => block.id === id),
+            after = blocks[1].find((block) => block.id === id);
+          const same = before?.text === after?.text;
+          if (!same) changed++;
+          return { before, after, same };
+        });
+        openModal(
+          "版本比较 · v" + versions[0].no + " → v" + versions[1].no,
+          '<div class="notice">' +
+            changed +
+            ' 个段落实际变化 · 按稳定节点比较，变量变化已展开。无 AI 预置摘要。</div><div class="diff-grid">' +
+            [0, 1]
+              .map(
+                (side) =>
+                  '<div class="diff-column"><h3>v' +
+                  versions[side].no +
+                  "</h3>" +
+                  rows
+                    .map(
+                      (row) =>
+                        '<div class="diff-block ' +
+                        (row.same
+                          ? ""
+                          : !row.before
+                            ? "added"
+                            : !row.after
+                              ? "removed"
+                              : "changed") +
+                        '">' +
+                        esc(
+                          (side ? row.after : row.before)?.text ||
+                            "— 此版本无该段落 —",
+                        ) +
+                        "</div>",
+                    )
+                    .join("") +
+                  "</div>",
+              )
+              .join("") +
+            "</div>",
+        );
+      }
+      function evidenceModal(kind) {
+        if (!canAI()) return toast("无引用访问权限");
+        openModal(
+          "证据与规则来源",
+          '<div class="flex between"><span class="tag blue">合成来源 · 已发布演示版本</span><span class="mono">DEMO-1.0</span></div><div class="row"><h3>' +
+            (kind === "knowledge" ? "演示产品流程手册" : "DEMO-DG 模板约束") +
+            '</h3><p class="muted">发布者：Nexus demo team · 来源类型：产品说明 / 模板，不是法律法规</p></div><div class="notice">' +
+            (kind === "knowledge"
+              ? "提交生成新的共享快照并释放锁；业务审批是针对固定版本的独立流程。"
+              : "本合成模板要求正式审批、正式导出和交接前，金额、币种及到期日期已填写并确认。金额演示限定为正数且最多两位小数。") +
+            "</div><p>定位：" +
+            esc(
+              kind === "knowledge"
+                ? "workflow.submit_vs_approval"
+                : "fields." + kind,
+            ) +
+            '</p><p class="tiny muted">真实来源许可、发布审核及引用权限由后台实现，原型不提供伪造法条或外部 URL。</p>',
+        );
+      }
+      function dispositionModal() {
+        const report = activeReport();
+        if (!report || report.error) return toast("请先运行当前快照的审计");
+        openModal(
+          "处理语义意见",
+          '<form id="dispositionForm"><div class="form-field"><label>处理方式<select id="disposition"><option value="accepted">采纳建议</option><option value="rejected">不采纳，记录理由</option><option value="needs_human_review">需要人工复核</option></select></label></div><div class="form-field" style="margin-top:12px"><label>处理理由<textarea id="dispositionReason" required placeholder="关键意见必须记录处理理由"></textarea></label></div></form>',
+          '<button data-action="close">取消</button><button class="primary" form="dispositionForm">记录决定</button>',
+        );
+      }
+      function suggestionModal() {
+        if (!canAI()) return;
+        const source = signature();
+        openModal(
+          "修改建议 · 用户确认后应用",
+          '<div class="tag warn">措辞样例 · 非法律意见</div><div class="diff-block removed" style="margin-top:15px">Payment will be made within a reasonable time after examination.</div><div class="diff-block added">Payment timing must be expressly agreed by the authorized parties before execution.</div><p class="muted" style="margin-top:12px">建议不填写真实期限或适用法。确认后仅替换匹配条款，不自动批准文档。</p>',
+          '<button data-action="close">取消</button><button class="primary" id="applySuggestion" ' +
+            (!mine() ? "disabled" : "") +
+            ">确认应用到草稿</button>",
+        );
+        document.getElementById("applySuggestion").onclick = () => {
+          if (!requireEdit() || signature() !== source)
+            return toast("基线已变化，请重新生成建议");
+          const before =
+            "Payment will be made within a reasonable time after examination.";
+          if (!draft().html.includes(before))
+            return toast("原句已变化，无法定位");
+          draft().html = draft().html.replace(
+            before,
+            "Payment timing must be expressly agreed by the authorized parties before execution.",
+          );
+          eventLog("应用修改建议", "用户确认，生成新草稿内容");
+          persist();
+          closeModal();
+          render();
+        };
+      }
+      function humanReviewModal() {
+        if (!canAI() || state.user === "lawyer")
+          return toast("当前身份没有人工任务分配权限");
+        if (mine()) return toast("请先提交共享版本，再分配人工复核");
+        const candidates = [
+          "ops",
+          "compliance",
+          ...(guestActive() && state.guest.ai ? ["lawyer"] : []),
+        ].filter((id) => id !== state.user);
+        openModal(
+          "分配人工复核",
+          '<form id="humanForm"><div class="notice">绑定当前 v' +
+            latest().no +
+            ' 检查点。受让人只获得报告受众资格，不自动获得其他资源权限。</div><div class="form-field"><label>受让人<select id="assignee">' +
+            candidates
+              .map(
+                (id) =>
+                  '<option value="' +
+                  id +
+                  '">' +
+                  esc(id === "lawyer" ? state.guest.name : USERS[id].name) +
+                  " · " +
+                  esc(USERS[id].role) +
+                  "</option>",
+              )
+              .join("") +
+            '</select></label></div><div class="form-field" style="margin-top:12px"><label>目的<textarea id="humanPurpose" required>复核付款期限表述与待确认事项</textarea></label></div></form>',
+          '<button data-action="close">取消</button><button class="primary" form="humanForm" ' +
+            (!candidates.length ? "disabled" : "") +
+            ">创建复核任务</button>",
+        );
+      }
+      function taskModal() {
+        if (!canAI()) return toast("当前身份无人工复核任务访问权限");
+        const tasks = state.tasks.filter((task) =>
+          [task.requester, task.assignee].includes(state.user),
+        );
+        openModal(
+          "人工复核任务",
+          tasks.length
+            ? tasks
+                .map(
+                  (task) =>
+                    '<section class="row"><div class="flex between wrap"><h3>' +
+                    esc(task.purpose) +
+                    '</h3><span class="tag">' +
+                    esc(task.status) +
+                    '</span></div><p class="muted tiny">v' +
+                    task.version +
+                    " · " +
+                    esc(USERS[task.assignee].name) +
+                    " · " +
+                    esc(task.time) +
+                    "</p>" +
+                    (task.signature !== signature()
+                      ? '<div class="notice warn">基线已变化，请基于新快照重新分配。</div>'
+                      : "") +
+                    task.decisions
+                      .map(
+                        (decision) =>
+                          '<div class="notice"><strong>' +
+                          esc(decision.label) +
+                          "</strong><p>" +
+                          esc(decision.reason) +
+                          " · " +
+                          esc(decision.time) +
+                          "</p></div>",
+                      )
+                      .join("") +
+                    (task.status === "pending" &&
+                    task.assignee === state.user &&
+                    task.signature === signature() &&
+                    canAI()
+                      ? '<button class="small" data-decide-task="' +
+                        task.id +
+                        '">提交复核决定</button>'
+                      : "") +
+                    "</section>",
+                )
+                .join("")
+            : '<div class="empty">当前身份没有人工复核任务。</div>',
+        );
+      }
+      function workflowGaps() {
+        const gaps = getChecks(latest())
+          .filter((check) => !check.valid)
+          .map((check) => check.label + "未完成确认");
+        const report = state.reports[state.user];
+        if (!report || report.error || report.signature !== signature(latest()))
+          gaps.push("当前共享版本尚无本身份有效审计报告");
+        else if (
+          report.semantic &&
+          (!report.disposition ||
+            report.disposition.value === "needs_human_review")
+        ) {
+          const resolved = state.tasks.some(
+            (task) =>
+              task.signature === signature(latest()) &&
+              task.status === "completed",
+          );
+          if (!resolved) gaps.push("关键语义意见尚未处理或复核");
+        }
+        if (state.lock) gaps.push("存在未释放的编辑锁，请先提交或释放");
+        return gaps;
+      }
+      function workflowModal() {
+        if (!canRead()) return toast("无文档访问权限");
+        const approval = state.approval;
+        if (
+          state.status === "IN_REVIEW" ||
+          state.status === "APPROVED" ||
+          state.status === "HANDED_OFF"
+        ) {
+          openModal(
+            "版本审批与交接",
+            '<div class="flex between"><span class="tag blue">v' +
+              approval.version +
+              ' · 固定审批快照</span><span class="tag good">' +
+              workflowLabel() +
+              '</span></div><div class="task-step"><span class="step-number">1</span><div><h4>银行经办复核 · Emma Wong</h4><p class="muted">' +
+              (approval.steps[0]
+                ? "已批准 · " + esc(approval.steps[0])
+                : "等待审批") +
+              '</p></div></div><div class="task-step"><span class="step-number">2</span><div><h4>独立合规复核 · Daniel Lee</h4><p class="muted">' +
+              (approval.steps[1]
+                ? "已批准 · " + esc(approval.steps[1])
+                : "等待前序完成") +
+              "</p></div></div>" +
+              (state.status === "HANDED_OFF"
+                ? '<div class="notice"><strong>本地交接回执</strong><p>' +
+                  esc(approval.handoff) +
+                  " · 接收方 Alpha Tech Ltd.</p><p>未向外部系统发送文档。</p></div>"
+                : "") +
+              '<div class="notice">提交人不得审批本人请求。审批不会改写正文；退回后修改需形成新版本重新发起。</div>',
+            state.status === "IN_REVIEW"
+              ? '<button data-action="close">关闭</button><button data-action="reject-approval" ' +
+                  (!canApprove() ? "disabled" : "") +
+                  '>退回修改</button><button class="primary" data-action="approve" ' +
+                  (!canApprove() ? "disabled" : "") +
+                  ">批准当前节点</button>"
+              : state.status === "APPROVED"
+                ? '<button data-action="close">关闭</button><button class="primary" data-action="handoff" ' +
+                  (state.user === "lawyer" ? "disabled" : "") +
+                  ">确认演示交接</button>"
+                : '<button data-action="close">关闭</button>',
+          );
+          return;
+        }
+        const gaps = workflowGaps();
+        openModal(
+          "发起审批 · 预检",
+          '<div class="flex between"><h3>DG-2026-00417 / v' +
+            latest().no +
+            '</h3><span class="tag ' +
+            (gaps.length ? "bad" : "good") +
+            '">' +
+            (gaps.length ? "暂不可发起" : "预检就绪") +
+            "</span></div>" +
+            (gaps.length
+              ? gaps
+                  .map(
+                    (gap) => '<div class="notice warn">' + esc(gap) + "</div>",
+                  )
+                  .join("")
+              : '<div class="notice">必填字段已确认，当前快照审计及关键意见处理已完成。</div>') +
+            '<div class="task-step"><span class="step-number">1</span><div><h4>银行经办</h4><p>Emma Wong · HSBC Trade Operations</p></div></div><div class="task-step"><span class="step-number">2</span><div><h4>独立合规</h4><p>Daniel Lee · HSBC Compliance</p></div></div><p class="tiny muted">本原型执行本地状态检查；真实实现须在宿主 Command 中原子复核权限、版本和政策。</p>',
+          '<button data-action="close">关闭</button><button data-action="audit-from-modal">运行当前审计</button><button class="primary" data-action="start-approval" ' +
+            (gaps.length || state.user !== "applicant" ? "disabled" : "") +
+            ">发起审批</button>",
+        );
+      }
+      function canApprove() {
+        if (
+          !state.approval ||
+          state.status !== "IN_REVIEW" ||
+          state.approval.requester === state.user
+        )
+          return false;
+        return state.user === (state.approval.steps[0] ? "compliance" : "ops");
+      }
+      function commentsModal() {
+        if (!canRead()) return toast("无文档权限");
+        openModal(
+          "评论与协作",
+          '<form id="commentForm"><label class="field-label" for="commentText">新评论 · 共享正文</label>' +
+            (savedSelection
+              ? '<div class="notice">选区：' + esc(savedSelection) + "</div>"
+              : "") +
+            '<textarea id="commentText" required maxlength="1000" placeholder="记录需要参与方确认的内容"></textarea><button class="small primary" style="margin-top:8px">添加评论</button></form>' +
+            state.comments
+              .map(
+                (comment) =>
+                  '<div class="comment"><div class="flex between"><strong>' +
+                  esc(USERS[comment.user].name) +
+                  '</strong><span class="tag">' +
+                  (comment.resolved
+                    ? "已解决"
+                    : comment.signature !== signature()
+                      ? "锚点已过期"
+                      : "待处理") +
+                  "</span></div>" +
+                  (comment.quote
+                    ? "<blockquote>" + esc(comment.quote) + "</blockquote>"
+                    : "") +
+                  "<p>" +
+                  esc(comment.text) +
+                  '</p><span class="muted tiny">v' +
+                  comment.version +
+                  " · " +
+                  esc(comment.time) +
+                  "</span>" +
+                  (!comment.resolved
+                    ? '<button class="small quiet" data-resolve-comment="' +
+                      comment.id +
+                      '">标记解决</button>'
+                    : "") +
+                  "</div>",
+              )
+              .join(""),
+        );
+      }
+      function exportModal() {
+        if (!canRead() || (state.user === "lawyer" && !state.guest.export))
+          return toast("当前身份未获导出权限");
+        const gaps = getChecks(latest()).filter((check) => !check.valid);
+        openModal(
+          "导出文档",
+          '<div class="notice">浏览器打印可保存为 PDF。仅输出共享正文，不含内部层、AI 会话或成员资料。</div><div class="row"><h3>草稿副本</h3><p class="muted">可含未填项，明确标记 DRAFT / NOT FOR EXECUTION。</p></div><div class="row"><h3>正式样式预览</h3><p class="muted">要求共享版本必填校验、有效审计和意见处理。仍带“合成演示”标识。</p></div><div class="row flex between"><span>DOCX 保真导出</span><span class="tag">待后台适配器接入</span></div>',
+          '<button data-action="close">取消</button><button data-print="draft">打印草稿 / PDF</button><button class="primary" data-print="formal" ' +
+            (gaps.length || workflowGaps().length ? "disabled" : "") +
+            ">打印正式样式 / PDF</button>",
+        );
+      }
+      function importModal() {
+        openModal(
+          "导入与字段提取",
+          '<div class="notice warn">仅使用合成数据。本地文件不会上传，原型不执行真实 OCR 或 DOCX/PDF 解析。</div><div class="row"><h3>选择源文件</h3><p class="muted">TXT 可实际载入；PDF / DOCX / 图片保留文件名并显示“解析待接入”。</p><button style="margin-top:12px" data-action="choose-file">选择文件</button></div><div class="row"><h3>合成 OCR 提取样例</h3><p class="muted">候选金额、币种、到期日带来源页码，确认前不能用于正式审批。</p><button style="margin-top:12px" data-action="sample-import">载入合成解析结果</button></div>',
+        );
+      }
+      function developerModal() {
+        openModal(
+          "开发对照 · UI / 状态 / API",
+          '<div class="notice warn"><strong>这是可交互规格，不是生产实现</strong><p>无真实认证、服务器锁、OCR、LLM、邮件、法规库、审计存储或对外交易。所有身份在同一浏览器模拟；本地数据不可作为授权隔离证明。</p></div><table class="mapping"><thead><tr><th>界面</th><th>实现合同</th><th>当前边界</th></tr></thead><tbody><tr><td>组织与邀请</td><td>AUTH / ORG / UM / INV</td><td>模拟接受、过期、撤权；生产接批准 IdP 与邀请服务</td></tr><tr><td>编辑 / 版本</td><td>ED / COL / VER / AUTO</td><td>原生富文本、本地恢复、真实 SHA-256；生产采用 TipTap + Yjs 及服务端 fencing</td></tr><tr><td>知识问答</td><td>POST /api/v1/assistant/sessions<br>POST /api/v1/assistant/sessions/{id}/runs</td><td>预置流程回答，其他问题明确证据不足</td></tr><tr><td>规则审计</td><td>POST /api/v1/audit/reviews<br>POST /api/v1/audit/gate-previews</td><td>3 条合成规则，1 条语义 fixture；不能作为完整审计</td></tr><tr><td>法律建议</td><td>POST /api/v1/legal/reviews</td><td>补充事实、显示覆盖缺口、人工复核；不生成真实法律意见</td></tr><tr><td>复核 / 审批</td><td>human-reviews / decisions<br>宿主 Workflow Command</td><td>固定快照、独立审批人、退回及演示交接</td></tr><tr><td>导入 / 导出</td><td>宿主 Document Adapter</td><td>TXT / 浏览器打印可用；OCR、DOCX、正式PDF服务待接入</td></tr></tbody></table><h3 style="margin:18px 0 8px">当前状态</h3><pre class="code">' +
+            esc(
+              JSON.stringify(
+                {
+                  user: state.user,
+                  organization: currentUser().org,
+                  business_status: state.status,
+                  version: latest().no,
+                  lock: state.lock,
+                  checks: getChecks(),
+                  report_current: !!activeReport(),
+                },
+                null,
+                2,
+              ),
+            ) +
+            '</pre><h3 style="margin:18px 0 8px">外部 API 映射</h3><p>map_api → 全文词规则候选 → 字段决定 → 内部 payload。对应 AUT-27 至 AUT-32；固定合成模板，无模型、模板发布服务或外部发送。映射及确认记录仅保留在当前页面内存，切换身份或刷新页面即清除。</p><h3 style="margin:18px 0 8px">语音与连续选区</h3><p>AUT-33 至 AUT-41：原生 Range / 真实视窗行号、确认选区、限定增删改提案、显式应用与头部撤销、受控审计调用。本地 SpeechRecognition 语音包可用且明确同意后才启用麦克风；无远程 ASR、任意应用控制或生产命令服务。音频不保存，语音上下文仅在内存；麦克风拒绝或本地包不可用时用文字输入。</p><h3 style="margin:18px 0 8px">模拟异常</h3><div class="flex wrap"><button data-action="fail-mapping">下次映射失败</button><button data-action="network">' +
+            (state.network ? "模拟离线" : "恢复在线") +
+            '</button><button data-action="fail-audit">下次审计失败</button><button data-action="expire-lock">使锁到期</button><button data-action="force-unlock">申请 / 复核强制解锁</button></div><h3 style="margin:18px 0 8px">实现基线</h3><div class="stack">' +
+            [
+              "Requirements.md",
+              "AI_assistance_reqirement.md",
+              "AI-audit_reqirement.md",
+              "AI-Law_agent_reqirement.md",
+              "GTSTrade_AI_Note.md",
+            ]
+              .map(
+                (file) =>
+                  '<a href="' +
+                  file +
+                  '" target="_blank" rel="noopener">' +
+                  file +
+                  " ↗</a>",
+              )
+              .join("") +
+            "</div>",
+          '<button class="danger" data-action="reset">重置合成演示数据</button><button data-action="close">关闭</button>',
+        );
+      }
+      function ask(question) {
+        if (!canAI()) return;
+        let answer,
+          outcome = "answered",
+          source = true;
+        if (/锁|编辑/.test(question))
+          answer =
+            "点击“开始编辑”获取当前会话的独占锁。其他参与方仍只看到已提交快照。释放锁可保留个人恢复草稿；提交新版本后自动释放。";
+        else if (/提交|审批/.test(question))
+          answer =
+            "提交生成新的共享版本，不等于业务批准。发起审批前需要确认必填字段、运行当前版本审计并处理关键意见，再由银行经办与独立合规依次审批。";
+        else if (/金额|必填/.test(question))
+          answer =
+            "讨论版本可以保留明确标记的缺项。先获取编辑锁，在自动化面板确认金额等变量，提交新版本并重新审计后再发起正式流程。";
+        else if (/润色|修改|替换/.test(question)) {
+          answer =
+            "此请求涉及正文修改，请转到自动化面板查看建议差异，再由持锁用户确认应用。";
+          outcome = "needs_handoff";
+          source = false;
+        } else {
+          answer =
+            "当前演示知识源不足以支持此问题。没有执行联网检索或真实法规查询；请补充批准来源，或交给人工专业复核。";
+          outcome = "insufficient_evidence";
+          source = false;
+        }
+        state.chats[state.user] ??= [];
+        state.chats[state.user].push({
+          question,
+          answer,
+          outcome,
+          source,
+          signature: signature(),
+        });
+        persist();
+        renderAssistant();
+      }
+      const actions = {
+        'voice-microphone': microphoneModal,
+        'voice-stop': () => stopVoiceCapture('语音会话已停止，未执行计划已清除', true),
+        'voice-clear': () => invalidateVoice('选区已清除'),
+        'voice-confirm-selection': confirmVoiceSelection,
+        'voice-preview': voicePreview,
+        'voice-apply': applyVoiceProposal,
+        'voice-undo': undoVoiceEdit,
+        'voice-dispatch': dispatchVoiceAction,
+        'voice-history': voiceHistoryModal,
+        'voice-layout': () => { if (!canAI()) return; if (innerWidth <= 700) setMobile('document'); voiceShowLines = true; drawVoiceSelection(); toast('行号仅对应当前完整可见文本；滚动或重排后重新定位'); },
+        'voice-return': () => { state.tab = 'automation'; setMobile('assistant'); renderAssistant(); refreshVoice(); },
+        "fail-mapping": () => { apiMappingFailNext = true; closeModal(); toast("下一次映射将模拟失败"); },
+        "mapping-template": apiTemplateModal,
+        "mapping-start": startApiMapping,
+        "mapping-cancel": cancelApiMapping,
+        "mapping-payload": mappingPayloadModal,
+        "mapping-history": mappingHistoryModal,
+        close: closeModal,
+        identity: identityModal,
+        people: peopleModal,
+        invite: inviteModal,
+        edit: acquire,
+        release: releasePrompt,
+        submit: submitVersion,
+        audit: runAudit,
+        variables: () => {
+          state.tab = "automation";
+          setMobile("assistant");
+          renderAssistant();
+        },
+        document: () => setMobile("document"),
+        versions: () => {
+          if (innerWidth <= 700) setMobile("versions");
+          else compareModal();
+        },
+        compare: compareModal,
+        comments: commentsModal,
+        export: exportModal,
+        import: importModal,
+        workflow: workflowModal,
+        developer: developerModal,
+        disposition: dispositionModal,
+        suggestion: suggestionModal,
+        "human-review": humanReviewModal,
+        "legal-history": taskModal,
+        inbox: taskModal,
+        "keep-draft": () => release(true),
+        "discard-draft": () => release(false),
+        "rebase-draft": () => {
+          state.drafts[state.user].base = latest().no;
+          closeModal();
+          acquire();
+          toast("旧内容已作为新修订草稿，请核对最新版本差异");
+        },
+        "cancel-audit": () => {
+          runToken++;
+          runBusy = false;
+          renderAssistant();
+          toast("运行已取消，未发布新报告");
+        },
+        "audit-from-modal": () => {
+          closeModal();
+          state.tab = "audit";
+          setMobile("assistant");
+          runAudit();
+        },
+        "locate-clause": () => {
+          setMobile("document");
+          editor
+            .querySelector('[data-node="clause-3"]')
+            ?.scrollIntoView({ block: "center", behavior: "smooth" });
+        },
+        "legal-check": () => {
+          if (!canAI() || state.user === "lawyer") return;
+          state.legalFacts = Object.fromEntries(
+            ["export", "import", "law"].map((key) => [
+              key,
+              document.getElementById("legal-" + key).value.trim(),
+            ]),
+          );
+          eventLog("确认适用信息", "仍缺批准法域规则，无法评估");
+          persist();
+          renderAssistant();
+          toast("适用信息已保存；仍未获得法域规则覆盖");
+        },
+        "join-org": () => {
+          state.joinRequests.push({
+            name: currentUser().name,
+            org: document.getElementById("joinOrg").value,
+          });
+          eventLog("申请加入组织", "待审核，权限未变化");
+          persist();
+          identityModal();
+        },
+        "revoke-guest": () => {
+          if (state.user === "lawyer" || !state.guest) return;
+          state.guest.status = "revoked";
+          if (state.lock?.user === "lawyer") state.lock = null;
+          eventLog("撤销访客授权", "阻止后续读取、AI 与写入，保留恢复草稿");
+          persist();
+          peopleModal();
+          render();
+        },
+        "start-approval": () => {
+          if (state.user !== "applicant" || workflowGaps().length)
+            return toast("预检条件不满足");
+          state.approval = {
+            version: latest().no,
+            signature: signature(latest()),
+            requester: state.user,
+            steps: [null, null],
+            time: now(),
+          };
+          state.status = "IN_REVIEW";
+          eventLog("发起审批", "固定 v" + latest().no);
+          persist();
+          render();
+          workflowModal();
+        },
+        approve: () => {
+          if (!canApprove() || state.approval.signature !== signature(latest()))
+            return toast("权限或审批基线不匹配");
+          state.approval.steps[state.user === "ops" ? 0 : 1] = now();
+          if (state.approval.steps.every(Boolean)) state.status = "APPROVED";
+          eventLog("批准审批节点", "v" + state.approval.version);
+          persist();
+          render();
+          workflowModal();
+        },
+        "reject-approval": () => {
+          if (!canApprove()) return;
+          openModal(
+            "退回修改",
+            '<form id="rejectForm"><label>退回原因<textarea id="rejectReason" required></textarea></label></form>',
+            '<button data-action="close">取消</button><button form="rejectForm" class="primary">退回该版本</button>',
+          );
+        },
+        handoff: () => {
+          if (
+            state.status !== "APPROVED" ||
+            state.user === "lawyer" ||
+            state.lock ||
+            getChecks(latest()).some((check) => !check.valid) ||
+            state.approval.signature !== signature(latest())
+          )
+            return toast("交接条件不满足");
+          state.status = "HANDED_OFF";
+          state.approval.handoff = now();
+          eventLog("确认本地交接", "未调用外部系统");
+          persist();
+          render();
+          workflowModal();
+        },
+        "choose-file": () => document.getElementById("fileInput").click(),
+        "sample-import": () => {
+          if (!mine()) {
+            closeModal();
+            acquire();
+          }
+          if (!requireEdit()) return;
+          draft().fields = {
+            amount: {
+              value: "100000.00",
+              confirmed: false,
+              source: "合成扫描件 · 第 1 页 / 金额区域",
+            },
+            currency: {
+              value: "USD",
+              confirmed: false,
+              source: "合成扫描件 · 第 1 页 / 币种区域",
+            },
+            expiry: {
+              value: "2027-06-30",
+              confirmed: false,
+              source: "合成扫描件 · 第 2 页 / 到期区域",
+            },
+          };
+          eventLog("载入合成解析候选", "未确认字段不得自动用于正式流程");
+          state.tab = "automation";
+          persist();
+          closeModal();
+          setMobile("assistant");
+          render();
+        },
+        network: () => {
+          state.network = !state.network;
+          eventLog(state.network ? "恢复在线" : "进入模拟离线");
+          persist();
+          closeModal();
+          render();
+        },
+        "fail-audit": () => {
+          state.nextFailure = true;
+          persist();
+          toast("下次审计将模拟失败");
+        },
+        "expire-lock": () => {
+          if (state.lock) {
+            state.lock.until = 0;
+            expireLock();
+          }
+          closeModal();
+          render();
+        },
+        "force-unlock": () => {
+          if (!["ops", "compliance"].includes(state.user) || !state.lock)
+            return toast("需要银行员工身份且存在编辑锁");
+          if (
+            state.forceRequest &&
+            state.forceRequest.token !== state.lock.token
+          ) {
+            state.forceRequest = null;
+            persist();
+            return toast("原锁令牌已变化，请重新申请");
+          }
+          if (state.forceRequest && state.forceRequest.user !== state.user) {
+            eventLog("独立复核并强制解锁", state.forceRequest.reason);
+            state.lock = null;
+            state.forceRequest = null;
+            persist();
+            closeModal();
+            render();
+            toast("旧锁已撤销，原用户恢复草稿保留");
+          } else
+            openModal(
+              "申请强制解锁",
+              '<form id="forceForm"><label>原因<textarea id="forceReason" required></textarea></label><div class="notice warn">需另一名授权银行员工独立复核。本步骤不会直接解除锁。</div></form>',
+              '<button data-action="close">取消</button><button class="primary" form="forceForm">创建解锁申请</button>',
+            );
+        },
+        activity: () =>
+          openModal(
+            "活动记录 · 本地演示",
+            state.events.length
+              ? state.events
+                  .map(
+                    (event) =>
+                      '<div class="row"><strong>' +
+                      esc(event.action) +
+                      "</strong><p>" +
+                      esc(event.detail) +
+                      '</p><p class="muted tiny">' +
+                      esc(USERS[event.user]?.name || event.user) +
+                      " · " +
+                      esc(event.time) +
+                      "</p></div>",
+                  )
+                  .join("")
+              : '<div class="empty">暂无活动</div>',
+          ),
+        rules: () =>
+          openModal(
+            "规则包与覆盖",
+            '<div class="flex between"><h3>DEMO-DG / 1.0</h3><span class="tag good">已发布合成版本</span></div><table class="mapping"><tr><th>规则</th><th>方法</th><th>范围</th></tr><tr><td>金额非空、正数、两位小数</td><td>确定性</td><td>审批 / 导出 / 交接</td></tr><tr><td>币种目录</td><td>确定性</td><td>USD / EUR / CNY / HKD</td></tr><tr><td>到期日期确认</td><td>确定性</td><td>日期字段</td></tr><tr><td>付款期限表述</td><td>语义样例</td><td>建议人工确认</td></tr></table><div class="notice warn">规则发布、校验回执、独立审核、撤回与影响分析须按审计规格实现。该目录仅展示冻结的合成包，未实现生产治理。</div>',
+          ),
+        table: () => {
+          if (!requireEdit()) return;
+          editor.focus();
+          document.execCommand(
+            "insertHTML",
+            false,
+            "<table><tbody><tr><th>项目</th><th>内容</th></tr><tr><td>待填写</td><td>待填写</td></tr></tbody></table><p><br></p>",
+          );
+          captureDraft();
+          persist();
+        },
+        find: () =>
+          openModal(
+            "查找与替换",
+            '<form id="findForm"><div class="form-grid"><div class="form-field"><label>查找文本<input id="findText" required></label></div><div class="form-field"><label>替换为<input id="replaceText"></label></div></div><div class="notice">只处理普通正文文本，不替换绑定的变量节点。</div></form>',
+            '<button data-action="close">关闭</button><button form="findForm">定位首个</button><button data-action="replace" ' +
+              (!mine() ? "disabled" : "") +
+              ">替换匹配文本</button>",
+          ),
+        replace: () => {
+          if (!requireEdit()) return;
+          const search = document.getElementById("findText").value,
+            replacement = document.getElementById("replaceText").value;
+          if (!search) return;
+          const walker = document.createTreeWalker(
+            editor,
+            NodeFilter.SHOW_TEXT,
+          );
+          let node,
+            count = 0;
+          while ((node = walker.nextNode())) {
+            if (node.parentElement.closest("[data-var]")) continue;
+            count += node.textContent.split(search).length - 1;
+            node.textContent = node.textContent.split(search).join(replacement);
+          }
+          captureDraft();
+          persist();
+          closeModal();
+          renderAssistant();
+          toast("已替换 " + count + " 处普通文本");
+        },
+        reset: () =>
+          openModal(
+            "重置演示数据",
+            "<p>将清除本原型在此浏览器中的草稿、邀请、审计和审批记录，恢复合成样例。</p>",
+            '<button data-action="close">取消</button><button class="primary" data-action="confirm-reset">确认重置</button>',
+          ),
+        "confirm-reset": () => {
+          runToken++;
+          runBusy = false;
+          state = seed();
+          persist();
+          closeModal();
+          render();
+          hashVersions();
+        },
+      };
+      function setMobile(view) {
+        mobileView = view;
+        document.getElementById("workGrid").dataset.mobile = view;
+        document.querySelectorAll("button[data-mobile]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.mobile === view);
+          button.setAttribute(
+            "aria-selected",
+            String(button.dataset.mobile === view),
+          );
+        });
+      }
+      document.addEventListener("click", (event) => {
+        const target = event.target.closest("button");
+        if (!target || target.disabled) return;
+        if (target.dataset.voiceMatch !== undefined) {
+          if (!canAI()) return;
+          const match = voiceState.matches[Number(target.dataset.voiceMatch)];
+          if (match && voiceRange(match)) { if (innerWidth <= 700) setMobile('document'); setVoiceSelection([match]); }
+          return;
+        }
+        if (target.dataset.mappingReject) {
+          const form = target.closest("form");
+          if (form?.reportValidity()) confirmMapping(form, true);
+          return;
+        }
+        if (target.dataset.mappingSource) {
+          const key = target.dataset.mappingSource === "expiry_date" ? "expiry" : target.dataset.mappingSource;
+          const input = document.getElementById("field-" + key);
+          input?.scrollIntoView({ block: "center" });
+          if (input?.disabled) toast("请先获取编辑锁，再确认源变量");
+          else input?.focus();
+          return;
+        }
+        if (target.dataset.mappingField || target.dataset.mappingConfirm) {
+          mappingFieldModal(target.dataset.mappingField || target.dataset.mappingConfirm);
+          return;
+        }
+        if (target.dataset.action) {
+          actions[target.dataset.action]?.();
+          return;
+        }
+        if (target.dataset.user) {
+          switchUser(target.dataset.user);
+          return;
+        }
+        if (target.dataset.mobile) {
+          setMobile(target.dataset.mobile);
+          return;
+        }
+        if (target.dataset.tab) {
+          state.tab = target.dataset.tab;
+          persist();
+          renderAssistant();
+          return;
+        }
+        if (target.dataset.format) {
+          if (requireEdit()) {
+            editor.focus();
+            document.execCommand(target.dataset.format);
+            captureDraft();
+            persist();
+          }
+          return;
+        }
+        if (target.dataset.confirmField) {
+          updateField(target.dataset.confirmField);
+          return;
+        }
+        if (target.dataset.evidence) {
+          evidenceModal(target.dataset.evidence);
+          return;
+        }
+        if (target.dataset.question) {
+          ask(target.dataset.question);
+          return;
+        }
+        if (target.dataset.viewVersion) {
+          versionModal(Number(target.dataset.viewVersion));
+          return;
+        }
+        if (target.dataset.restoreVersion) {
+          if (!canEdit() || state.lock) return;
+          const source = state.versions.find(
+            (version) => version.no === Number(target.dataset.restoreVersion),
+          );
+          state.drafts[state.user] = {
+            base: latest().no,
+            html: source.html,
+            fields: structuredClone(source.fields),
+          };
+          closeModal();
+          acquire();
+          return;
+        }
+        if (target.dataset.acceptInvite) {
+          acceptInvite(target.dataset.acceptInvite);
+          return;
+        }
+        if (target.dataset.locate) {
+          setMobile("document");
+          const node = editor.querySelector(
+            '[data-var="' + target.dataset.locate + '"]',
+          );
+          node?.scrollIntoView({ block: "center", behavior: "smooth" });
+          if (node) {
+            node.style.outline = "2px solid #29638d";
+            setTimeout(() => (node.style.outline = ""), 2000);
+          }
+          return;
+        }
+        if (target.dataset.resolveComment) {
+          const comment = state.comments.find(
+            (item) => item.id === target.dataset.resolveComment,
+          );
+          if (canRead() && comment) {
+            comment.resolved = true;
+            persist();
+            commentsModal();
+          }
+          return;
+        }
+        if (target.dataset.decideTask) {
+          const task = state.tasks.find(
+            (item) => item.id === target.dataset.decideTask,
+          );
+          if (!task || task.assignee !== state.user || !canAI()) return;
+          openModal(
+            "人工复核决定",
+            '<form id="taskForm" data-task="' +
+              task.id +
+              '"><label>结论<select id="taskDecision"><option value="request_information">请求补充信息</option><option value="agree">同意意见</option><option value="disagree">不同意，说明依据</option></select></label><label style="display:block;margin-top:12px">理由<textarea id="taskReason" required></textarea></label></form>',
+            '<button data-action="close">取消</button><button class="primary" form="taskForm">记录复核决定</button>',
+          );
+          return;
+        }
+        if (target.dataset.print) {
+          if (!canRead() || (state.user === "lawyer" && !state.guest.export))
+            return;
+          if (target.dataset.print === "formal" && workflowGaps().length)
+            return toast("正式输出预检未通过");
+          document.getElementById("printNote").textContent =
+            (target.dataset.print === "draft"
+              ? "DRAFT / 未确认项可能存在"
+              : "正式样式预览") +
+            " · 合成演示 / NOT FOR EXECUTION · v" +
+            latest().no +
+            (mine() ? " + 个人草稿" : "");
+          eventLog("打印共享正文", target.dataset.print);
+          persist();
+          closeModal();
+          setMobile("document");
+          window.print();
+        }
+      });
+      document.addEventListener("change", (event) => {
+        if (event.target.id === "api-template") {
+          if (!API_TEMPLATES[event.target.value] || !canAI()) return;
+          apiTemplateVersion = event.target.value;
+          if (apiMapping) apiMapping.invalidated = true;
+          clearTimeout(apiMappingTimer);
+          refreshApiMapping();
+          return;
+        }
+        if (event.target.dataset.version) {
+          const number = Number(event.target.dataset.version);
+          if (event.target.checked) {
+            state.selected.push(number);
+            state.selected = [...new Set(state.selected)].slice(-2);
+          } else
+            state.selected = state.selected.filter((value) => value !== number);
+          renderVersions();
+          persist();
+        }
+        if (event.target.id === "blockFormat" && requireEdit()) {
+          editor.focus();
+          document.execCommand("formatBlock", false, event.target.value);
+          captureDraft();
+          persist();
+        }
+      });
+      document.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const form = event.target;
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
+        if (form.id === 'voiceCommandForm' || form.id === 'voiceDockForm') { parseVoiceCommand(new FormData(form).get('command')); return; }
+        if (form.id === 'voiceMicrophoneForm') { startVoiceMicrophone(new FormData(form).get('language')); return; }
+        if (form.id === "mappingDecisionForm") {
+          confirmMapping(form);
+          return;
+        }
+        if (form.id === "questionForm") {
+          ask(document.getElementById("questionInput").value.trim());
+          return;
+        }
+        if (form.id === "inviteForm") {
+          const email = document
+            .getElementById("inviteEmail")
+            .value.trim()
+            .toLowerCase();
+          if (
+            state.invitations.some(
+              (invite) => invite.email === email && invite.status === "pending",
+            )
+          ) {
+            document.getElementById("formError").textContent =
+              "该邮箱已有待接受邀请";
+            return;
+          }
+          state.invitations.push({
+            id: uid(),
+            email,
+            purpose: document.getElementById("invitePurpose").value,
+            status: "pending",
+            created: Date.now(),
+            ai: document.getElementById("inviteAI").checked,
+            edit: document.getElementById("inviteEdit").checked,
+            export: document.getElementById("inviteExport").checked,
+          });
+          eventLog("创建本地邀请", email + " · 未发送邮件");
+          persist();
+          peopleModal();
+          return;
+        }
+        if (form.id === "acceptForm") {
+          const invite = state.invitations.find(
+            (item) => item.id === form.dataset.invite,
+          );
+          if (
+            !invite ||
+            invite.status !== "pending" ||
+            Date.now() - invite.created > 72 * 3600000
+          ) {
+            document.getElementById("formError").textContent =
+              "邀请已使用、撤销或过期";
+            return;
+          }
+          if (
+            document
+              .getElementById("verifiedEmail")
+              .value.trim()
+              .toLowerCase() !== invite.email
+          ) {
+            document.getElementById("formError").textContent =
+              "已验证邮箱与受邀邮箱不一致";
+            return;
+          }
+          state.guest = {
+            name: document.getElementById("guestName").value,
+            org: document.getElementById("guestOrg").value,
+            email: invite.email,
+            status: "active",
+            expires: new Date(Date.now() + 30 * 86400000).toISOString(),
+            ai: invite.ai,
+            edit: invite.edit,
+            export: invite.export,
+          };
+          invite.status = "accepted";
+          eventLog("接受邀请", "演示邮箱校验 · 个人访客授权");
+          persist();
+          peopleModal();
+          return;
+        }
+        if (form.id === "dispositionForm") {
+          const report = activeReport();
+          if (!report) return toast("报告已过期");
+          const select = document.getElementById("disposition");
+          report.disposition = {
+            value: select.value,
+            label: select.selectedOptions[0].text,
+            reason: document.getElementById("dispositionReason").value,
+          };
+          eventLog(
+            "处理语义意见",
+            report.disposition.label + " · " + report.disposition.reason,
+          );
+          persist();
+          closeModal();
+          renderAssistant();
+          return;
+        }
+        if (form.id === "humanForm") {
+          if (!canAI() || state.user === "lawyer" || mine()) return;
+          const assignee = document.getElementById("assignee").value;
+          if (!assignee || assignee === state.user) return;
+          if (
+            state.tasks.some(
+              (task) =>
+                task.status === "pending" && task.signature === signature(),
+            )
+          )
+            return toast("当前快照已有待完成复核任务");
+          state.tasks.push({
+            id: uid(),
+            requester: state.user,
+            assignee,
+            purpose: document.getElementById("humanPurpose").value,
+            signature: signature(),
+            version: latest().no,
+            time: now(),
+            status: "pending",
+            decisions: [],
+          });
+          eventLog("分配人工复核", USERS[assignee].name);
+          persist();
+          taskModal();
+          return;
+        }
+        if (form.id === "taskForm") {
+          const task = state.tasks.find(
+            (item) => item.id === form.dataset.task,
+          );
+          if (
+            !task ||
+            task.assignee !== state.user ||
+            task.status !== "pending" ||
+            task.signature !== signature() ||
+            !canAI()
+          )
+            return toast("任务或授权已失效");
+          const select = document.getElementById("taskDecision");
+          task.decisions.push({
+            decision: select.value,
+            label: select.selectedOptions[0].text,
+            reason: document.getElementById("taskReason").value,
+            time: now(),
+          });
+          if (select.value !== "request_information") task.status = "completed";
+          eventLog("提交人工决定", select.selectedOptions[0].text);
+          persist();
+          taskModal();
+          return;
+        }
+        if (form.id === "commentForm") {
+          if (!canRead()) return;
+          state.comments.push({
+            id: uid(),
+            user: state.user,
+            text: document.getElementById("commentText").value,
+            quote: savedSelection,
+            signature: signature(),
+            version: latest().no,
+            time: now(),
+            resolved: false,
+          });
+          savedSelection = "";
+          eventLog("添加共享评论");
+          persist();
+          render();
+          commentsModal();
+          return;
+        }
+        if (form.id === "rejectForm") {
+          if (!canApprove()) return;
+          state.approval.rejection =
+            document.getElementById("rejectReason").value;
+          state.approvalHistory.push(state.approval);
+          state.approval = null;
+          state.status = "CHANGES_REQUESTED";
+          eventLog("审批退回", document.getElementById("rejectReason").value);
+          persist();
+          closeModal();
+          render();
+          return;
+        }
+        if (form.id === "forceForm") {
+          state.forceRequest = {
+            user: state.user,
+            reason: document.getElementById("forceReason").value,
+            token: state.lock?.token,
+          };
+          eventLog("申请强制解锁", state.forceRequest.reason + " · 待独立复核");
+          persist();
+          closeModal();
+          return;
+        }
+        if (form.id === "findForm") {
+          const search = document.getElementById("findText").value;
+          closeModal();
+          setMobile("document");
+          const walker = document.createTreeWalker(
+            editor,
+            NodeFilter.SHOW_TEXT,
+          );
+          let node;
+          while ((node = walker.nextNode())) {
+            const index = node.textContent.indexOf(search);
+            if (index >= 0) {
+              const range = document.createRange();
+              range.setStart(node, index);
+              range.setEnd(node, index + search.length);
+              const selection = getSelection();
+              selection.removeAllRanges();
+              selection.addRange(range);
+              node.parentElement.scrollIntoView({ block: "center" });
+              return;
+            }
+          }
+          toast("未找到匹配文本");
+        }
+      });
+      editor.addEventListener("input", () => {
+        if (!mine() || !state.network) return;
+        captureDraft();
+        saveMessage = "保存中 · 本地恢复副本";
+        renderSaveStatus();
+        renderAssistant();
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          persist();
+          saveMessage = storageOk ? "已保存到本机 · " + now() : "本地保存失败";
+          renderSaveStatus();
+        }, 2000);
+      });
+      editor.addEventListener("paste", (event) => {
+        event.preventDefault();
+        if (requireEdit())
+          document.execCommand(
+            "insertText",
+            false,
+            event.clipboardData.getData("text/plain"),
+          );
+      });
+      document.addEventListener("selectionchange", () => {
+        const selection = getSelection();
+        if (voiceState.selection && selection?.rangeCount && !selection.isCollapsed && editor.contains(selection.anchorNode)) invalidateVoice('鼠标 / 键盘选区已变化，请重新定位并确认');
+        if (
+          selection?.rangeCount &&
+          editor.contains(selection.anchorNode) &&
+          selection.toString().trim()
+        )
+          savedSelection = selection.toString().trim().slice(0, 300);
+      });
+      document
+        .getElementById("fileInput")
+        .addEventListener("change", async (event) => {
+          const file = event.target.files[0];
+          if (!file) return;
+          if (file.size > 2 * 1024 * 1024) return toast("演示文件上限 2 MB");
+          if (!file.name.toLowerCase().endsWith(".txt")) {
+            openModal(
+              "解析服务未接入",
+              '<div class="notice warn">' +
+                esc(file.name) +
+                " 已选择，未上传或解析。</div><p>生产须展示解析进度、来源区域、失败及不支持元素。本原型可载入显式合成样例。</p>",
+              '<button data-action="close">关闭</button><button data-action="sample-import">载入合成解析结果</button>',
+            );
+            return;
+          }
+          if (!mine()) {
+            closeModal();
+            acquire();
+          }
+          if (!requireEdit()) return;
+          const owner = state.user,
+            token = state.lock.token;
+          const text = await file.text();
+          if (state.user !== owner || !mine() || state.lock.token !== token)
+            return toast("导入期间编辑上下文已变化");
+          draft().html = text
+            .split(/\n\s*\n/)
+            .map(
+              (paragraph) =>
+                '<p data-node="' +
+                uid() +
+                '">' +
+                esc(paragraph).replace(/\n/g, "<br>") +
+                "</p>",
+            )
+            .join("");
+          eventLog("导入 TXT", file.name + " · 未上传");
+          persist();
+          closeModal();
+          render();
+          event.target.value = "";
+        });
+      document.addEventListener('input', event => {
+        if (event.target.id === 'voice-command' || event.target.closest('#voiceDockForm')) {
+          voiceState.command = event.target.value;
+          voiceState.proposal = null; voiceState.pending = null;
+          const target = document.getElementById('voice-state');
+          if (target) target.innerHTML = voiceStateHtml();
+        }
+      });
+      function checkVoiceLayout() {
+        if (voiceProvisional && voiceProvisional.layoutKey !== voiceLayoutKey()) { voiceProvisional = null; drawVoiceSelection(); }
+        if (voiceState.selection && (voiceState.selection.layoutKey !== voiceLayoutKey() || voiceState.selection.signature !== signature())) invalidateVoice('布局 / 滚动或正文已变化，请重新选择范围');
+        else if (voiceShowLines) drawVoiceSelection();
+      }
+      window.addEventListener('resize', checkVoiceLayout);
+      window.visualViewport?.addEventListener('resize', checkVoiceLayout);
+      document.addEventListener('scroll', event => {
+        if (event.target === document || event.target === editor || (event.target instanceof Element && event.target.contains(editor))) checkVoiceLayout();
+      }, true);
+      new ResizeObserver(checkVoiceLayout).observe(editor);
+      new MutationObserver(checkVoiceLayout).observe(editor, {subtree: true, childList: true, characterData: true});
+      document.fonts?.addEventListener('loadingdone', checkVoiceLayout);
+      document.addEventListener('visibilitychange', () => { if (document.hidden) stopVoiceCapture('页面已隐藏，麦克风及旧计划已停止', true); });
+      window.addEventListener('pagehide', () => stopVoiceCapture('页面已关闭', true));
+      window.addEventListener("beforeunload", () => {
+        stopVoiceCapture('页面离开，麦克风已关闭', true);
+        if (mine()) captureDraft();
+        persist();
+      });
+      async function hashVersions() {
+        try {
+          for (const version of state.versions)
+            if (!version.hash) version.hash = await digest(version);
+          persist();
+          renderVersions();
+        } catch {
+          toast("当前浏览器无法生成 SHA-256，提交不可用");
+        }
+      }
+      setInterval(() => {
+        expireLock();
+        if (state.lock && mine() && state.network)
+          state.lock.until = Date.now() + 300000;
+        if (state.user === "lawyer" && !guestActive()) {
+          if (state.lock?.user === "lawyer") state.lock = null;
+          if (editor.childNodes.length) render();
+        }
+      }, 10000);
+      render();
+      hashVersions();
+    </script>
+  </body>
+</html>

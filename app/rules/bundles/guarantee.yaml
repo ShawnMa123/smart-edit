@@ -1,0 +1,180 @@
+# Guarantee rule pack — the first published bundle (design D4).
+#
+# Rules are data: closed ops only, no scripts, no regex, no network, no model. Every rule ships
+# executable test vectors (task 2.6) so a rule that cannot be demonstrated cannot be published.
+bundle_id: guarantee-core
+version: 1.0.0
+published: true
+document_types: [guarantee]
+rules:
+  - rule_id: GR-AMOUNT-POSITIVE
+    version: 1
+    title: Guarantee amount must be greater than zero
+    category: field
+    severity: critical
+    gate_type: hard_block
+    target_operations: [start_approval, formal_export, handoff, formal_mapping]
+    field_id: guarantee_amount
+    expression:
+      op: compare
+      left: {kind: field, field_id: guarantee_amount}
+      comparator: gt
+      right: {kind: literal, value_type: decimal, value: "0"}
+    test_vectors:
+      - name: positive amount passes
+        fields:
+          guarantee_amount: {state: confirmed, value: "500000.00"}
+        expect: pass
+      - name: zero amount is a finding
+        fields:
+          guarantee_amount: {state: confirmed, value: "0.00"}
+        expect: finding
+      - name: unconfirmed amount needs input
+        fields:
+          guarantee_amount: {state: unconfirmed, value: "500000.00"}
+        expect: needs_input
+
+  - rule_id: GR-AMOUNT-MAX
+    version: 1
+    title: Guarantee amount above the desk limit needs review
+    category: field
+    severity: warn
+    gate_type: advisory
+    target_operations: []
+    field_id: guarantee_amount
+    expression:
+      op: compare
+      left: {kind: field, field_id: guarantee_amount}
+      comparator: le
+      right: {kind: literal, value_type: decimal, value: "50000000"}
+    test_vectors:
+      - name: within limit passes
+        fields:
+          guarantee_amount: {state: confirmed, value: "500000.00"}
+        expect: pass
+      - name: above limit is a finding
+        fields:
+          guarantee_amount: {state: confirmed, value: "90000000.00"}
+        expect: finding
+      - name: unconfirmed amount needs input
+        fields:
+          guarantee_amount: {state: unconfirmed, value: "90000000.00"}
+        expect: needs_input
+
+  - rule_id: GR-EXPIRY-AFTER-ISSUE
+    version: 1
+    title: Expiry date must be after the issue date
+    category: consistency
+    severity: critical
+    gate_type: hard_block
+    target_operations: [start_approval, formal_export, handoff]
+    field_id: expiry_date
+    expression:
+      op: compare
+      left: {kind: field, field_id: expiry_date}
+      comparator: gt
+      right: {kind: field, field_id: issue_date}
+    test_vectors:
+      - name: expiry after issue passes
+        fields:
+          issue_date: {state: confirmed, value: "2026-03-12"}
+          expiry_date: {state: confirmed, value: "2027-03-12"}
+        expect: pass
+      - name: expiry before issue is a finding
+        fields:
+          issue_date: {state: confirmed, value: "2026-03-12"}
+          expiry_date: {state: confirmed, value: "2025-03-12"}
+        expect: finding
+      - name: missing issue date cannot be judged
+        fields:
+          expiry_date: {state: confirmed, value: "2027-03-12"}
+        expect: needs_input
+
+  - rule_id: GR-CURRENCY-USD
+    version: 1
+    title: Currency other than USD needs business confirmation
+    category: field
+    severity: warn
+    gate_type: advisory
+    target_operations: []
+    field_id: currency
+    expression:
+      op: compare
+      left: {kind: field, field_id: currency}
+      comparator: eq
+      right: {kind: literal, value_type: string, value: "USD"}
+    test_vectors:
+      - name: USD passes
+        fields:
+          currency: {state: confirmed, value: "USD"}
+        expect: pass
+      - name: another currency is a finding
+        fields:
+          currency: {state: confirmed, value: "EUR"}
+        expect: finding
+      - name: unconfirmed currency needs input
+        fields:
+          currency: {state: unconfirmed, value: "EUR"}
+        expect: needs_input
+
+  - rule_id: GR-RULES-URDG
+    version: 1
+    title: Governing rules should reference URDG 758
+    category: template
+    severity: warn
+    gate_type: advisory
+    target_operations: []
+    field_id: governing_rules
+    expression:
+      op: contains_clause
+      field_id: governing_rules
+      match_kind: exact_text
+      value: URDG 758
+    test_vectors:
+      - name: clause present passes
+        fields:
+          governing_rules: {state: confirmed, value: "适用 URDG 758"}
+        expect: pass
+      - name: clause absent is a finding
+        fields:
+          governing_rules: {state: confirmed, value: "适用当地法律"}
+        expect: finding
+      - name: unconfirmed clause needs input
+        fields:
+          governing_rules: {state: unconfirmed, value: "适用 URDG 758"}
+        expect: needs_input
+
+  - rule_id: GR-AMOUNT-REQUIRES-CURRENCY
+    version: 1
+    title: An amount without a currency cannot be interpreted
+    category: consistency
+    severity: critical
+    gate_type: hard_block
+    target_operations: [start_approval, formal_export, handoff]
+    field_id: currency
+    applicability:
+      op: exists
+      field_id: guarantee_amount
+    expression:
+      op: exists
+      field_id: currency
+    test_vectors:
+      - name: amount with currency passes
+        fields:
+          guarantee_amount: {state: confirmed, value: "500000.00"}
+          currency: {state: confirmed, value: "USD"}
+        expect: pass
+      - name: amount without currency is a finding
+        fields:
+          guarantee_amount: {state: confirmed, value: "500000.00"}
+          currency: {state: absent}
+        expect: finding
+      - name: no amount means the rule does not apply
+        fields:
+          guarantee_amount: {state: absent}
+        expect: not_applicable
+      - name: unconfirmed amount defers to the human
+        fields:
+          guarantee_amount: {state: unconfirmed, value: "500000.00"}
+          currency: {state: confirmed, value: "USD"}
+        expect: needs_input

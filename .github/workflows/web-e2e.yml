@@ -1,0 +1,39 @@
+name: web-e2e
+
+# Restricted-intranet friendly: no browser download. The runner must already have Chrome
+# (`PW_CHANNEL=chrome`, the default below) or a pinned binary (`PW_EXECUTABLE_PATH`).
+# Playwright starts both backends (:8000 fixture / :8010 no-provider) and both dev servers itself.
+
+on:
+  pull_request:
+    paths: ['web/**', 'app/**', 'fixtures/**']
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: self-hosted
+    env:
+      PW_CHANNEL: chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Backend
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -e .
+
+      - name: Frontend
+        working-directory: web
+        run: npm ci
+
+      # typecheck + vitest + playwright, one command
+      - name: Verify
+        working-directory: web
+        run: npm run verify
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-traces
+          path: web/test-results
+          retention-days: 3

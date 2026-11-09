@@ -1,0 +1,155 @@
+{
+  "_readme": "Acceptance carrier for seam A -> B: the state snapshot after Agent 1 finished normalize. Assertions live in assert.py; no golden file.",
+  "run_id": "seam-a-to-b",
+  "business_type": "guarantee",
+  "docs": [
+    {
+      "file_id": "F-1",
+      "filename": "guarantee.pdf",
+      "mime": "application/pdf",
+      "form": "pdf_text",
+      "blocks": [
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 90.0, 320.0, 104.0], "text": "保函编号：BG-2026-0001", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 120.0, 400.0, 134.0], "text": "申请人：ABC Trading Pte Ltd", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 150.0, 420.0, 164.0], "text": "受益人：XYZ IMPORTER PTE LTD", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 180.0, 260.0, 194.0], "text": "币种：USD", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 210.0, 320.0, 224.0], "text": "开立日期：12/03/26", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 2, "bbox": [72.0, 90.0, 360.0, 104.0], "text": "保函金额 USD 500", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 2, "bbox": [72.0, 120.0, 380.0, 134.0], "text": "K 到期日 2027-01-01", "kind": "paragraph"}
+      ],
+      "full_text": "保函编号：BG-2026-0001\n申请人：ABC Trading Pte Ltd\n受益人：XYZ IMPORTER PTE LTD\n币种：USD\n开立日期：12/03/26\n保函金额 USD 500\nK 到期日 2027-01-01",
+      "errors": [],
+      "sha256": "9f2c1b7d4e5a6f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708"
+    }
+  ],
+  "fields": {
+    "guarantee_number": {
+      "key": "guarantee_number",
+      "value": "BG-2026-0001",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 90.0, 320.0, 104.0], "span": "BG-2026-0001", "form_label": null},
+      "normalized_from": "BG-2026-0001",
+      "label": "保函编号",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "applicant_name": {
+      "key": "applicant_name",
+      "value": "ABC Trading Pte Ltd",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 120.0, 400.0, 134.0], "span": "ABC Trading Pte Ltd", "form_label": null},
+      "normalized_from": "ABC Trading Pte Ltd",
+      "label": "申请人",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "beneficiary_name": {
+      "key": "beneficiary_name",
+      "value": "XYZ IMPORTER PTE LTD",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 150.0, 420.0, 164.0], "span": "XYZ IMPORTER PTE LTD", "form_label": null},
+      "normalized_from": "XYZ IMPORTER PTE LTD",
+      "label": "受益人",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "currency": {
+      "key": "currency",
+      "value": "USD",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 180.0, 260.0, 194.0], "span": "USD", "form_label": null},
+      "normalized_from": "USD",
+      "label": "币种",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "issue_date": {
+      "key": "issue_date",
+      "value": "2026-03-12",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 210.0, 320.0, 224.0], "span": "12/03/26", "form_label": null},
+      "normalized_from": "12/03/26",
+      "label": "开立日期",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "guarantee_amount": {
+      "key": "guarantee_amount",
+      "value": "500000.00",
+      "status": "inferred",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": null,
+      "normalized_from": "USD 500 K",
+      "label": "保函金额",
+      "doc_type": "application_form",
+      "notes": ["merged_across_pages"]
+    },
+    "expiry_date": {
+      "key": "expiry_date",
+      "value": null,
+      "status": "missing",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": null,
+      "normalized_from": null,
+      "label": "到期日",
+      "doc_type": null,
+      "notes": ["not_in_source"]
+    }
+  },
+  "extra_fields": {
+    "custom_memo": {
+      "key": "custom_memo",
+      "value": "客户要求周五前回签",
+      "status": "inferred",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": null,
+      "normalized_from": "客户要求周五前回签",
+      "label": null,
+      "doc_type": null,
+      "notes": []
+    }
+  },
+  "findings": [
+    {
+      "id": "N-001",
+      "source": "normalization",
+      "kind": "invalid_value",
+      "rule_id": "F-guarantee_number-max_length",
+      "severity": "warn",
+      "blocking": false,
+      "resolved": false,
+      "resolution": null,
+      "field_keys": ["guarantee_number"],
+      "message": "guarantee_number value length 70 exceeds the fields.yaml limit 64; it was truncated, please confirm manually",
+      "evidence": "BG-2026-0001-EX",
+      "citation": null,
+      "suggestion": "Check whether this field really is that long in the source, and correct it in the review console if needed"
+    }
+  ],
+  "trail": [
+    {"id": "agent1.parse#001", "agent": "agent1", "stage": "parse", "op": "read", "before": null, "after": "1 docs / 7 blocks", "ref": null, "model": null, "prompt_hash": null, "detail": {"failed": []}},
+    {"id": "agent1.extract#001", "agent": "agent1", "stage": "extract", "op": "llm_call", "before": null, "after": "F-1#0:7", "ref": "F-1", "model": "gpt-4o", "prompt_hash": "3f5a9c0d1b2e4f67", "detail": {"file_id": "F-1", "index": 0, "range": [0, 6], "blocks": 7}},
+    {"id": "agent1.normalize#001", "agent": "agent1", "stage": "normalize", "op": "transform", "before": "USD 500 K", "after": "500000.00", "ref": "F-1/1-2/USD 500 K", "model": null, "prompt_hash": null, "detail": {"key": "guarantee_amount", "cross_page": true, "pages": [1, 2]}},
+    {"id": "agent1.normalize#002", "agent": "agent1", "stage": "normalize", "op": "pass", "before": null, "after": null, "ref": null, "model": null, "prompt_hash": null, "detail": {"key": "expiry_date", "reason": "field not present in source"}},
+    {"id": "agent1.normalize#003", "agent": "agent1", "stage": "normalize", "op": "pass", "before": "适用 URDG 758", "after": "guarantee", "ref": "F-1", "model": null, "prompt_hash": null, "detail": {"business_type": "guarantee", "evidence": "适用 URDG 758", "file_id": "F-1", "reason": "explicit_independence_clause"}},
+    {"id": "agent1.normalize#004", "agent": "agent1", "stage": "normalize", "op": "emit", "before": null, "after": "N-001", "ref": "guarantee_number", "model": null, "prompt_hash": null, "detail": {"rule_id": "F-guarantee_number-max_length", "kind": "invalid_value"}}
+  ],
+  "stages": [
+    {"stage": "parse", "agent": "agent1", "status": "done", "reason": null, "produced": 1, "model_calls": 0},
+    {"stage": "extract", "agent": "agent1", "status": "done", "reason": null, "produced": 7, "model_calls": 1},
+    {"stage": "normalize", "agent": "agent1", "status": "done", "reason": null, "produced": 8, "model_calls": 0}
+  ]
+}

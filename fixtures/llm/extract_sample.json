@@ -1,0 +1,66 @@
+[
+  {
+    "key": "guarantee_number",
+    "raw_value": "BG-2026-00417",
+    "span": "BG-2026-00417",
+    "label": "Guarantee No",
+    "confidence": 0.95,
+    "doc_type": "contract"
+  },
+  {
+    "key": "applicant_name",
+    "raw_value": "Alpha Tech Pte Ltd",
+    "span": "Alpha Tech Pte Ltd",
+    "label": "Applicant",
+    "confidence": 0.93,
+    "doc_type": "contract"
+  },
+  {
+    "key": "beneficiary_name",
+    "raw_value": "Beta Construction Ltd",
+    "span": "Beta Construction Ltd",
+    "label": "Beneficiary",
+    "confidence": 0.93,
+    "doc_type": "contract"
+  },
+  {
+    "key": "guarantee_amount",
+    "raw_value": "USD 500,000.00",
+    "span": "USD 500,000.00",
+    "label": "Amount",
+    "confidence": 0.91,
+    "doc_type": "contract"
+  },
+  {
+    "key": "currency",
+    "raw_value": "USD",
+    "span": "USD",
+    "label": "Currency",
+    "confidence": 0.9,
+    "doc_type": "contract"
+  },
+  {
+    "key": "issue_date",
+    "raw_value": "12/03/26",
+    "span": "12/03/26",
+    "label": "Issue Date",
+    "confidence": 0.86,
+    "doc_type": "contract"
+  },
+  {
+    "key": "expiry_date",
+    "raw_value": "12/03/27",
+    "span": "12/03/27",
+    "label": "Expiry Date",
+    "confidence": 0.86,
+    "doc_type": "contract"
+  },
+  {
+    "key": "governing_rules",
+    "raw_value": "URDG 758",
+    "span": "URDG 758",
+    "label": "Governing Rules",
+    "confidence": 0.8,
+    "doc_type": "contract"
+  }
+]
