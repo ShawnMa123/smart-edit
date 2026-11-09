@@ -20,6 +20,10 @@ DISPOSITIONS = (OPEN, ACCEPTED, REJECTED, NEEDS_HUMAN_REVIEW)
 class DispositionError(ValueError):
     """The disposition request is not acceptable (unknown value, missing reason for a critical reject)."""
 
+    def __init__(self, message: str, *, code: str = "INVALID_DISPOSITION") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 def append_event(
     events: list[dict],
@@ -36,10 +40,12 @@ def append_event(
         raise DispositionError(f"unknown disposition {disposition!r}; expected one of {DISPOSITIONS}")
     if not finding_id:
         raise DispositionError("finding_id is required")
-    if not actor:
+    if not (actor or "").strip():
         raise DispositionError("actor is required")
     if disposition == REJECTED and severity == "critical" and not (reason or "").strip():
-        raise DispositionError("rejecting a critical finding requires a reason")
+        raise DispositionError(
+            "rejecting a critical finding requires a reason", code="REASON_REQUIRED"
+        )
 
     event = {
         "finding_id": finding_id,

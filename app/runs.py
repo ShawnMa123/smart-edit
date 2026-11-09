@@ -49,6 +49,7 @@ class RunStore:
             "trail": [],
             "stages": [],
             "findings": [],
+            "dispositions": [],
             "_candidates": [],
         }
         self._states[thread_id] = state

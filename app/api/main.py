@@ -16,14 +16,17 @@ from fastapi.responses import JSONResponse
 
 from app.api.envelope import to_envelope
 from app.api.errors import ApiFailure, IncompleteResult, error_body
+from app.audit.disposition import DispositionError, append_event, latest
 from app.audit.gate import GateError
 from app.audit.policy import OPERATIONS
 from app.llm import resolve_llm
+from app.nodes.audit import AUDIT_AGENT, AUDIT_STAGE
 from app.nodes.gate import gate_node
 from app.runs import RunStore, UnknownRun
 from app.runtime import UnknownStage, execute_chain, merge_update
 from app.standalone import plan_standalone
 from app.stages import AGENT_SPECS
+from app.trail import record
 
 _UNSET = object()
 
@@ -43,6 +46,19 @@ def _read_plan_refusal(plan: dict) -> ApiFailure:
         plan.get("detail") or "prerequisites are not satisfied",
         {"missing": plan.get("missing") or []},
     )
+
+
+def _find_finding(state: dict, finding_id: str) -> dict | None:
+    """A disposition may target a contract finding or the audit's own copy (which carries gate type)."""
+    for finding in state.get("findings") or []:
+        if finding.get("id") == finding_id:
+            return finding
+    verification = state.get("verification") or {}
+    report = verification.get("audit") if isinstance(verification, dict) else None
+    for finding in (report or {}).get("findings") or []:
+        if finding.get("id") == finding_id:
+            return finding
+    return None
 
 
 async def _read_object(request: Request) -> dict:
@@ -231,6 +247,68 @@ def create_app(
             "operation": operation,
             "gate": state.get("gate"),
             "verification": state.get("verification"),
+        }
+
+    @app.post("/runs/{thread_id}/findings/{finding_id}/disposition")
+    async def dispose_finding(thread_id: str, finding_id: str, request: Request) -> dict:
+        """Append one human disposition event; findings are never edited to look resolved."""
+        payload = await _read_object(request)
+        disposition = payload.get("disposition")
+        actor = payload.get("actor")
+        reason = payload.get("reason")
+
+        store_: RunStore = app.state.store
+        store_.get(thread_id)
+        async with store_.lock(thread_id):
+            state = store_.get(thread_id)
+            finding = _find_finding(state, finding_id)
+            if finding is None:
+                raise ApiFailure(
+                    404,
+                    "UNKNOWN_FINDING",
+                    f"unknown finding {finding_id!r}",
+                    {"finding_id": finding_id},
+                )
+
+            try:
+                events = append_event(
+                    state.get("dispositions") or [],
+                    finding_id=finding_id,
+                    disposition=disposition if isinstance(disposition, str) else "",
+                    actor=actor if isinstance(actor, str) else "",
+                    severity=finding.get("severity"),
+                    reason=reason if isinstance(reason, str) else None,
+                )
+            except DispositionError as exc:
+                raise ApiFailure(
+                    400, exc.code, str(exc), {"finding_id": finding_id}
+                ) from exc
+
+            # Append-only: earlier events are untouched; the finding itself is untouched as well.
+            state["dispositions"] = events
+            # A decision taken before this event is stale, not reusable (rule-audit gate contract).
+            state["gate"] = None
+            event = events[-1]
+            merge_update(
+                state,
+                record(
+                    state,
+                    agent=AUDIT_AGENT,
+                    stage=AUDIT_STAGE,
+                    op="transform",
+                    detail={
+                        "finding_id": finding_id,
+                        "disposition": event["disposition"],
+                        "actor": event["actor"],
+                    },
+                ),
+            )
+
+        return {
+            "thread_id": thread_id,
+            "finding_id": finding_id,
+            "events": events,
+            "latest": latest(events, finding_id),
         }
 
     @app.get("/runs/{thread_id}")
