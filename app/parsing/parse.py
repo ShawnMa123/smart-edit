@@ -7,7 +7,9 @@ contract signatures: `openspec/changes/poc-skeleton/design.md` §6.
 1. A single failing file **must not raise**: it is recorded in `ParsedDoc.errors` and the rest continue
 2. No text layer (scanned document) -> an explicit error; **MUST NOT** return an empty `full_text`
    pretending success
-3. `text` matches the source verbatim: no whitespace folding, no rewriting
+3. `text` keeps the source's **visible** characters verbatim: no rewriting. Invisible control marks are
+   dropped and a block's fragments are reflowed into visual rows (design D17-D19); `\xa0` and the
+   full-width space are visible and stay.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import hashlib
 import os
 from pathlib import Path
 
+from app.parsing.pdf_layout import block_text
 from app.parsing.rich_docx import RichDocError, document_to_rich as document_to_rich_docx
 from app.parsing.rich_pdf import RichPdfError, document_to_rich as document_to_rich_pdf
 from app.state import ParsedBlock, ParsedDoc, SourceFile
@@ -61,7 +64,12 @@ def _form_for(src: SourceFile) -> str | None:
 
 
 def _blocks_from_pdf(path: str, file_id: str) -> tuple[list[ParsedBlock], list[str]]:
-    """Text-layer PDF -> blocks (with `page` and, when available, `bbox`)."""
+    """Text-layer PDF -> blocks (with `page` and, when available, `bbox`).
+
+    Text comes from ``get_text("dict")`` so the shared visual-row layer can put a title and its
+    right-aligned page number on one line (design D17-D19). ``get_text("blocks")`` and this mode
+    produce the same block text for the shipped sample; the difference is only the row reflow.
+    """
     import fitz  # pymupdf, imported lazily: non-PDF paths do not need it
 
     blocks: list[ParsedBlock] = []
@@ -71,15 +79,18 @@ def _blocks_from_pdf(path: str, file_id: str) -> tuple[list[ParsedBlock], list[s
         return [], [f"pdf_open_failed: {exc}"]
     try:
         for page_index, page in enumerate(document, start=1):
-            for raw in page.get_text("blocks"):
-                text = str(raw[4]).strip("\n")
+            for raw in page.get_text("dict").get("blocks", []):
+                if raw.get("type") != 0:  # 0 = text block; images are not this path's business
+                    continue
+                text = block_text(raw)
                 if not text.strip():
                     continue
+                x0, y0, x1, y1 = raw["bbox"]
                 blocks.append(
                     {
                         "file_id": file_id,
                         "page": page_index,
-                        "bbox": [float(raw[0]), float(raw[1]), float(raw[2]), float(raw[3])],
+                        "bbox": [float(x0), float(y0), float(x1), float(y1)],
                         "text": text,
                         "kind": "paragraph",
                     }

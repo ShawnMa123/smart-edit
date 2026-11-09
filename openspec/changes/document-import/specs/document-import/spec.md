@@ -292,3 +292,47 @@
 #### Scenario: 可见空白不受影响
 - **WHEN** 文本包含 `\xa0` 或全角空格
 - **THEN** 这些字符 MUST 原样保留
+
+### Requirement: PDF 矢量空白必须保留为可见布局
+
+系统 SHALL 读取 PDF 的矢量水平线并把它们作为**显示用**空白保留：单视觉行的文本行中，与绘制线对应的空白 MUST 在编辑器中可见（下划线）；空白 MUST NOT 向 `full_text` 或投影文本增加任何字符，MUST NOT 改变块数或页边界。
+
+#### Scenario: 标签后的下划线
+- **WHEN** 一行文本是 `Beneficiary:`，后面有一条从标签末尾到页面右边界的绘制线
+- **THEN** 编辑器 MUST 在标签后显示一条下划线
+- **AND** 投影文本 MUST 仍只有 `Beneficiary:`
+- **AND** `full_text` MUST NOT 因该下划线增加任何字符
+
+#### Scenario: 行首的下划线
+- **WHEN** 一行以一个绘制线开始、随后是占位符文字
+- **THEN** 编辑器 MUST 显示该下划线，并把文字推到右侧
+- **AND** 投影文本 MUST 与该占位符的原文一致
+
+#### Scenario: 句子中间的空白
+- **WHEN** 一句话被绘制线切成两段
+- **THEN** 编辑器 MUST 在两段之间显示下划线
+- **AND** 投影文本 MUST 仍以一个空格连接两段
+
+#### Scenario: 没有绘制线或多行 block
+- **WHEN** 一个 block 没有对应的绘制线，或包含多个视觉行
+- **THEN** 它 MUST NOT 被插入布局空白节点
+- **AND** 其文字与投影 MUST 与第三轮一致
+
+### Requirement: 右对齐文本必须保持右边界对齐
+
+系统 SHALL 保留 PDF 中的右对齐：目录行的页码 MUST 出现在标题同一行的右边界；单片段且贴着页面右边界的内容（页码、`Page` 等）MUST 右对齐。对齐 MUST NOT 改变投影文本或审计结论。
+
+#### Scenario: 目录页码
+- **WHEN** 目录行由标题与右对齐页码组成
+- **THEN** 页码 MUST 显示在同一行的右边界
+- **AND** 投影文本 MUST 仍是"标题 空格 页码"
+
+#### Scenario: 页码与表头
+- **WHEN** 一个 block 只有页码或 `Page`，且位于页面右边界
+- **THEN** 编辑器 MUST 把它右对齐
+- **AND** 其他左对齐段落 MUST NOT 受影响
+
+#### Scenario: 缺少对齐属性的旧文档
+- **WHEN** 富文档没有 `align` 属性
+- **THEN** 编辑器 MUST 按左对齐渲染
+- **AND** 投影文本 MUST 不变

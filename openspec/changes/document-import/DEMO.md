@@ -121,6 +121,45 @@ heuristic: 25 pages, levels from font-size rank, 25 headings, 24 page breaks, pa
 `t1_contract.pdf` 已不在仓库根目录（只剩 `runs/` 下的上传副本，含个人姓名与证件号，**不应入库**），
 因此把它从 HTTP e2e 中移除，改用已提交的 25 页样本作为 PDF 证据。
 
+## 第三轮：PDF 视觉行（2026-11-09）
+
+客户指出 Contents 页的页码被渲染到标题的**下一行**。根因不是目录特例：PyMuPDF 的 `line` 不等于视觉行，
+同一 block 内会有多个 `line` 共享一个水平带——这份 25 页样本有 **138 / 717** 个 block 如此（目录 19 行、
+正文填空 119 行）。编辑器又用 `white-space: pre-wrap` 把 `\n` 渲染成真实换行。
+
+```bash
+.venv/bin/python -m pytest tests/test_pdf_layout.py -q          # 11 passed（纯函数与两层一致性）
+.venv/bin/python -m pytest tests/test_rich_pdf_fidelity.py -q   # 11 passed
+.venv/bin/python -m pytest tests/test_import_acceptance.py -q   # 8 passed（真实 25 页样本）
+.venv/bin/python -m pytest -q                                   # 390 passed
+npm --prefix web run test                                       # 150 passed / 12 skipped
+npm --prefix web run typecheck                                  # clean
+npm --prefix web run build                                      # 802.19 kB（gzip 254.80 kB）
+VITE_E2E=1 VITE_E2E_RICH=1 VITE_API_BASE=http://127.0.0.1:8010 \
+  npm --prefix web run test -- src/e2e.rich.test.ts             # 3 passed（739 块 / 24 页边界）
+```
+
+### 修前 / 修后（同一份 25 页样本，实测）
+
+| 指标 | 第二轮 | 第三轮 |
+|---|---|---|
+| 文本块数 | 715 | **715**（不跨 block 合并） |
+| `full_text` 字符 | 50799 | **50022** |
+| 换行 | 915 | **735** |
+| `pageBreak` | 24 | **24** |
+| 目录行 | `Tender Guarantee Standard` + 下一行 `4` | **`Tender Guarantee Standard 4`** |
+| 正文填空句 | `We are informed by` + 下一行 `(the “Tenderer”)…` | **一行** |
+| 不可见控制字符 | `\x08`×21 / `\x07`×5 / `\t`×25 | **0 / 0 / 0**（`\t` → 空格） |
+| 标题 / 粗体 | H1=1 / H2=23 / H3=1，粗体 75 | **不变** |
+| 投影 vs `full_text` | 逐字相同 | **逐字相同** |
+
+### 规则与口径
+
+- **只在 block 内重组**：同一水平带的 `line`（垂直交集 > 较矮者高度的 50%）归为一行；行内按 x、用一个空格连接；行间保留 `\n`。
+- **解析层与富文本层共用** `app/parsing/pdf_layout.py`：`parse.py` 改用 `get_text("dict")`，`rich_pdf.py` 用同一 `visual_rows`。两种 `get_text` 模式在这份样本的 **715 / 715** 个 block 上文本一致，切换没有字符漂移。
+- **可见字符仍然逐字相同**：`\xa0` 与全角空格保留（有断言）；只移除不可见的 `\x07` / `\x08` 并把 `\t` 变空格。
+- **只保证"同行"**：页码不右对齐、填空宽度会塌成一个空格——这是显示层方案 B，独立 change；跨 block 的表格行与 OCR 路径的行重组也不在本轮。
+
 ## 已知边界
 
 1. 导入的 run 与随后审计的 run 是两个 run（`design.md` Open Questions 1）；审计报告里没有原始文件的 `sha256`。

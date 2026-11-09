@@ -1,14 +1,16 @@
 # Tasks
 
-> 依据：`proposal.md`（范围）、`specs/document-import/spec.md`（要求）、`design.md`（做法 D1–D20）、
+> 依据：`proposal.md`（范围）、`specs/document-import/spec.md`（要求）、`design.md`（做法 D1–D24）、
 > `TBD-image-recognition.md`（明确暂缓的视觉模型路线）。
 > 每组自带该组的测试与文档；第 6 组只做跨组集成与验收。
 >
 > **状态（2026-11-09）：** 第 0–6 组已完成并上线（21/21）。**第 7–9 组是第二轮**（PDF 版面保真，14/14 已完成），
 > 因客户实测 `guarantee-and-standby-letters-of-credit-wording.pdf` 指出"格式不像 PDF 原样"而加入。
 > 原第一版方案曾建议"删掉页脚与页码"，现已按客户要求改为**保留原样**（design D15）。
-> **第 10–12 组是第三轮**（PDF 视觉行，0/10 已完成）：Contents 页的页码被拆到下一行，根因是 `line` ≠ 视觉行
+> **第 10–12 组是第三轮**（PDF 视觉行，10/10 已完成）：Contents 页的页码被拆到下一行，根因是 `line` ≠ 视觉行
 > （138/717 个 block 受影响）；做法见 design D17–D20，Non-Goals 见 proposal。
+> **第 13 组是第四轮**（PDF 布局保真，0/6 未完成）：`Beneficiary:` 后面的下划线是矢量线，当前只读文字所以丢失；
+> 目录/页码也缺右对齐。做法见 design D21–D24。
 
 ## 0. 契约与签字（最先做，且只做加法）
 
@@ -86,22 +88,31 @@
 
 ## 10. 共享视觉行层（第三轮，纯函数，先锁规则）
 
-- [ ] 10.1 新增 `app/parsing/pdf_layout.py`：`visual_rows(block)` 按"垂直区间交集 > 较矮者高度的 50%"把同一 block 内的 `line` 归并为行；行按 `y`、行内片段按 `x` 排序。Verify: 单测用合成 block 覆盖"同带两段 → 1 行"、"上下两行 → 2 行"、"单行"、"重叠 49% 不算同行"。
-- [ ] 10.2 `row_fragments(row)` / `block_text(block)`：每个非空片段去掉首尾空白后用**一个空格**连接，空片段跳过；行与行之间保留 `\n`。Verify: 单测断言 `'Tender Guarantee Standard\x08'` + `'4'` → `Tender Guarantee Standard 4`；两行仍是两行。
-- [ ] 10.3 控制字符在共享层规范化：`\x07`、`\x08` 移除，`\t` → 一个空格，`\xa0` 与全角空格原样保留。Verify: 单测逐字符断言这三类输入。
+- [x] 10.1 新增 `app/parsing/pdf_layout.py`：`visual_rows(block)` 按"垂直区间交集 > 较矮者高度的 50%"把同一 block 内的 `line` 归并为行；行按 `y`、行内片段按 `x` 排序。Verify: 单测用合成 block 覆盖"同带两段 → 1 行"、"上下两行 → 2 行"、"单行"、"重叠 49% 不算同行"。
+- [x] 10.2 `row_fragments(row)` / `block_text(block)`：每个非空片段去掉首尾空白后用**一个空格**连接，空片段跳过；行与行之间保留 `\n`。Verify: 单测断言 `'Tender Guarantee Standard\x08'` + `'4'` → `Tender Guarantee Standard 4`；两行仍是两行。
+- [x] 10.3 控制字符在共享层规范化：`\x07`、`\x08` 移除，`\t` → 一个空格，`\xa0` 与全角空格原样保留。Verify: 单测逐字符断言这三类输入。
 
 ## 11. 解析层与富文本层接入（第三轮）
 
-- [ ] 11.1 `app/parsing/parse.py::_blocks_from_pdf` 从 `get_text("blocks")` 改为 `get_text("dict")` + `block_text`；错误路径、大小/页数上限、`page`、`bbox`、`form` 全部不变。Verify: `tests/test_parse.py`、`tests/test_parse_import.py` 全绿；fixture 块数仍为 715。
-- [ ] 11.2 更新这份 25 页样本的期望并断言：`full_text` **50799 → 50022** 字符、换行 **915 → 735**；第 3 页出现 `Tender Guarantee Standard 4` 与 `Facility Guarantee 15`；第 4 页填空句为一行；`full_text` 不含 `\x07`/`\x08`/`\t` 且 `\xa0` 仍存在。Verify: `tests/test_import_acceptance.py` 的具体断言。
-- [ ] 11.3 `app/parsing/rich_pdf.py::_text_nodes` 改为 row → fragment → span：marks 仍按 span 保留，行内空格、行间 `\n`；`_block_size` / `_is_uniform` / `_heading_ranks` / `_toc_level_for` 不变。Verify: `tests/test_rich_pdf_fidelity.py` 全绿；投影与 `full_text` 逐字相等；块数 715、`pageBreak` 24、标题 H1=1/H2=23/H3=1、粗体 75 不变。
-- [ ] 11.4 其他文本路径不受影响：DOCX 仍 `deterministic`、纯文本路径未调用 PDF 行规则、OCR 分支未改。Verify: `tests/test_rich_mapping.py`、`tests/test_parse_import.py` 全绿。
+- [x] 11.1 `app/parsing/parse.py::_blocks_from_pdf` 从 `get_text("blocks")` 改为 `get_text("dict")` + `block_text`；错误路径、大小/页数上限、`page`、`bbox`、`form` 全部不变。Verify: `tests/test_parse.py`、`tests/test_parse_import.py` 全绿；fixture 块数仍为 715。
+- [x] 11.2 更新这份 25 页样本的期望并断言：`full_text` **50799 → 50022** 字符、换行 **915 → 735**；第 3 页出现 `Tender Guarantee Standard 4` 与 `Facility Guarantee 15`；第 4 页填空句为一行；`full_text` 不含 `\x07`/`\x08`/`\t` 且 `\xa0` 仍存在。Verify: `tests/test_import_acceptance.py` 的具体断言。
+- [x] 11.3 `app/parsing/rich_pdf.py::_text_nodes` 改为 row → fragment → span：marks 仍按 span 保留，行内空格、行间 `\n`；`_block_size` / `_is_uniform` / `_heading_ranks` / `_toc_level_for` 不变。Verify: `tests/test_rich_pdf_fidelity.py` 全绿；投影与 `full_text` 逐字相等；块数 715、`pageBreak` 24、标题 H1=1/H2=23/H3=1、粗体 75 不变。
+- [x] 11.4 其他文本路径不受影响：DOCX 仍 `deterministic`、纯文本路径未调用 PDF 行规则、OCR 分支未改。Verify: `tests/test_rich_mapping.py`、`tests/test_parse_import.py` 全绿。
 
 ## 12. 第三轮验收与记录
 
-- [ ] 12.1 审计不受影响：同一文本在行重组后 `counts` / `outcome` 不变（含 pageBreak 与字体属性的用例）。Verify: `tests/test_rich_honesty.py` 全绿。
-- [ ] 12.2 全量回归：`.venv/bin/python -m pytest -q`、`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run build` 全部通过并记录数字。Verify: 命令输出与记录一致。
-- [ ] 12.3 更新 `DEMO.md`：加入第三轮的修前/修后（块数、字符数、换行数、目录/填空样例）与"只保证同行、不做右对齐/保宽"的口径。Verify: 文件中的数字与实际输出一致。
+- [x] 12.1 审计不受影响：同一文本在行重组后 `counts` / `outcome` 不变（含 pageBreak 与字体属性的用例）。Verify: `tests/test_rich_honesty.py` 全绿。
+- [x] 12.2 全量回归：`.venv/bin/python -m pytest -q`、`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run build` 全部通过并记录数字。Verify: 命令输出与记录一致。
+- [x] 12.3 更新 `DEMO.md`：加入第三轮的修前/修后（块数、字符数、换行数、目录/填空样例）与"只保证同行、不做右对齐/保宽"的口径。Verify: 文件中的数字与实际输出一致。
+
+## 13. PDF 布局保真（第四轮）
+
+- [ ] 13.1 `app/parsing/rich_pdf.py` + `pdf_layout.py`：从 `page.get_drawings()` 过滤水平线（宽 > 20pt、高 < 1.5pt），只关联到**单视觉行** block（线 y 在行带 ±3pt、x 有交集；与文字 x 覆盖的线跳过）。Verify: 单测覆盖"水平线 / 竖线 / 页眉分隔线"过滤、行带关联、多行 block 不处理；fixture 统计 226 条线、187 个带线行、0 个多行布局 block。
+- [ ] 13.2 `rich_pdf` 生成显示用 `pdfGap` 节点：片段之间 / 行首 / 行尾的可见下划线（`rule=true`）与不可见间距（`rule=false`），`grow` 按 PDF 宽度；单行 block 加 `row=true`。Verify: 第 5 页 `Beneficiary:` 后有可见 gap、占位符行有行首可见 gap；第 3 页目录有不可见 gap；投影仍逐字等于 `full_text`，715 块 / 50022 字符 / 24 页边界不变。
+- [ ] 13.3 右对齐：目录页码通过不可见 gap 到右边界；单片段贴右边界的 block（24 个页码 + `Page`）加 `align="right"`。Verify: 第 3 页 `Tender Guarantee Standard` 的页码在右边界；第 2 页 `2`、第 3 页 `Page` 右对齐；投影不变。
+- [ ] 13.4 前端模型与 schema：`richDocument.ts` 增加 `pdfGap` 内联节点与 `row` / `align` 属性；`tiptap.ts` 注册原子节点与全局属性；`plainText.ts` 忽略 gap；`styles.css` 增加 flex 行、下划线、右对齐。Verify: `npm run typecheck` clean；`richToPlainText` 对含 gap 的文档投影不变。
+- [ ] 13.5 前端渲染测试：编辑器显示 `Beneficiary:` 下划线、目录页码在右边界、旧文档无变化；`pdfGap` 不产生字符、不可选。Verify: `RichEditor.test.tsx` / `plainText.test.ts` 新增用例；既有前端测试全绿。
+- [ ] 13.6 验收与记录：真实样本断言第 5 页 Beneficiary / 占位符、第 3 页目录、第 22 页、页码；715 块 / 50022 字符 / 24 页边界、投影 == `full_text`、审计 counts/outcome 不变；全量 pytest / web / typecheck / build；更新 DEMO 第四轮。Verify: 命令输出与 DEMO 数字一致。
 
 ## Workflow follow-up
 
@@ -111,7 +122,7 @@
   "富文档可携带显示属性与页边界"要求（3 个 scenario）。
 - `ParsedDoc.form` 的两个新取值需要在归档前记录批准（与 `agent-audit` 0.2 同一张签字表）；未签字前不得把本 change 归档。
 - `editor-shell` 的 `document-editor` delta 把 "file import" 列为"present but marked not implemented"；本 change 落地后需要在那份 delta 里同步（改它自己 change 的规格，不是本 change 的）。**2026-11-09 已完成**：该 delta 已按实际能力区分 file import / formatting（可用）与 export / approval（仍不可用）。
-- **显示层对齐（方案 B，第三轮 follow-up）**：页码右对齐、填空保留原宽度需要新的显示节点/标记与 flex 渲染，独立 change；第三轮只保证"同行"。
+- **显示层对齐（第四轮，2026-11-09 已纳入）**：见第 13 组与 design D21–D23；不再是独立 change。空白作为可填写字段（A+）仍是 follow-up，需要字段模型与抽取语义。
 - **跨 block 表格行**：第一轮的 ` | ` 行为等有真实表格样本时单独提 change；第三轮明确只做 block 内。
 - **OCR 路径行重组**：`_blocks_from_pdf_ocr` 仍用 blocks 模式；等扫描版多栏/表格样本再统一。
 - 视觉模型图像识别见 `TBD-image-recognition.md`：独立 change，动手前必须先回答该文件第 4 节的五项待定。

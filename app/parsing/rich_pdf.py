@@ -10,12 +10,17 @@ A PDF carries no semantics, but it does carry *evidence of layout*: font size, f
 - **display attributes** (`fontSize` / `fontFamily` / `page`) so the editor can render the original look (D14);
 - **page breaks as a non-text node**, page numbers and footers kept as their own blocks (D15) — nothing is
   deleted, because "look like the original" and "quietly tidy up" are opposites;
-- **nothing is rewritten** (D16): every block's characters survive, including `\\xa0`.
+- **visual rows inside a block** (D17-D19): a title and its right-aligned page number, or a sentence
+  split by an underlined blank, share one row and are joined with a single space;
+- **nothing is rewritten** (D16): every block's *visible* characters survive, including `\\xa0`; the
+  invisible `\\x07` / `\\x08` marks are dropped and a tab becomes one space.
 """
 
 from __future__ import annotations
 
 from collections import Counter
+
+from app.parsing.pdf_layout import clean_text, visual_rows
 
 HEADING_RANKS = 3
 PAGE_BREAK = "pageBreak"
@@ -44,23 +49,49 @@ def _marks(span: dict) -> list[str]:
     return marks
 
 
-def _text_nodes(block: dict) -> list[dict]:
-    """One text node per span, keeping marks; line breaks ride on the last span of each line."""
-    lines = block.get("lines") or []
+def _fragment_nodes(line: dict) -> list[dict]:
+    """One node per span (marks kept), with the fragment's ASCII edges trimmed across spans."""
     nodes: list[dict] = []
-    for line_index, line in enumerate(lines):
-        spans = line.get("spans") or []
-        for span_index, span in enumerate(spans):
-            text = str(span.get("text") or "")
-            if span_index == len(spans) - 1 and line_index < len(lines) - 1:
-                text += "\n"
-            if not text:
-                continue
-            node: dict = {"type": "text", "text": text}
-            marks = _marks(span)
-            if marks:
-                node["marks"] = marks
-            nodes.append(node)
+    for span in line.get("spans") or []:
+        text = clean_text(str(span.get("text") or ""))
+        if not text:
+            continue
+        node: dict = {"type": "text", "text": text}
+        marks = _marks(span)
+        if marks:
+            node["marks"] = marks
+        nodes.append(node)
+
+    while nodes:
+        nodes[0]["text"] = nodes[0]["text"].lstrip(" \t\r\n\f\v")
+        if nodes[0]["text"]:
+            break
+        nodes.pop(0)
+    while nodes:
+        nodes[-1]["text"] = nodes[-1]["text"].rstrip(" \t\r\n\f\v")
+        if nodes[-1]["text"]:
+            break
+        nodes.pop()
+    return nodes
+
+
+def _text_nodes(block: dict) -> list[dict]:
+    """Visual rows: fragments on one row join with a space; row breaks ride as `\\n`."""
+    rows: list[list[list[dict]]] = []
+    for row in visual_rows(block):
+        fragments = [_fragment_nodes(line) for line in row]
+        fragments = [fragment for fragment in fragments if fragment]
+        if fragments:
+            rows.append(fragments)
+
+    nodes: list[dict] = []
+    for row_index, fragments in enumerate(rows):
+        for fragment_index, fragment in enumerate(fragments):
+            if fragment_index:
+                nodes.append({"type": "text", "text": " "})
+            nodes.extend(fragment)
+        if row_index < len(rows) - 1:
+            nodes[-1]["text"] += "\n"
     return nodes
 
 

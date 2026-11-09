@@ -141,10 +141,14 @@ def _png(tmp_path, name: str = "scan.png") -> Path:
 
 def _stub_ocr(monkeypatch, blocks: list[tuple]):
     """Make pymupdf's OCR layer return `blocks` without needing a real Tesseract install."""
+
+    def fake_get_text(self, option, textpage=None):
+        if option == "dict":  # the text-layer pass must find nothing, so OCR is tried
+            return {"blocks": []}
+        return list(blocks)
+
     monkeypatch.setattr("pymupdf.Page.get_textpage_ocr", lambda self, **kwargs: None)
-    monkeypatch.setattr(
-        "pymupdf.Page.get_text", lambda self, option, textpage=None: list(blocks)
-    )
+    monkeypatch.setattr("pymupdf.Page.get_text", fake_get_text)
 
 
 def test_image_ocr_keeps_the_block_geometry(tmp_path, monkeypatch):

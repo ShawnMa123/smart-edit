@@ -198,10 +198,44 @@ OCR 文本进入 `docs[].full_text` 之后，`extract` 抽出的候选值仍按�
 
 实测（这份样本）：块数 **715 → 715**，`pageBreak` **24 → 24**，`full_text` **50799 → 50022** 字符（−777，来自控制字符与片段边界的冗余空白），换行 **915 → 735**。标题层级、marks、`fontSize`/`fontFamily`/`page`、书签优先级与页码/页脚保留逻辑都不经过行规则，保持不变。测试必须同时断言：块数、页边界数、投影与 `full_text` 逐字相等、目录行、填空句、控制字符。
 
+### D21. 矢量线是布局证据：读取 `get_drawings()`，只落在单行 block 上
+
+PDF 的空白下划线是描边线，不是文字。`get_drawings()` 给出每条线的 rect 与 items；过滤"水平、宽 > 20pt、高 < 1.5pt"的线，然后只把它关联到**同一水平带内、单视觉行**的 block（线 y 在行带 ±3pt 内、x 有交集）。
+
+*为什么只做单行 block：* 实测 226 条线、187 个带线行、25 个带大间距的行，**含布局的多行 block 为 0**；这样"一个 PDF block = 一个段落"的模型不用改，块数守恒也就不受影响。*替代方案：* 合成 `_` 字符——已否决，会改 `full_text`/审计（D16/D19），且仍不解决右对齐。*替代方案：* 绝对定位/页面图——见 D24。
+
+### D22. 显示用内联 `pdfGap` 节点 + 单行 flex
+
+- 节点：`{type: "pdfGap", attrs: {rule: boolean, grow: number}}`，内联、原子、**不产生文字**。
+- 段落/标题：`row: true` → 编辑器用 `display:flex; align-items:baseline; flex-wrap:nowrap`。
+- `rule=true` 渲染为下划线（`border-bottom`），`rule=false` 是完全透明的弹性间距；`grow` 按 PDF 线宽/间距分配剩余空间。
+- 位置：行内片段之间、首个片段之前、末个片段之后；片段之间仍保留文本层那个空格文本节点，所以投影与 `full_text` 仍逐字相等。
+- 只在 gap 阈值（>20pt）或绘制线存在时插入；普通空格不产生节点。
+- `richToPlainText` 忽略 `pdfGap`；块数、字符数、页边界不变。
+- *代价：* 编辑器字体通常不是 PDF 的 UniversNext，文字宽度不同，空白宽度是**近似**；下划线位置接近，不是像素级。*替代方案：* 固定 pt 宽度的 gap——在窄面板会溢出；flex-grow 更稳。
+
+### D23. 右对齐：不可见 gap + `align=right`
+
+- 目录行：标题 + 不可见 gap（`rule=false`，grow 为 PDF 间距）+ 页码 → 页码被推到右边界，与 PDF 一致。
+- 单片段且贴着右边界（24 个页码 + `Page` + 某些占位符）：给段落加 `align="right"`，CSS `text-align:right`；这类没有 gap 也能对齐。
+- 为什么不用空格/tab：会进入投影文本且宽度随字体漂移；对齐是显示属性。
+- 兼容：没有 `align` 的旧文档仍左对齐。
+
+### D24. 第四轮的守恒、兼容与边界
+
+- 不变量：715 块、50022 字符、735 换行、24 个页边界、投影 == `full_text`、审计 counts/outcome 不变。
+- 只改 PDF 文本层路径；DOCX、纯文本、OCR 不变。
+- 显示节点/属性缺失时老文档照常渲染。
+- Non-Goals：空白作为可填写字段（A+）、绝对定位/像素级、跨 block 表格、OCR 路径绘制线。
+- 测试：`pdf_layout` 纯函数（线过滤/关联/gap 规划）、`rich_pdf`（第 5 页 Beneficiary/占位符、第 3 页目录、第 22 页、页码）、前端（下划线/右对齐/投影忽略）、审计回归。
+
 ## Risks / Trade-offs
 
 - **[真正的多栏文本被误判成一行]** → 规则只在 block 内生效，PyMuPDF 已按邻近/分栏分块；跨 block 合并被明确禁止（D17）。若后续出现单 block 内含两栏的样本，再引入列检测。
-- **[填空宽度塌成一个空格，句子读起来略怪]** → 第三轮接受（D19）；显示层 gap/右对齐是后续独立 change，不混进文本层。
+- **[填空宽度塌成一个空格，句子读起来略怪]** → 第三轮接受（D19）；第四轮用显示层 gap 解决（D21–D23），文本层仍不变。
+- **[flex + contenteditable 的光标/换行]** → `pdfGap` 为原子、不可选（`selectable: false`），行用 `flex-wrap: nowrap`；组件测试 + 手工浏览器检查；若跨片段光标异常，退回 inline-block + margin（视觉略差）。
+- **[字体回退导致空白位置只是近似]** → 接受；目标是"看得见下划线、页码在右"，不是像素级；DEMO 记录这一口径。
+- **[绘制线误判（表格边框/页眉分隔线）]** → 水平 + 行带 + 单行 block 过滤，且跳过与文字 x 范围重叠的线；样本测试锁定。
 - **[`full_text` 变化导致既有断言与 DEMO 数字失效]** → 同一轮更新 `tests/test_import_acceptance.py`、`tests/test_rich_pdf_fidelity.py` 与本 change 的 DEMO；不回改已归档的 change 文件。
 - **[控制字符规范化被误读为"改写原文"]** → spec 明确"逐字相同"指可见字符；`\xa0`/全角空格有专门断言（D19）。
 
@@ -221,6 +255,7 @@ OCR 文本进入 `docs[].full_text` 之后，`extract` 抽出的候选值仍按�
 4. **前端**：上传按钮 + 结果清单 + 填入 textarea；组件测试覆盖"成功 / 多文件 / 部分失败"。
 5. **回滚**：删掉两个新 `form` 取值、`documents` 键、DOCX/OCR 分支即可回到今天的行为；无数据迁移（run 是进程内的）。
 6. **第三轮（视觉行）**：新增 `pdf_layout.py` → `parse.py` 改 `get_text("dict")` + 共享层 → `rich_pdf.py` 改 text nodes → 更新 fidelity/acceptance 数字。回滚：删除 `pdf_layout.py`，把两个调用点恢复为原实现；无持久化影响。
+7. **第四轮（布局保真）**：`get_drawings()` 过滤/关联 → gap 规划 → `rich_pdf` 生成 `pdfGap` / `row` / `align` → 前端节点/属性/CSS → 测试与 DEMO。回滚：删掉节点与属性即可，文本层与 `full_text` 不动。
 
 ## Open Questions
 
@@ -229,4 +264,6 @@ OCR 文本进入 `docs[].full_text` 之后，`extract` 抽出的候选值仍按�
 3. **文本框 / 页眉页脚里的文字** —— DOCX 与 PDF 的"非正文"内容抽不抽，等有真实样本再定；本轮只承诺正文段落与表格。
 4. **OCR 语言默认值** —— `chi_sim+eng` 是猜测；若客户材料以英文为主，质量与耗时都不同，等实测样本再调 `SMART_EDIT_OCR_LANGS`。
 5. **OCR 路径是否采用同一行规则** —— 第三轮不做。`_blocks_from_pdf_ocr` 仍用 `get_text("blocks", textpage=...)`，OCR 行通常已按识别行组织；等有扫描版多栏/表格样本时再统一，不影响本轮规格与任务。
-6. **显示层是否要做右对齐/保宽** —— 属于方案 B，独立 change；第三轮只保证"同行"，空白宽度会塌成一个空格。
+6. **显示层是否要做右对齐/保宽** —— 第四轮已实现（D21–D23：内联 gap + `align=right`）；仍是显示层近似，不是像素级；绝对定位见第 8 条。
+7. **空白是否要成为可填写字段** —— 属于 A+；需要字段模型、交互与抽取语义，独立 change；本轮只做装饰性下划线。
+8. **是否要像素级/绝对定位** —— 需要字体度量与绝对布局，编辑体验代价大；若要，另做 change；也可以先加一个"查看原始 PDF 页"的对照视图补足视觉参考。
