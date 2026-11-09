@@ -193,15 +193,19 @@ The assistant pane SHALL keep the reference tab set and SHALL mark the tabs this
 - **THEN** the pane MUST show that the capability is not implemented
 - **AND** MUST NOT render sample answers, findings or citations
 
-### Requirement: Unavailable document actions are labelled unavailable
+### Requirement: Document actions state what this build can do
 
-The workspace SHALL show the document actions the reference prototype offers, marking the ones this
-build cannot perform.
+The workspace SHALL show the document actions the reference prototype offers, SHALL make the actions
+this build can perform available, and SHALL mark the ones it cannot perform.
+
+#### Scenario: Actions the build can perform
+- **WHEN** the operator views the document header or footer
+- **THEN** file import and rich-text formatting MUST be available actions
+- **AND** activating file import MUST open the file chooser and MUST NOT state that it is unavailable
 
 #### Scenario: Actions the build cannot perform
 - **WHEN** the operator views the document header or footer
-- **THEN** rich-text formatting, file import, export and approval actions MUST be present but marked
-  as not implemented
+- **THEN** export and approval actions MUST be present but marked as not implemented
 - **AND** activating one MUST state that it is unavailable rather than appearing to succeed
 
 ### Requirement: Status is never conveyed by colour alone

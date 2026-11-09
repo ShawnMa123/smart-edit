@@ -139,4 +139,8 @@
 - When server-side versions (VER-01/VER-03) land, replace `localStorage` history and the client digest
   with the server's transactional snapshot and deterministic digest; the snapshot shape already
   anticipates it.
+- **Spec sync (2026-11-09):** `rich-text-editor` delivered the TipTap surface and `document-import`
+  made file import real. `specs/document-editor/spec.md` now separates the actions this build can
+  perform (formatting, import) from the ones it still cannot (export, approval), and `design.md`
+  marks D3 as superseded. Nothing else in this delta changed.
 - Archive this change with `/opsx-archive` once 8.3 has been demonstrated against the prototype.

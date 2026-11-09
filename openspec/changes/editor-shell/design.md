@@ -195,6 +195,11 @@ components (harder to substitute, easy to bypass the error contract).
   exact text beats imitation rich text, and the missing formatting is labelled as not implemented
   rather than faked.
 
+  **Superseded (2026-11-09):** `rich-text-editor` replaced the textarea with the TipTap surface and
+  `document-import` made file import real, so the delta now separates the actions this build can
+  perform (formatting, import) from the ones it still cannot (export, approval). D3 survives only as
+  the reason the editor shipped as plain text first.
+
 ## Migration Plan
 
 Purely additive: new `web/` application, no backend change, no frozen file touched.

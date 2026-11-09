@@ -140,3 +140,23 @@
 - **WHEN** 导入的文本来自 OCR
 - **THEN** 其在富文档中 MAY 被格式化
 - **AND** 由它抽取的字段 MUST 仍为待人工确认，MUST NOT 因为"看起来整齐"而被视为已确认
+
+### Requirement: 富文档可携带显示属性与页边界
+
+编辑器 SHALL 支持段落与标题上的可选显示属性（`fontSize` / `fontFamily` / `page`）以及不产生文字的分页标记（`pageBreak`）。显示属性与分页标记 MUST 只影响呈现，MUST NOT 参与纯文本投影；缺少这些属性或标记的既有富文档 MUST 仍能正常渲染。
+
+#### Scenario: 显示属性只影响呈现
+- **WHEN** 一个标题带有 `fontSize: 20`、`fontFamily: Arial` 与 `page: 3`
+- **THEN** 编辑器 MUST 按该字号与字体呈现它
+- **AND** 其纯文本投影 MUST 与去掉这三个属性时完全相同
+
+#### Scenario: 页边界可见但不产生文字
+- **WHEN** 富文档含有 `pageBreak` 标记
+- **THEN** 编辑器 MUST 显示一条可见的分隔（而不是空白）
+- **AND** 纯文本投影 MUST NOT 因该标记增加任何字符
+- **AND** 用户 MUST 可以在编辑器中删除该标记
+
+#### Scenario: 旧文档兼容
+- **WHEN** 打开一份不含任何显示属性与 `pageBreak` 的富文档
+- **THEN** 编辑器 MUST 正常渲染该文档
+- **AND** 其投影 MUST 与本次扩展前完全一致

@@ -55,6 +55,7 @@
 ## Workflow follow-up
 
 - `editor-shell` 的 `document-editor` delta 里"plain textarea on purpose"与 `Formatting · not implemented` 与本 change 冲突（D9）：需由该 change 的所有者同步其规格，本 change 不改别人的 delta。
+  **2026-11-09 已同步**：`editor-shell` 的 delta 已把"可执行（formatting / import）"与"仍不可执行（export / approval）"分开，`design.md` 的 D3 已标注被取代；本 change 的 delta 也补了"显示属性与页边界"要求。
 - 导出（ED-09）应作为独立 change：先决定"导出富文档还是投影文本"，见 `design.md` Open Questions 5。
 - PDF 表格是否升级为真 table 节点（Open Questions 1）与多级列表缩进（Open Questions 3）留给有真实样本后的细化。
 - 若后续要服务端保存富文档（跨设备），那是存储层的 change，会同时影响快照与版本语义。
