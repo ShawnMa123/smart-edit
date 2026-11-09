@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 
 /** Task 14.5 - a blank can be filled, and typing does not jump the caret to the last line. */
 
-const SAMPLE = new URL(
-  '../../fixtures/imports/guarantee-and-standby-letters-of-credit-wording.pdf',
-  import.meta.url,
-).pathname;
+// `URL.pathname` keeps the leading slash on Windows (`/C:/...`); `fileURLToPath` is portable.
+const SAMPLE = fileURLToPath(
+  new URL('../../fixtures/imports/guarantee-and-standby-letters-of-credit-wording.pdf', import.meta.url),
+);
 
 test('a PDF blank accepts text without jumping to the last line', async ({ page }) => {
   await page.goto('/');

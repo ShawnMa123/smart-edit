@@ -36,7 +36,9 @@ test('unimplemented assistant tabs are labelled and render no sample output', as
   await tab.click();
 
   await expect(page.getByRole('status')).toContainText('is not implemented in this build');
-  await expect(page.getByRole('status')).toContainText('Only the rule audit tab is wired');
+  await expect(page.getByRole('status')).toContainText(
+    'Only the rule audit and legal advice tabs are wired',
+  );
   // No fabricated output for a capability this build lacks: no run control, no audit result block.
   await expect(page.locator('[data-testid="audit-run"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="rule-audit"]')).toHaveCount(0);
