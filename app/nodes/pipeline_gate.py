@@ -74,7 +74,7 @@ def evaluate_export_gate(
     if not verification:
         add("VERIFICATION_MISSING")
     elif verification.get("verdict") == "fail":
-        add("VERIFICATION_FAILED", {"checks": len(verification.get("checks") or [])})
+        add("VERIFICATION_FAIL", {"checks": len(verification.get("checks") or [])})
 
     # 2. Unresolved blocking findings.
     unresolved = [
@@ -83,12 +83,12 @@ def evaluate_export_gate(
         if isinstance(finding, dict) and finding.get("blocking") and not finding.get("resolved")
     ]
     if unresolved:
-        add("UNRESOLVED_BLOCKING", {"finding_ids": unresolved})
+        add("BLOCKING_UNRESOLVED", {"finding_ids": unresolved})
 
     # 3. Inferred values a human has not confirmed.
     unconfirmed = _unconfirmed_inferred(state.get("fields"))
     if unconfirmed:
-        add("UNCONFIRMED_INFERRED", {"field_keys": unconfirmed})
+        add("INFERRED_UNCONFIRMED", {"field_keys": unconfirmed})
 
     # 4. Required stages.
     incomplete = []
@@ -103,7 +103,7 @@ def evaluate_export_gate(
                 }
             )
     if incomplete:
-        add("STAGES_INCOMPLETE", {"stages": incomplete})
+        add("STAGE_NOT_DONE", {"stages": incomplete})
 
     # 5. Legal escalation / unavailable coverage.
     legal = state.get("legal") or {}

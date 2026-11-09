@@ -24,7 +24,7 @@ from app.regulatory.retriever import (
     resolve_retriever,
     to_chunks,
 )
-from app.stages import latest_stage, stage_report
+from app.stages import resolve_input_mode, stage_report
 from app.trail import record, record_many
 
 AGENT = "agent3"
@@ -51,14 +51,9 @@ def _full_text(state: dict) -> str:
 
 
 def _mode(state: dict) -> str:
-    normalized = latest_stage(state.get("stages") or [], "normalize")
-    enriched = (
-        bool(state.get("fields"))
-        and bool(state.get("business_type"))
-        and bool(normalized)
-        and normalized.get("status") == "done"
-    )
-    return "enriched" if enriched else "raw"
+    # One implementation lives in `app/stages.py` so "enriched" can never be inferred from
+    # `legal is None` (a failed legal call also leaves it None).
+    return resolve_input_mode(state)
 
 
 def _mock_hits(state: dict) -> list[str]:

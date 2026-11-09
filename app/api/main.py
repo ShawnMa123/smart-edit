@@ -148,7 +148,7 @@ def create_app(
         return JSONResponse(status_code=500, content=error_body("INCOMPLETE_RESULT", str(exc)))
 
     @app.post("/runs", status_code=201)
-    async def create_run(request: Request) -> JSONResponse:
+    async def create_run(request: Request, autostart: bool = False) -> JSONResponse:
         store_: RunStore = app.state.store
         uploads, text = await _read_submission(request)
         if not uploads and not text:
@@ -181,6 +181,15 @@ def create_app(
                     "path": str(path),
                     "sha256": digest,
                 }
+            )
+
+        if autostart:
+            # Opt-in compatibility with the `poc-skeleton` contract: the create response carries
+            # the first review payload. The console keeps its legacy "create, then trigger" flow.
+            async with store_.lock(thread_id):
+                result = app.state.runner.start(thread_id)
+            return JSONResponse(
+                status_code=201, content=_control_body(state, result)
             )
 
         return JSONResponse(status_code=201, content=to_envelope(state))

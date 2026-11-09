@@ -36,6 +36,10 @@ def plan_standalone(target: str, state: dict, *, input_mode: str = "raw") -> dic
         return {
             "status": 409,
             "error": "unknown_stage",
+            "refused": True,
+            "agent": target,
+            "missing": [],
+            "reason": f"unregistered stage target: {target}",
             "detail": f"unregistered stage target: {target}",
             "registered": sorted(STAGE_TARGETS),
         }
@@ -44,7 +48,10 @@ def plan_standalone(target: str, state: dict, *, input_mode: str = "raw") -> dic
         return {
             "status": 409,
             "error": "REFUSED",
+            "refused": True,
+            "agent": resolved,
             "detail": f"unknown input_mode {input_mode!r}; expected one of {INPUT_MODES}",
+            "reason": f"unknown input_mode {input_mode!r}",
             "missing": [],
         }
 
@@ -63,7 +70,13 @@ def plan_standalone(target: str, state: dict, *, input_mode: str = "raw") -> dic
         return {
             "status": 409,
             "error": "REFUSED",
+            "refused": True,
+            "agent": resolved,
             "missing": unimplemented,
+            "reason": (
+                f"prerequisite stage(s) {unimplemented} are not implemented in this build; "
+                f"refusing to run {resolved}"
+            ),
             "detail": (
                 f"prerequisite stage(s) {unimplemented} are not implemented in this build; "
                 f"refusing to run {resolved}"
@@ -80,7 +93,10 @@ def plan_standalone(target: str, state: dict, *, input_mode: str = "raw") -> dic
         return {
             "status": 409,
             "error": "missing_prerequisite",
+            "refused": True,
+            "agent": resolved,
             "missing": missing,
+            "reason": f"missing prerequisite keys {missing}",
             "detail": f"missing prerequisite keys {missing}, refusing to run (no empty result)",
         }
 

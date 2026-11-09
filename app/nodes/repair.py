@@ -14,6 +14,11 @@ Rules that must not drift:
 
 from __future__ import annotations
 
+try:  # LangGraph 1.x
+    from langgraph.types import Overwrite
+except ImportError:  # pragma: no cover
+    from langgraph.graph.message import Overwrite  # type: ignore[no-redef]
+
 from app.stages import stage_report
 from app.trail import record
 
@@ -85,8 +90,11 @@ def repair_node(state: dict) -> dict:
         return {"requested_stages": []}
 
     repaired = sorted(branches)
+    cleared = _clear_branches(state, branches)
+    findings = cleared.pop("findings")
     return {
-        **_clear_branches(state, branches),
+        **cleared,
+        "findings": Overwrite(findings),
         "requested_stages": repaired,
         "repair_count": int(state.get("repair_count") or 0) + 1,
         "stages": [

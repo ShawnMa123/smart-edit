@@ -66,6 +66,10 @@ class DocVersionStore:
                 "sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
             }
 
+    def write_version(self, doc_id: str, payload: dict) -> dict:
+        """Contract name for `append`; the version is generated, never accepted."""
+        return self.append(doc_id, payload)
+
     def latest(self, doc_id: str) -> dict | None:
         directory = self._dir(doc_id)
         version = self.next_version(doc_id) - 1

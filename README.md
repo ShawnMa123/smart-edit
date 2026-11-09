@@ -21,7 +21,7 @@ openspec validate --all
 
 | Change 目录 | Agent | 中文名 | Owner | 内容 |
 |---|---|---|---|---|
-| `poc-skeleton` | — | 地基 | **待定** | 契约冻结 + 共享层（parse/extract/normalize）+ 主图 + 阶段状态 + 操作留痕 + 独立触发 |
+| `poc-skeleton` | — | 地基 | **Shawn** | 契约冻结 + 共享层（parse/extract/normalize）+ 主图 + 阶段状态 + 操作留痕 + 独立触发 |
 | `agent-normalize` | **Agent 1** | 标准化 | **A** | 原始材料 → 结构化字段 + 出处 |
 | `agent-verify` | **Agent 2** | 要件校验 | **B** | 逐字段值校验 + 齐全性 + 业务参数 |
 | `agent-regulatory` | **Agent 3** | 法规合规 | **C** | RAG 检索 + 两种输入模式 + 覆盖声明 |
@@ -99,8 +99,14 @@ export SMART_EDIT_LLM=fixture:fixtures/llm/extract_sample.json
 | Endpoint | Purpose |
 |---|---|
 | `POST /runs` | Create one run. Multipart with field `files`, or JSON `{"text": "..."}` for pasted text |
-| `POST /runs/{thread_id}/stages/{stage}` | Run a stage chain (`parse` / `extract` / `normalize` / `agent3` / `audit`), backfilling prerequisites |
+| `POST /runs?autostart=true` | Same, then run the graph and return the first review `interrupt` (opt-in) |
+| `POST /runs/{thread_id}/stages/{stage}` | Run a stage chain (`parse` / `extract` / `normalize` / `agent3` / `audit`), backfilling prerequisites; `?input_mode=raw\|enriched` applies to `agent3` |
+| `POST /runs/{thread_id}/run` | Run the checkpointed main graph to the first `interrupt` (or `END`) |
+| `POST /runs/{thread_id}/resume` | Resume one `hitl` interrupt with `{"edits": [...], "recheck": bool}`; duplicate payloads are applied once |
+| `GET /runs/{thread_id}/events` | Replay timeline: node order plus every appended `StageReport` / `TrailEntry` |
 | `GET /runs/{thread_id}` | Read the envelope: `fields`, `extra_fields`, `findings`, `legal`, `retrieved`, `stages`, `trail`, `verification`, `gate`, `supported_stages` |
+| `POST /runs/{thread_id}/gate` | Ask one protected operation for a decision (`operation` in the JSON body) |
+| `POST /runs/{thread_id}/findings/{finding_id}/disposition` | Append a human disposition event (`open` / `accepted` / `rejected` / `needs_human_review`) |
 
 `verification` / `gate` are `null` until they mean something: `null` verification = no audit yet, `null`
 gate = nobody asked the gate. Neither is ever "clean". The audit decides no operation by itself — a
@@ -126,8 +132,10 @@ Errors always come back as `{code, message, detail?}` with `code` one of `EMPTY_
 `INCOMPLETE_RESULT` (500). Branch on `code`, not on `message`.
 
 Run state is process-scoped: after a restart the same `thread_id` answers `unknown_run` — never an
-empty run. Re-auditing means creating a new run, because `normalize` clears `_candidates` and a
-repeat trigger is refused.
+empty run. The graph checkpointer (`SMART_EDIT_CHECKPOINT_DB`) and the resume ledger
+(`SMART_EDIT_LEDGER_DB`) survive a restart for the control-plane endpoints, but the console's
+in-memory cache does not, so a vanished thread is still reported as an error. Re-auditing means
+creating a new run, because `normalize` clears `_candidates` and a repeat trigger is refused.
 
 ---
 

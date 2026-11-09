@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-edit/schemas/verification.json",
+  "title": "Agent 4 audit output (VerificationReport)",
+  "description": "`score` is display-only and MUST NOT participate in gate or repair decisions. `audit` is the report baseline the console quotes; it is optional so older fixtures stay valid.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["checks", "verdict", "credibility", "score"],
+  "properties": {
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["checker", "level", "finding_ids", "detail", "location"],
+        "properties": {
+          "checker": { "type": "string" },
+          "level": { "enum": ["fail", "warn", "info"] },
+          "finding_ids": { "type": "array", "items": { "type": "string" } },
+          "detail": { "type": "string" },
+          "location": { "type": ["string", "null"] },
+          "check_id": { "type": "string" },
+          "method": { "type": "string" },
+          "gate_type": { "type": ["string", "null"] },
+          "target_operations": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "verdict": { "enum": ["pass", "warn", "fail"] },
+    "credibility": {
+      "type": "object",
+      "required": ["assessed", "planned", "ratio", "formula"],
+      "properties": {
+        "assessed": { "type": ["integer", "null"] },
+        "planned": { "type": ["integer", "null"] },
+        "ratio": { "type": ["number", "null"] },
+        "formula": { "type": "string" }
+      }
+    },
+    "score": { "type": ["number", "null"] },
+    "audit": { "type": "object" }
+  }
+}

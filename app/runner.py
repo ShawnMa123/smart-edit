@@ -125,7 +125,7 @@ class Runner:
         with self._lock:
             config = self._config(thread_id)
             key = _resume_key(payload)
-            if not self.ledger.claim_resume(thread_id, key):
+            if self.ledger.resume_seen(thread_id, key):
                 # Duplicate submission: report the current checkpoint, do not invoke the graph.
                 latest = self.graph.get_state(config)
                 payloads = _interrupt_values(latest.interrupts)
@@ -145,6 +145,9 @@ class Runner:
                     or (result.get("__interrupt__") if isinstance(result, dict) else ())
                 )
                 status = "interrupted" if payloads else "complete"
+            # Written only after the graph applied it: a crash mid-resume can be retried, while a
+            # successful duplicate is still ignored.
+            self.ledger.mark_resume(thread_id, key)
             self._sync(thread_id, dict(latest.values or {}))
             self.ledger.record_event(
                 thread_id,

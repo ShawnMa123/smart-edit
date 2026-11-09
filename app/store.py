@@ -15,6 +15,7 @@ One connection + one lock is enough for the POC; the SQLite saver already serial
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -31,7 +32,7 @@ class RunStore:
     """Append-only events, idempotency keys and last-known state."""
 
     def __init__(self, path: str | Path | None = None) -> None:
-        self.path = Path(path or DEFAULT_LEDGER_DB)
+        self.path = Path(path or os.environ.get("SMART_EDIT_LEDGER_DB") or DEFAULT_LEDGER_DB)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
@@ -105,6 +106,22 @@ class RunStore:
                 (thread_id, resume_key, _now()),
             )
         return cursor.rowcount == 1
+
+    def resume_seen(self, thread_id: str, resume_key: str) -> bool:
+        """Read-only idempotency check; the mark is written only after a successful apply."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM resume_keys WHERE thread_id = ? AND resume_key = ?",
+                (thread_id, resume_key),
+            ).fetchone()
+        return row is not None
+
+    def mark_resume(self, thread_id: str, resume_key: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO resume_keys (thread_id, resume_key, applied_at) VALUES (?, ?, ?)",
+                (thread_id, resume_key, _now()),
+            )
 
     def record_event(self, thread_id: str, kind: str, payload: dict) -> int:
         """Append one event; returns its per-run sequence number."""

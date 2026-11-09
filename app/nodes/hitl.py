@@ -48,7 +48,8 @@ def _field_view(fields: dict | None) -> list[dict]:
 
 
 def _finding_view(findings: list | None) -> list[dict]:
-    return [
+    rank = {"critical": 0, "warn": 1, "info": 2}
+    rows = [
         {
             "id": finding.get("id"),
             "source": finding.get("source"),
@@ -59,6 +60,10 @@ def _finding_view(findings: list | None) -> list[dict]:
         }
         for finding in findings or []
     ]
+    return sorted(
+        rows,
+        key=lambda row: (rank.get(str(row["severity"]), 3), str(row["id"] or "")),
+    )
 
 
 def _latest_stages(stages: list | None) -> list[dict]:

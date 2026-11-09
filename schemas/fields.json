@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-edit/schemas/fields.json",
+  "title": "Agent 1 normalize output (fields + extra_fields)",
+  "description": "Contract shape of `fields` / `extra_fields`. `value` preserves source case; `status` is exactly one of extracted / inferred / missing; `field_keys` elsewhere is always a list.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "key",
+      "value",
+      "status",
+      "confirmed",
+      "edited_by_user",
+      "source",
+      "normalized_from",
+      "label",
+      "doc_type",
+      "notes"
+    ],
+    "properties": {
+      "key": { "type": "string" },
+      "value": { "type": ["string", "null"] },
+      "status": { "enum": ["extracted", "inferred", "missing"] },
+      "confirmed": { "type": "boolean" },
+      "edited_by_user": { "type": "boolean" },
+      "source": {
+        "type": ["object", "null"],
+        "additionalProperties": false,
+        "required": ["file_id", "page", "bbox", "span", "form_label"],
+        "properties": {
+          "file_id": { "type": "string" },
+          "page": { "type": ["integer", "null"] },
+          "bbox": {
+            "type": ["array", "null"],
+            "items": { "type": "number" },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "span": { "type": "string", "maxLength": 200 },
+          "form_label": { "type": ["string", "null"] }
+        }
+      },
+      "normalized_from": { "type": ["string", "null"] },
+      "label": { "type": ["string", "null"] },
+      "doc_type": { "type": ["string", "null"] },
+      "notes": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

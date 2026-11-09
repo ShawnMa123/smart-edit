@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover
     from langgraph.graph.message import Overwrite  # type: ignore[no-redef]
 
 from app.stages import stage_report
+from app.state import FINDING_PREFIX
 
 MERGE_STAGE = "merge"
 _SEVERITY_RANK = {"critical": 0, "warn": 1, "info": 2}
@@ -35,6 +36,14 @@ def merge_findings(findings: list[dict]) -> list[dict]:
     seen: set[tuple] = set()
     unique: list[dict] = []
     for finding in findings:
+        source = str(finding.get("source") or "")
+        expected = FINDING_PREFIX.get(source)
+        finding_id = str(finding.get("id") or "")
+        if expected is None or not finding_id.startswith(f"{expected}-"):
+            raise ValueError(
+                f"finding {finding_id!r} does not match source {source!r}; "
+                f"expected prefix {expected!r}"
+            )
         key = _dedupe_key(finding)
         if key in seen:
             continue

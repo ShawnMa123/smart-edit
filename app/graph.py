@@ -41,7 +41,9 @@ from app.state import EditState
 
 def route_after_hitl(state: dict) -> str:
     """`recheck` means the user changed a field and wants the pipeline to run again."""
-    return "reset" if state.get("recheck") else "gate"
+    if state.get("recheck") and int(state.get("recheck_count") or 0) < 3:
+        return "reset"
+    return "gate"
 
 
 def route_after_gate(state: dict) -> str:

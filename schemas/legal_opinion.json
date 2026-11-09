@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-edit/schemas/legal_opinion.json",
+  "title": "Agent 3 regulatory output (LegalOpinion)",
+  "description": "Raw mode means extract never ran; downstream must not run conflict_check on it. Coverage unavailable=true is 'not covered', never 'no issue'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "input_mode",
+    "applicable_rules",
+    "claims",
+    "coverage",
+    "escalate_to_human",
+    "summary"
+  ],
+  "properties": {
+    "input_mode": { "enum": ["enriched", "raw"] },
+    "applicable_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule_id", "title", "version", "effective_from", "chunk_id"],
+        "properties": {
+          "rule_id": { "type": "string" },
+          "title": { "type": "string" },
+          "version": { "type": "string" },
+          "effective_from": { "type": ["string", "null"] },
+          "chunk_id": { "type": "string" }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "chunk_id", "kind", "support"],
+        "properties": {
+          "text": { "type": "string" },
+          "chunk_id": { "type": ["string", "null"] },
+          "kind": { "enum": ["applicable_rule", "risk", "condition"] },
+          "support": { "enum": ["supported", "insufficient"] }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["jurisdictions", "standards", "unavailable"],
+      "properties": {
+        "jurisdictions": { "type": "array", "items": { "type": "string" } },
+        "standards": { "type": "array", "items": { "type": "string" } },
+        "unavailable": { "type": "boolean" },
+        "business_type_uncertain": { "type": "boolean" },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "escalate_to_human": { "type": "boolean" },
+    "summary": { "type": "string" }
+  }
+}
