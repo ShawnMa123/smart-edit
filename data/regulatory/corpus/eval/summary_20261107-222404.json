@@ -1,0 +1,39 @@
+{
+  "kb": "759db55df37343f9b174976e5ede90a6",
+  "n_cases": 440,
+  "modes": {
+    "True": {
+      "n": 440,
+      "refuse_ok": 3,
+      "refuse_total": 8,
+      "kw_sum": 362.0,
+      "kw_n": 432,
+      "with_refs": 440,
+      "elapsed_sum": 9728.570000000007,
+      "empty": 4,
+      "truncated_refuse": 63,
+      "partial": 72,
+      "avg_elapsed": 22.11,
+      "keyword_rate": 0.838,
+      "refuse_rate": 0.375,
+      "ref_hit_rate": 1.0
+    },
+    "False": {
+      "n": 440,
+      "refuse_ok": 8,
+      "refuse_total": 8,
+      "kw_sum": 315.5,
+      "kw_n": 432,
+      "with_refs": 440,
+      "elapsed_sum": 2124.5600000000027,
+      "empty": 0,
+      "truncated_refuse": 89,
+      "partial": 31,
+      "avg_elapsed": 4.83,
+      "keyword_rate": 0.7303,
+      "refuse_rate": 1.0,
+      "ref_hit_rate": 1.0
+    }
+  },
+  "ts": "20261107-222404"
+}

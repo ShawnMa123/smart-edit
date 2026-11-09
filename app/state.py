@@ -248,6 +248,14 @@ class Chunk(TypedDict):
     text: str
     score: float
     source_type: Literal["kb", "web"]
+    # [SEMANTICS] agent-regulatory: citation fields returned by the retrieval service. Optional so
+    # existing fixtures/tests keep working; `text` is always the source text, never a summary.
+    source_doc: NotRequired[str]
+    articles: NotRequired[list[str]]
+    effective_from: NotRequired[str | None]
+    effective_to: NotRequired[str | None]
+    jurisdictions: NotRequired[list[str]]
+    applies_to: NotRequired[list[str]]
 
 
 # --------------------------------------------------------------------------

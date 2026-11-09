@@ -74,6 +74,15 @@ STAGE_TARGETS = {
         True,
         ("fields", "extra_fields", "business_type"),
     ),
+    # Agent 3's triggerable target: raw mode only needs `parse`; the node decides enriched inside
+    # (normalize done + fields + business_type). It never requires `fields` up front.
+    "agent3": AgentSpec(
+        "agent3",
+        ("parse",),
+        ("files",),
+        ("findings", "legal", "retrieved", "stages", "trail"),
+        True,
+    ),
     # Agent 4's only triggerable target (task 6.2). It declares the **whole** shared layer, not just
     # `normalize`: `execute_chain` runs the plan as written and does not expand it transitively, so
     # requiring only `normalize` would run it without `docs` and fail by design.
@@ -93,6 +102,7 @@ ENRICHED_CHAIN = ("parse", "extract", "normalize")
 # refused — registration, never a guess (design D5 of `frontend-console`).
 AGENT_TARGETS = {
     "agent1": "normalize",
+    "agent3": "agent3",
     "agent4": "audit",
 }
 

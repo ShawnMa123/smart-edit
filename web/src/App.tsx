@@ -11,6 +11,7 @@ import { createSnapshot, digestText } from './snapshot';
 import { versionStore, type VersionEntry } from './versionStore';
 import { AssistantPanel } from './components/AssistantPanel';
 import { DocumentActions } from './components/DocumentActions';
+import type { LegalState } from './components/LegalPanel';
 import { ImportReport, initialImportState, type ImportState } from './components/ImportReport';
 import { RichEditor } from './components/RichEditor';
 import { VersionPanel } from './components/VersionPanel';
@@ -31,6 +32,8 @@ export function App() {
   const [currentDigest, setCurrentDigest] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [audit, dispatch] = useReducer(auditReducer, initialAuditState);
+  const [legalState, setLegalState] = useState<LegalState>({ phase: 'idle' });
+  const [legalRun, setLegalRun] = useState<{ threadId: string; digest: string } | null>(null);
   /** Which published template to audit against; empty means "rule bundle only" (design D18). */
   const [templateId, setTemplateId] = useState('');
   /** File-import round: what was uploaded and how it went (`document-import` D10). */
@@ -134,6 +137,7 @@ export function App() {
 
   const handleRunAudit = async () => {
     const snapshot = await createSnapshot(text, currentVersionId);
+    setLegalState({ phase: 'idle' });
     dispatch({ type: 'start', snapshot, at: Date.now() });
     try {
       const created = await createRun(snapshot.text);
@@ -152,6 +156,41 @@ export function App() {
           ? { code: error.code, message: error.message, detail: error.detail }
           : { code: 'NETWORK', message: String(error) };
       dispatch({ type: 'fail', failure, at: Date.now() });
+    }
+  };
+
+  /**
+   * Reuse the audit's run when it still matches the editor; otherwise create a fresh run from the
+   * current document. The legal check is therefore usable without running the audit first, and a
+   * stale audit can never make it inspect old text.
+   */
+  const handleRunLegal = async () => {
+    if (!text.trim()) return;
+    setLegalState({ phase: 'running' });
+    try {
+      let threadId: string;
+      let digest: string;
+      if (legalRun && legalRun.digest === currentDigest) {
+        threadId = legalRun.threadId;
+        digest = legalRun.digest;
+      } else if (audit.phase === 'report' && audit.snapshot.digest === currentDigest) {
+        threadId = audit.envelope.thread_id;
+        digest = currentDigest;
+      } else {
+        const snapshot = await createSnapshot(text, currentVersionId);
+        const created = await createRun(snapshot.text);
+        threadId = created.thread_id;
+        digest = snapshot.digest;
+      }
+      setLegalRun({ threadId, digest });
+      const report = await triggerStage(threadId, 'agent3');
+      setLegalState({ phase: 'report', envelope: report });
+    } catch (error) {
+      const failure =
+        error instanceof ApiError
+          ? { code: error.code, message: error.message }
+          : { code: 'NETWORK', message: String(error) };
+      setLegalState({ phase: 'failed', failure });
     }
   };
 
@@ -181,6 +220,10 @@ export function App() {
         templateId={templateId}
         onTemplateChange={setTemplateId}
         now={now}
+        legalState={legalState}
+        onRunLegal={() => void handleRunLegal()}
+        canRunLegal={text.trim().length > 0}
+        legalHint="Type or import a document first."
       />
     ),
   };

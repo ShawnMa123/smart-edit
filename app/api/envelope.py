@@ -46,6 +46,9 @@ def to_envelope(state: dict) -> dict:
             }
             for doc in state.get("docs") or []
         ],
+        # Agent 3 surfaces: `null` / `[]` means "no legal check has run", never "clean".
+        "legal": state.get("legal"),
+        "retrieved": state.get("retrieved") or [],
         # Audit surfaces (tasks 6.3): `null` means "no audit yet" / "the gate was never asked" — it
         # never means "clean", so a client must not read a missing value as approval.
         "verification": state.get("verification"),

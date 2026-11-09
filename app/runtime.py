@@ -19,6 +19,7 @@ from app.nodes.audit import audit_node
 from app.nodes.extract import extract_node
 from app.nodes.normalize import normalize_node
 from app.nodes.parse import parse_node
+from app.regulatory.node import regulatory_node
 from app.stages import STAGE_TARGETS, latest_stage
 
 # The only keys with a reducer in `app/state.py`. Anything else overwrites.
@@ -28,6 +29,7 @@ NODES = {
     "parse": parse_node,
     "extract": extract_node,
     "normalize": normalize_node,
+    "agent3": regulatory_node,
     "audit": audit_node,
 }
 
@@ -59,6 +61,8 @@ def execute_chain(
     llm=None,
     fields_yaml: dict[str, dict] | None = None,
     template_reference: dict | None = None,
+    retriever=None,
+    answerer=None,
 ) -> dict:
     """Run `chain` in order, merging each node update into `state` (mutated in place).
 
@@ -82,12 +86,23 @@ def execute_chain(
     field_keys = list(fields_yaml) if fields_yaml else []
 
     for stage in chain:
-        if is_done(state, stage):
+        # Agent 3 is explicitly re-runnable: a second trigger must replace its old legal opinion,
+        # retrieval and `R-` findings instead of showing a stale one. Other done stages stay reusable.
+        if is_done(state, stage) and stage != "agent3":
             continue
         if stage == "parse":
             update = parse_node(state)
         elif stage == "extract":
             update = extract_node(state, llm=llm, field_keys=field_keys)
+        elif stage == "agent3":
+            state["findings"] = [
+                finding
+                for finding in state.get("findings") or []
+                if finding.get("source") != "regulatory"
+            ]
+            state["legal"] = None
+            state["retrieved"] = []
+            update = regulatory_node(state, retriever=retriever, answerer=answerer)
         elif stage == "audit":
             update = audit_node(state, template_reference=template_reference)
         else:

@@ -1,0 +1,272 @@
+{
+  "source": "US eCFR",
+  "title": 19,
+  "snapshot_date": "2026-11-01",
+  "fetched": [
+    {
+      "part": "0",
+      "file": "part-0.md",
+      "sections": 2,
+      "chars": 4183
+    },
+    {
+      "part": "7",
+      "file": "part-7.md",
+      "sections": 5,
+      "chars": 20706
+    },
+    {
+      "part": "10",
+      "file": "part-10.md",
+      "sections": 572,
+      "chars": 1430657
+    },
+    {
+      "part": "11",
+      "file": "part-11.md",
+      "sections": 12,
+      "chars": 22218
+    },
+    {
+      "part": "12",
+      "file": "part-12.md",
+      "sections": 105,
+      "chars": 241458
+    },
+    {
+      "part": "18",
+      "file": "part-18.md",
+      "sections": 30,
+      "chars": 70999
+    },
+    {
+      "part": "19",
+      "file": "part-19.md",
+      "sections": 47,
+      "chars": 149118
+    },
+    {
+      "part": "24",
+      "file": "part-24.md",
+      "sections": 28,
+      "chars": 242448
+    },
+    {
+      "part": "54",
+      "file": "part-54.md",
+      "sections": 2,
+      "chars": 5920
+    },
+    {
+      "part": "101",
+      "file": "part-101.md",
+      "sections": 11,
+      "chars": 41955
+    },
+    {
+      "part": "102",
+      "file": "part-102.md",
+      "sections": 15,
+      "chars": 319054
+    },
+    {
+      "part": "103",
+      "file": "part-103.md",
+      "sections": 17,
+      "chars": 33312
+    },
+    {
+      "part": "111",
+      "file": "part-111.md",
+      "sections": 82,
+      "chars": 113170
+    },
+    {
+      "part": "112",
+      "file": "part-112.md",
+      "sections": 26,
+      "chars": 30853
+    },
+    {
+      "part": "113",
+      "file": "part-113.md",
+      "sections": 53,
+      "chars": 107557
+    },
+    {
+      "part": "114",
+      "file": "part-114.md",
+      "sections": 16,
+      "chars": 17015
+    },
+    {
+      "part": "115",
+      "file": "part-115.md",
+      "sections": 50,
+      "chars": 34472
+    },
+    {
+      "part": "118",
+      "file": "part-118.md",
+      "sections": 12,
+      "chars": 18625
+    },
+    {
+      "part": "122",
+      "file": "part-122.md",
+      "sections": 124,
+      "chars": 314677
+    },
+    {
+      "part": "123",
+      "file": "part-123.md",
+      "sections": 45,
+      "chars": 109036
+    },
+    {
+      "part": "125",
+      "file": "part-125.md",
+      "sections": 20,
+      "chars": 14139
+    },
+    {
+      "part": "127",
+      "file": "part-127.md",
+      "sections": 27,
+      "chars": 30827
+    },
+    {
+      "part": "128",
+      "file": "part-128.md",
+      "sections": 10,
+      "chars": 15360
+    },
+    {
+      "part": "132",
+      "file": "part-132.md",
+      "sections": 21,
+      "chars": 31986
+    },
+    {
+      "part": "133",
+      "file": "part-133.md",
+      "sections": 37,
+      "chars": 89691
+    },
+    {
+      "part": "134",
+      "file": "part-134.md",
+      "sections": 33,
+      "chars": 59266
+    },
+    {
+      "part": "141",
+      "file": "part-141.md",
+      "sections": 70,
+      "chars": 171129
+    },
+    {
+      "part": "142",
+      "file": "part-142.md",
+      "sections": 41,
+      "chars": 58623
+    },
+    {
+      "part": "143",
+      "file": "part-143.md",
+      "sections": 37,
+      "chars": 43953
+    },
+    {
+      "part": "144",
+      "file": "part-144.md",
+      "sections": 32,
+      "chars": 46756
+    },
+    {
+      "part": "145",
+      "file": "part-145.md",
+      "sections": 43,
+      "chars": 53570
+    },
+    {
+      "part": "146",
+      "file": "part-146.md",
+      "sections": 58,
+      "chars": 110034
+    },
+    {
+      "part": "147",
+      "file": "part-147.md",
+      "sections": 23,
+      "chars": 15056
+    },
+    {
+      "part": "148",
+      "file": "part-148.md",
+      "sections": 82,
+      "chars": 136637
+    },
+    {
+      "part": "149",
+      "file": "part-149.md",
+      "sections": 6,
+      "chars": 16488
+    },
+    {
+      "part": "151",
+      "file": "part-151.md",
+      "sections": 62,
+      "chars": 124667
+    },
+    {
+      "part": "152",
+      "file": "part-152.md",
+      "sections": 23,
+      "chars": 72532
+    },
+    {
+      "part": "158",
+      "file": "part-158.md",
+      "sections": 28,
+      "chars": 27237
+    },
+    {
+      "part": "159",
+      "file": "part-159.md",
+      "sections": 41,
+      "chars": 65863
+    },
+    {
+      "part": "161",
+      "file": "part-161.md",
+      "sections": 7,
+      "chars": 8195
+    },
+    {
+      "part": "162",
+      "file": "part-162.md",
+      "sections": 57,
+      "chars": 105716
+    },
+    {
+      "part": "163",
+      "file": "part-163.md",
+      "sections": 14,
+      "chars": 65932
+    },
+    {
+      "part": "165",
+      "file": "part-165.md",
+      "sections": 29,
+      "chars": 59355
+    },
+    {
+      "part": "172",
+      "file": "part-172.md",
+      "sections": 17,
+      "chars": 14224
+    }
+  ],
+  "missing": []
+}

@@ -26,3 +26,10 @@ runs/
 # IDE
 /.idea/
 /.vscode/
+
+# Agent 3 local retrieval: generated artifacts (corpus/index are source; cache is rebuildable)
+data/regulatory/embedding-cache.db
+data/regulatory/index/*.db.tmp
+data/regulatory/index/*.db-wal
+data/regulatory/index/*.db-shm
+data/embedding-cache.db

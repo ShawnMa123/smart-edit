@@ -94,6 +94,63 @@ export interface ImportedDocument {
   rich?: RichDocument | null;
 }
 
+/** Agent 3 citation (one chunk from the retrieval service). `text` is never a summary. */
+export interface Chunk {
+  chunk_id: string;
+  doc_id: string;
+  title: string;
+  text: string;
+  score: number;
+  source_type: 'kb' | 'web';
+  source_doc?: string;
+  articles?: string[];
+  effective_from?: string | null;
+  effective_to?: string | null;
+  jurisdictions?: string[];
+  applies_to?: string[];
+}
+
+export interface LegalClaim {
+  text: string;
+  chunk_id: string | null;
+  kind: 'applicable_rule' | 'risk' | 'condition' | string;
+  support: 'supported' | 'insufficient' | string;
+}
+
+export interface ApplicableRule {
+  rule_id: string;
+  title: string;
+  version: string;
+  effective_from: string | null;
+  chunk_id: string;
+}
+
+export interface LegalCoverage {
+  jurisdictions: string[];
+  standards: string[];
+  unavailable: boolean;
+  business_type_uncertain: boolean;
+  /** Body-inferred type in raw mode; informational only (never written to `business_type`). */
+  inferred_business_type?: string | null;
+  notes: string[];
+  corpus?: {
+    version: string | null;
+    documents: number | null;
+    jurisdictions: string[];
+    built_at: string | null;
+  };
+}
+
+/** `legal` is evidence, not a verdict: no field here means "compliant". */
+export interface LegalOpinion {
+  input_mode: 'enriched' | 'raw';
+  applicable_rules: ApplicableRule[];
+  claims: LegalClaim[];
+  coverage: LegalCoverage;
+  escalate_to_human: boolean;
+  summary: string;
+}
+
 export interface RunEnvelope {
   thread_id: string;
   business_type: string | null;
@@ -107,6 +164,10 @@ export interface RunEnvelope {
   /** What each uploaded file yielded; `[]` means "nothing parsed yet". */
   documents?: ImportedDocument[];
   supported_stages: string[];
+  /** `null` = no legal check has run on this run yet. Never read as "clean". */
+  legal?: LegalOpinion | null;
+  /** Chunks cited by this run's legal check; `[]` is not a coverage claim. */
+  retrieved?: Chunk[];
   /** `null` = no audit has run on this run yet. Never read as "clean". */
   verification?: VerificationReport | null;
   /** `null` = the gate was never asked about an operation. Never read as "allowed". */

@@ -1,0 +1,1039 @@
+{
+ "summary": {
+  "tag": "smoke2",
+  "params": {
+   "vec_weight": 0.3,
+   "sim_threshold": 0.2,
+   "top_n": 8,
+   "top_k": 1024
+  },
+  "n": 40,
+  "hit5": 0.45,
+  "hit10": 0.45,
+  "hit5_loose": 0.025,
+  "mrr": 0.4092,
+  "has_any": 1.0,
+  "avg_chunks": 30,
+  "avg_elapsed": 2.119,
+  "by_category": {
+   "报关": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "关税": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "原产地": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "出口管制": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "检验检疫": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "保税": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "贸易救济": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "外汇": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "担保": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "国际货物买卖": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "WTO": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "日本": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "澳洲": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "跨法域比较": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "综合场景": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "出口": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "稽查信用": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "商品归类": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "贸易便利化": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "US报关": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US关税": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US原产地": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US出口管制": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US保税": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US担保": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US综合": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "AU综合": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "WTO综合": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "CISG综合": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "反倾销": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "场景": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "US定义": {
+    "n": 1,
+    "hit5": 1.0
+   },
+   "US报关代理": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US安全申报": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US查验": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US估值": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US清算": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US减免": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US执法": {
+    "n": 1,
+    "hit5": 0.0
+   },
+   "US贸易救济": {
+    "n": 1,
+    "hit5": 0.0
+   }
+  }
+ },
+ "rows": [
+  {
+   "case_id": 1,
+   "category": "报关",
+   "question": "一般贸易进口报关需要提交哪些单证？",
+   "elapsed": 2.173,
+   "n_chunks": 30,
+   "n_articles": 14,
+   "top_articles": [
+    "海关法:第33条",
+    "海关法:第24条",
+    "货物进出口管理条例:第24条",
+    "货物进出口管理条例:第20条",
+    "货物进出口管理条例:第2条"
+   ],
+   "strict_idx": [
+    1,
+    26
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 31,
+   "category": "关税",
+   "question": "海关审定完税价格时，成交价格需要满足哪些条件？",
+   "elapsed": 2.633,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "进出口关税条例:第18条",
+    "进出口关税条例:第21条",
+    "海关法:第55条",
+    "进出口关税条例:第26条",
+    "进出口关税条例:第27条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 61,
+   "category": "原产地",
+   "question": "什么叫实质性改变？如何判定？",
+   "elapsed": 1.579,
+   "n_chunks": 30,
+   "n_articles": 16,
+   "top_articles": [
+    "进出口货物原产地条例:第6条",
+    "进出口货物原产地条例:第3条",
+    "关税法:第11条",
+    "反补贴条例:第8条",
+    "反倾销和反补贴条例:第7条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 81,
+   "category": "出口管制",
+   "question": "出口两用物项需要办理什么许可手续？",
+   "elapsed": 2.374,
+   "n_chunks": 30,
+   "n_articles": 21,
+   "top_articles": [
+    "两用物项出口管制条例:第21条",
+    "两用物项出口管制条例:第15条",
+    "两用物项出口管制条例:第48条",
+    "两用物项出口管制条例:第47条",
+    "导弹及相关物项和技术出口管制条例:第14条"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    6,
+    8,
+    9
+   ],
+   "loose_idx": [
+    0,
+    3,
+    4,
+    7,
+    10
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 104,
+   "category": "检验检疫",
+   "question": "进口商品检验的流程是什么？",
+   "elapsed": 1.468,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "进出口商品检验法:第10条",
+    "进出口商品检验法:第6条",
+    "进出口商品检验法实施条例:第2条",
+    "进出口商品检验法:第22条",
+    "进出口商品检验法:第4条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 124,
+   "category": "保税",
+   "question": "保税货物的监管要求是什么？",
+   "elapsed": 1.648,
+   "n_chunks": 30,
+   "n_articles": 12,
+   "top_articles": [
+    "海关法:第32条",
+    "海关行政处罚实施条例:第18条",
+    "海关法:第100条",
+    "海关事务担保条例:第5条",
+    "海关法:第45条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 142,
+   "category": "贸易救济",
+   "question": "反倾销调查的申请主体和立案条件是什么？",
+   "elapsed": 1.873,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "反倾销条例:第18条",
+    "反倾销条例:第15条",
+    "反倾销条例:第13条",
+    "反倾销和反补贴条例:第11条",
+    "反倾销条例:第17条"
+   ],
+   "strict_idx": [
+    0,
+    2,
+    3,
+    4,
+    7
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 162,
+   "category": "外汇",
+   "question": "货物贸易跨境收付汇需要办理哪些手续？",
+   "elapsed": 2.15,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "对外贸易法:第77条",
+    "海关法:第35条",
+    "海关法:第8条",
+    "海关法:第11条",
+    "海关法:第10条"
+   ],
+   "strict_idx": [
+    0,
+    5
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 172,
+   "category": "担保",
+   "question": "海关事务担保的方式有哪些？",
+   "elapsed": 1.979,
+   "n_chunks": 30,
+   "n_articles": 15,
+   "top_articles": [
+    "海关事务担保条例:第2条",
+    "海关事务担保条例:第5条",
+    "海关事务担保条例:第12条",
+    "海关事务担保条例:第11条",
+    "海关法:第67条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 182,
+   "category": "国际货物买卖",
+   "question": "根据 CISG，国际货物销售合同何时成立？",
+   "elapsed": 3.242,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 204,
+   "category": "WTO",
+   "question": "GATT 1994 的国民待遇原则对进口产品的国内税有什么要求？",
+   "elapsed": 2.414,
+   "n_chunks": 30,
+   "n_articles": 2,
+   "top_articles": [
+    "货物进出口管理条例:第5条",
+    "对外贸易法:第9条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 224,
+   "category": "日本",
+   "question": "日本の関税法における輸入許可の手続きはどのようなものですか。",
+   "elapsed": 1.952,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 242,
+   "category": "澳洲",
+   "question": "Under the Australian Customs Act 1901, what are the requirements for entering goods for home consumption?",
+   "elapsed": 1.746,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 260,
+   "category": "跨法域比较",
+   "question": "中国海关法和美国 CFR 对报关代理人资格的要求有什么不同？",
+   "elapsed": 2.146,
+   "n_chunks": 30,
+   "n_articles": 10,
+   "top_articles": [
+    "海关法:第89条",
+    "海关法:第11条",
+    "海关行政处罚实施条例:第28条",
+    "海关法:第44条",
+    "海关法:第10条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 276,
+   "category": "综合场景",
+   "question": "我们从越南进口一批纺织品，经香港转口，最终运到上海。整个链条涉及哪些海关手续和原产地认定问题？",
+   "elapsed": 2.33,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "海关事务担保条例:第4条",
+    "进出口货物原产地条例:第11条",
+    "海关法:第23条",
+    "进出口货物原产地条例:第14条",
+    "进出口货物原产地条例:第13条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 286,
+   "category": "出口",
+   "question": "出口货物报关需要提交哪些单证？",
+   "elapsed": 1.866,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "海关法:第24条",
+    "两用物项出口管制条例:第22条",
+    "两用物项出口管制条例:第21条",
+    "出口管制法:第19条",
+    "货物进出口管理条例:第44条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 296,
+   "category": "稽查信用",
+   "question": "海关稽查的启动条件和程序是什么？",
+   "elapsed": 1.828,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "海关行政处罚实施条例:第67条",
+    "海关法:第45条",
+    "海关行政处罚实施条例:第33条",
+    "海关行政处罚实施条例:第46条",
+    "海关行政处罚实施条例:第36条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    5
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 316,
+   "category": "商品归类",
+   "question": "商品归类的基本原则是什么？",
+   "elapsed": 2.043,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "海关法:第42条",
+    "关税法:第31条",
+    "进出口关税条例:第31条",
+    "进出口关税条例:第32条",
+    "关税法:第9条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 326,
+   "category": "贸易便利化",
+   "question": "提前申报模式适用于哪些情形？",
+   "elapsed": 1.796,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "进出口关税条例:第16条",
+    "外汇管理条例:第48条",
+    "海关事务担保条例:第4条",
+    "关税法:第21条",
+    "关税法:第20条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    13
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 336,
+   "category": "US报关",
+   "question": "What is the process for filing an entry summary with US Customs?",
+   "elapsed": 1.499,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 340,
+   "category": "US关税",
+   "question": "How does US Customs determine the transaction value of imported merchandise?",
+   "elapsed": 2.378,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 344,
+   "category": "US原产地",
+   "question": "What are the US rules of origin for preferential tariff treatment?",
+   "elapsed": 2.071,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 346,
+   "category": "US出口管制",
+   "question": "What is the Commerce Control List under the EAR?",
+   "elapsed": 2.65,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 351,
+   "category": "US保税",
+   "question": "What are the requirements for a US foreign trade zone?",
+   "elapsed": 1.564,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 353,
+   "category": "US担保",
+   "question": "What forms of customs bond are accepted by US Customs?",
+   "elapsed": 1.772,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 365,
+   "category": "US综合",
+   "question": "How do I import goods into the United States for the first time? What are the key steps?",
+   "elapsed": 2.203,
+   "n_chunks": 30,
+   "n_articles": 1,
+   "top_articles": [
+    "part-101:101.1"
+   ],
+   "strict_idx": [
+    0
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 375,
+   "category": "AU综合",
+   "question": "How do I lodge an import declaration in Australia?",
+   "elapsed": 1.948,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 383,
+   "category": "WTO综合",
+   "question": "How does the WTO dispute settlement process work for trade disputes?",
+   "elapsed": 2.53,
+   "n_chunks": 30,
+   "n_articles": 7,
+   "top_articles": [
+    "对外贸易法:第51条",
+    "货物进出口管理条例:第76条",
+    "对外贸易法:第52条",
+    "反倾销条例:第57条",
+    "反补贴条例:第56条"
+   ],
+   "strict_idx": [
+    28
+   ],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0345,
+   "has_any": true
+  },
+  {
+   "case_id": 388,
+   "category": "CISG综合",
+   "question": "Under the CISG, what is the place of delivery when the contract does not specify it?",
+   "elapsed": 2.537,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 407,
+   "category": "反倾销",
+   "question": "反倾销调查中利害关系方有哪些权利？",
+   "elapsed": 1.848,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "反倾销条例:第19条",
+    "反倾销和反补贴条例:第21条",
+    "反补贴条例:第19条",
+    "反倾销条例:第23条",
+    "反倾销条例:第25条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 415,
+   "category": "场景",
+   "question": "我方从德国进口数控机床，合同价格 FOB 汉堡，海运至上海。报关时完税价格应如何申报？运费保险费是否必须计入？",
+   "elapsed": 1.77,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "海关法:第55条",
+    "进出口关税条例:第18条",
+    "进出口关税条例:第26条",
+    "进出口关税条例:第20条",
+    "进出口关税条例:第21条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 441,
+   "category": "US定义",
+   "question": "What does 19 CFR Part 101 define as the customs territory of the United States?",
+   "elapsed": 2.873,
+   "n_chunks": 30,
+   "n_articles": 1,
+   "top_articles": [
+    "part-101:101.1"
+   ],
+   "strict_idx": [
+    2,
+    9
+   ],
+   "loose_idx": [],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.3333,
+   "has_any": true
+  },
+  {
+   "case_id": 443,
+   "category": "US报关代理",
+   "question": "What are the licence requirements for a customs broker under 19 CFR Part 111?",
+   "elapsed": 2.125,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 460,
+   "category": "US安全申报",
+   "question": "What is the Importer Security Filing requirement under 19 CFR Part 149?",
+   "elapsed": 2.482,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 462,
+   "category": "US查验",
+   "question": "How does customs examine and sample merchandise under 19 CFR Part 151?",
+   "elapsed": 2.462,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 463,
+   "category": "US估值",
+   "question": "How is merchandise appraised under 19 CFR Part 152?",
+   "elapsed": 2.251,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 465,
+   "category": "US清算",
+   "question": "How are duties liquidated under 19 CFR Part 159?",
+   "elapsed": 2.42,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 467,
+   "category": "US减免",
+   "question": "When is duty relief available for damaged merchandise under 19 CFR Part 158?",
+   "elapsed": 1.723,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 468,
+   "category": "US执法",
+   "question": "What search and seizure powers does customs have under 19 CFR Part 162?",
+   "elapsed": 2.37,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 471,
+   "category": "US贸易救济",
+   "question": "What is the evasion investigation process under 19 CFR Part 165?",
+   "elapsed": 2.032,
+   "n_chunks": 30,
+   "n_articles": 0,
+   "top_articles": [],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  }
+ ]
+}

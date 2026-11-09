@@ -1,0 +1,5445 @@
+{
+ "summary": {
+  "tag": "p1",
+  "params": {
+   "vec_weight": 0.5,
+   "sim_threshold": 0.2,
+   "top_n": 8,
+   "top_k": 1024
+  },
+  "n": 174,
+  "hit5": 0.6437,
+  "hit10": 0.7241,
+  "hit5_loose": 0.6437,
+  "mrr": 0.5498,
+  "has_any": 1.0,
+  "avg_chunks": 29.81,
+  "avg_elapsed": 2.233,
+  "by_category": {
+   "国际货物买卖": {
+    "n": 21,
+    "hit5": 0.381
+   },
+   "WTO": {
+    "n": 22,
+    "hit5": 0.0455
+   },
+   "日本": {
+    "n": 26,
+    "hit5": 0.7308
+   },
+   "澳洲": {
+    "n": 18,
+    "hit5": 0.8333
+   },
+   "跨法域比较": {
+    "n": 8,
+    "hit5": 0.125
+   },
+   "综合场景": {
+    "n": 10,
+    "hit5": 0.8
+   },
+   "出口": {
+    "n": 10,
+    "hit5": 1.0
+   },
+   "稽查信用": {
+    "n": 10,
+    "hit5": 1.0
+   },
+   "关税": {
+    "n": 10,
+    "hit5": 0.9
+   },
+   "商品归类": {
+    "n": 10,
+    "hit5": 1.0
+   },
+   "贸易便利化": {
+    "n": 10,
+    "hit5": 0.6
+   },
+   "US报关": {
+    "n": 4,
+    "hit5": 1.0
+   },
+   "US关税": {
+    "n": 4,
+    "hit5": 0.5
+   },
+   "US原产地": {
+    "n": 2,
+    "hit5": 1.0
+   },
+   "US出口管制": {
+    "n": 5,
+    "hit5": 0.8
+   },
+   "US保税": {
+    "n": 2,
+    "hit5": 0.5
+   },
+   "US担保": {
+    "n": 2,
+    "hit5": 1.0
+   }
+  }
+ },
+ "rows": [
+  {
+   "case_id": 183,
+   "category": "国际货物买卖",
+   "question": "CISG 下要约与承诺的规则是什么？",
+   "elapsed": 1.772,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "cisg:art-19",
+    "cisg:art-101",
+    "cisg:art-18",
+    "cisg:art-24",
+    "cisg:art-14"
+   ],
+   "strict_idx": [
+    2,
+    6,
+    7,
+    8,
+    11
+   ],
+   "loose_idx": [
+    2,
+    6,
+    7,
+    8,
+    11
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.3333,
+   "has_any": true
+  },
+  {
+   "case_id": 184,
+   "category": "国际货物买卖",
+   "question": "逾期承诺是否有效？",
+   "elapsed": 1.268,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "kazei-hou:第14条",
+    "反倾销条例:第34条",
+    "海关法:第30条",
+    "kazei-hou:第12条",
+    "kazei-hou:第63条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 185,
+   "category": "国际货物买卖",
+   "question": "对要约作出实质性变更的回复构成反要约吗？",
+   "elapsed": 2.006,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "进出口货物原产地条例:第6条",
+    "反补贴条例:第44条",
+    "海关事务担保条例:第17条",
+    "两用物项出口管制条例:第18条",
+    "关税法:第24条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 186,
+   "category": "国际货物买卖",
+   "question": "CISG 是否适用于营业地在不同国家的当事人之间的合同？",
+   "elapsed": 1.782,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "cisg:art-1",
+    "cisg:art-101",
+    "cisg:art-94",
+    "cisg:art-93",
+    "cisg:art-12"
+   ],
+   "strict_idx": [
+    10,
+    12,
+    14,
+    23
+   ],
+   "loose_idx": [
+    10,
+    12,
+    14,
+    23
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0909,
+   "has_any": true
+  },
+  {
+   "case_id": 187,
+   "category": "国际货物买卖",
+   "question": "当事人可以排除 CISG 的适用吗？",
+   "elapsed": 2.382,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "cisg:art-101",
+    "cisg:art-94",
+    "cisg:art-1",
+    "cisg:art-12",
+    "cisg:art-98"
+   ],
+   "strict_idx": [
+    15,
+    17,
+    18,
+    25
+   ],
+   "loose_idx": [
+    15,
+    17,
+    18,
+    25
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0625,
+   "has_any": true
+  },
+  {
+   "case_id": 188,
+   "category": "国际货物买卖",
+   "question": "CISG 不适用的销售有哪些？",
+   "elapsed": 2.246,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "cisg:art-2",
+    "cisg:art-101",
+    "cisg:art-4",
+    "cisg:art-1",
+    "cisg:art-94"
+   ],
+   "strict_idx": [
+    14,
+    16,
+    17,
+    22
+   ],
+   "loose_idx": [
+    14,
+    16,
+    17,
+    22
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0667,
+   "has_any": true
+  },
+  {
+   "case_id": 189,
+   "category": "国际货物买卖",
+   "question": "CISG 是否适用于服务合同？",
+   "elapsed": 1.405,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "cisg:art-101",
+    "cisg:art-3",
+    "cisg:art-1",
+    "cisg:art-4",
+    "cisg:art-28"
+   ],
+   "strict_idx": [
+    7,
+    10,
+    21,
+    28
+   ],
+   "loose_idx": [
+    7,
+    10,
+    21,
+    28
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.125,
+   "has_any": true
+  },
+  {
+   "case_id": 190,
+   "category": "国际货物买卖",
+   "question": "CISG 对合同形式有要求吗？",
+   "elapsed": 1.691,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "cisg:art-101",
+    "cisg:art-12",
+    "cisg:art-96",
+    "cisg:art-29",
+    "cisg:art-4"
+   ],
+   "strict_idx": [
+    1,
+    3,
+    7,
+    8,
+    18
+   ],
+   "loose_idx": [
+    1,
+    3,
+    7,
+    8,
+    18
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 191,
+   "category": "国际货物买卖",
+   "question": "CISG 下货物风险何时转移？",
+   "elapsed": 2.431,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "cisg:art-68",
+    "cisg:art-69",
+    "cisg:art-67",
+    "cisg:art-101",
+    "cisg:art-31"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 192,
+   "category": "国际货物买卖",
+   "question": "根据 CISG，货物不符合同时买方有哪些救济？",
+   "elapsed": 1.746,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "cisg:art-101",
+    "cisg:art-46",
+    "cisg:art-50",
+    "cisg:art-83",
+    "cisg:art-45"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    5,
+    9
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    5,
+    9
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 193,
+   "category": "国际货物买卖",
+   "question": "买方检验货物和通知不符的义务是什么？",
+   "elapsed": 2.169,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "kazei-hou:第69条",
+    "进出口商品检验法:第10条",
+    "kazei-teiritsu-hou:第8条",
+    "进出口商品检验法:第12条",
+    "进出口商品检验法:第11条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 194,
+   "category": "国际货物买卖",
+   "question": "根本违约与一般违约的区别在哪？",
+   "elapsed": 1.781,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "gaiamei-hou:第6条",
+    "反倾销条例:第4条",
+    "海关行政处罚实施条例:第52条",
+    "反倾销条例:第5条",
+    "反补贴条例:第6条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 195,
+   "category": "国际货物买卖",
+   "question": "CISG 下卖方可以补救交货不符吗？",
+   "elapsed": 2.203,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "cisg:art-48",
+    "cisg:art-37",
+    "cisg:art-46",
+    "cisg:art-45",
+    "cisg:art-61"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    5,
+    6,
+    7
+   ],
+   "loose_idx": [
+    1,
+    2,
+    5,
+    6,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 196,
+   "category": "国际货物买卖",
+   "question": "买方要求实际履行的条件是什么？",
+   "elapsed": 1.969,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "对外贸易法:第51条",
+    "两用物项出口管制条例:第30条",
+    "进出口关税条例:第18条",
+    "关税法:第24条",
+    "进出口关税条例:第21条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 197,
+   "category": "国际货物买卖",
+   "question": "CISG 下的损害赔偿如何计算？",
+   "elapsed": 2.493,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "cisg:art-74",
+    "cisg:art-75",
+    "cisg:art-61",
+    "cisg:art-45",
+    "cisg:art-101"
+   ],
+   "strict_idx": [
+    4,
+    9,
+    15,
+    17,
+    26
+   ],
+   "loose_idx": [
+    4,
+    9,
+    15,
+    17,
+    26
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.2,
+   "has_any": true
+  },
+  {
+   "case_id": 198,
+   "category": "国际货物买卖",
+   "question": "减价权在 CISG 中如何行使？",
+   "elapsed": 2.173,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "cisg:art-50",
+    "cisg:art-45",
+    "cisg:art-86",
+    "cisg:art-83",
+    "cisg:art-61"
+   ],
+   "strict_idx": [
+    0,
+    6,
+    7,
+    8,
+    13
+   ],
+   "loose_idx": [
+    0,
+    6,
+    7,
+    8,
+    13
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 199,
+   "category": "国际货物买卖",
+   "question": "货物风险转移后出现损坏由谁承担？",
+   "elapsed": 2.024,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "关税法:第56条",
+    "海关法:第61条",
+    "海关法:第95条",
+    "进出口关税条例:第54条",
+    "海关法:第56条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 200,
+   "category": "国际货物买卖",
+   "question": "CISG 下的免责事由包括哪些？",
+   "elapsed": 1.728,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "cisg:art-79",
+    "cisg:art-101",
+    "cisg:art-80",
+    "cisg:art-49",
+    "cisg:art-45"
+   ],
+   "strict_idx": [
+    3,
+    4,
+    8,
+    18
+   ],
+   "loose_idx": [
+    3,
+    4,
+    8,
+    18
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.25,
+   "has_any": true
+  },
+  {
+   "case_id": 201,
+   "category": "国际货物买卖",
+   "question": "买方解除合同的条件是什么？",
+   "elapsed": 2.065,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "进出口关税条例:第18条",
+    "关税法:第24条",
+    "进出口关税条例:第21条",
+    "关税法:第27条",
+    "关税法:第25条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 202,
+   "category": "国际货物买卖",
+   "question": "CISG 下的预期违约如何救济？",
+   "elapsed": 2.409,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "cisg:art-101",
+    "cisg:art-70",
+    "cisg:art-45",
+    "cisg:art-72",
+    "cisg:art-61"
+   ],
+   "strict_idx": [
+    0,
+    10,
+    15,
+    19,
+    24
+   ],
+   "loose_idx": [
+    0,
+    10,
+    15,
+    19,
+    24
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 203,
+   "category": "国际货物买卖",
+   "question": "卖方交付替代货物的条件是什么？",
+   "elapsed": 1.675,
+   "n_chunks": 30,
+   "n_articles": 15,
+   "top_articles": [
+    "货物进出口管理条例:第52条",
+    "kazei-teiritsu-hou:第15条",
+    "kazei-teiritsu-hou:第4条",
+    "kazei-hou:第69条",
+    "kazei-teiritsu-hou:第7条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 204,
+   "category": "WTO",
+   "question": "GATT 1994 的国民待遇原则对进口产品的国内税有什么要求？",
+   "elapsed": 1.887,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "反补贴条例:第41条",
+    "货物进出口管理条例:第5条",
+    "反倾销条例:第40条",
+    "对外贸易法:第9条",
+    "反倾销条例:第4条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [
+    8,
+    17,
+    20,
+    22,
+    25
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 205,
+   "category": "WTO",
+   "question": "最惠国待遇原则如何适用于关税措施？",
+   "elapsed": 2.139,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "关税法:第17条",
+    "关税法:第12条",
+    "进出口关税条例:第10条",
+    "进出口货物原产地条例:第2条",
+    "货物进出口管理条例:第5条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 206,
+   "category": "WTO",
+   "question": "关税约束义务对成员国的税率调整有何限制？",
+   "elapsed": 1.313,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "关税法:第12条",
+    "进出口关税条例:第10条",
+    "关税法:第15条",
+    "进出口关税条例:第4条",
+    "进出口关税条例:第14条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 207,
+   "category": "WTO",
+   "question": "数量限制在 GATT 下一般是否允许？有哪些例外？",
+   "elapsed": 1.917,
+   "n_chunks": 30,
+   "n_articles": 17,
+   "top_articles": [
+    "货物进出口管理条例:第11条",
+    "货物进出口管理条例:第36条",
+    "进出口货物原产地条例:第2条",
+    "trims_e:art-3",
+    "对外贸易法:第50条"
+   ],
+   "strict_idx": [
+    5,
+    18,
+    27
+   ],
+   "loose_idx": [
+    5,
+    18,
+    27
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1667,
+   "has_any": true
+  },
+  {
+   "case_id": 208,
+   "category": "WTO",
+   "question": "一般例外条款包括哪些情形？",
+   "elapsed": 2.675,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "进出口商品检验法:第4条",
+    "两用物项出口管制条例:第28条",
+    "对外贸易法:第41条",
+    "对外贸易法:第18条",
+    "对外贸易法:第80条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 209,
+   "category": "WTO",
+   "question": "安全例外条款的适用范围是什么？",
+   "elapsed": 3.512,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "核两用品及相关技术出口管制条例:第27条",
+    "核出口管制条例:第22条",
+    "两用物项出口管制条例:第18条",
+    "gaiamei-hou:第9条",
+    "gaiamei-hou:第30条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 210,
+   "category": "WTO",
+   "question": "技术法规与标准的区别是什么？",
+   "elapsed": 2.009,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "技术进出口管理条例:第5条",
+    "技术进出口管理条例:第43条",
+    "对外贸易法:第16条",
+    "技术进出口管理条例:第42条",
+    "进出口商品检验法:第7条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 211,
+   "category": "WTO",
+   "question": "TBT 协定对成员国技术法规的制定有何要求？",
+   "elapsed": 2.288,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "tbt_e:art-2",
+    "技术进出口管理条例:第5条",
+    "对外贸易法:第16条",
+    "技术进出口管理条例:第28条",
+    "技术进出口管理条例:第8条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 212,
+   "category": "WTO",
+   "question": "SPS 协定下卫生检疫措施的合法性如何判断？",
+   "elapsed": 2.378,
+   "n_chunks": 30,
+   "n_articles": 16,
+   "top_articles": [
+    "sps_e:art-2",
+    "货物进出口管理条例:第72条",
+    "sps_e:art-1",
+    "sps_e:art-3",
+    "sps_e:art-4"
+   ],
+   "strict_idx": [
+    6,
+    11,
+    24
+   ],
+   "loose_idx": [
+    6,
+    11,
+    24
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1429,
+   "has_any": true
+  },
+  {
+   "case_id": 213,
+   "category": "WTO",
+   "question": "透明度原则要求成员国公布哪些贸易措施？",
+   "elapsed": 2.579,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "进出口货物原产地条例:第1条",
+    "进出口货物原产地条例:第2条",
+    "对外贸易法:第10条",
+    "对外贸易法:第8条",
+    "货物进出口管理条例:第6条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 214,
+   "category": "WTO",
+   "question": "《贸易便利化协定》对成员国通关程序有哪些要求？",
+   "elapsed": 2.211,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "对外贸易法:第81条",
+    "对外贸易法:第8条",
+    "对外贸易法:第60条",
+    "kazei-teiritsu-hou:第9条",
+    "进出口关税条例:第10条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 215,
+   "category": "WTO",
+   "question": "预裁定制度在贸易便利化协定中如何规定？",
+   "elapsed": 2.657,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "进出口货物原产地条例:第2条",
+    "对外贸易法:第81条",
+    "进出口货物原产地条例:第15条",
+    "kazei-teiritsu-hou:第9条",
+    "对外贸易法:第7条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 216,
+   "category": "WTO",
+   "question": "单一窗口建设属于贸易便利化的哪项义务？",
+   "elapsed": 2.021,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "gaiamei-hou:第52条",
+    "gaiamei-hou:第48条",
+    "对外贸易法:第61条",
+    "对外贸易法:第60条",
+    "对外贸易法:第81条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 217,
+   "category": "WTO",
+   "question": "海关合作与信息交换的规定是什么？",
+   "elapsed": 2.109,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "进出口货物原产地条例:第21条",
+    "海关行政处罚实施条例:第64条",
+    "进出口关税条例:第8条",
+    "关税法:第61条",
+    "海关对检举或协助查获违反海关法案件有功人员的奖励办法:第10条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 218,
+   "category": "WTO",
+   "question": "过境自由原则对成员国的要求是什么？",
+   "elapsed": 2.255,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "海关法:第50条",
+    "海关法:第36条",
+    "货物进出口管理条例:第20条",
+    "海关法:第23条",
+    "两用物项出口管制条例:第48条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 219,
+   "category": "WTO",
+   "question": "贸易便利化协定的特殊与差别待遇如何体现？",
+   "elapsed": 2.129,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "进出口货物原产地条例:第2条",
+    "进出口关税条例:第10条",
+    "关税法:第12条",
+    "对外贸易法:第81条",
+    "kazei-teiritsu-hou:第9条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 220,
+   "category": "WTO",
+   "question": "海关估价协定规定的估价方法有哪几种？",
+   "elapsed": 4.633,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "关税法:第27条",
+    "进出口关税条例:第21条",
+    "进出口关税条例:第27条",
+    "关税法:第30条",
+    "进出口关税条例:第34条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 221,
+   "category": "WTO",
+   "question": "进口许可程序协定对许可程序有何约束？",
+   "elapsed": 1.538,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "货物进出口管理条例:第20条",
+    "货物进出口管理条例:第32条",
+    "货物进出口管理条例:第24条",
+    "货物进出口管理条例:第19条",
+    "货物进出口管理条例:第23条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 222,
+   "category": "WTO",
+   "question": "原产地规则协定对成员国的要求是什么？",
+   "elapsed": 1.441,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "进出口货物原产地条例:第6条",
+    "进出口货物原产地条例:第26条",
+    "关税法:第11条",
+    "进出口关税条例:第10条",
+    "关税法:第12条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 223,
+   "category": "WTO",
+   "question": "反倾销协定对调查程序有何要求？",
+   "elapsed": 2.075,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "反倾销和反补贴条例:第25条",
+    "反倾销条例:第51条",
+    "反倾销和反补贴条例:第22条",
+    "反倾销和反补贴条例:第17条",
+    "反倾销条例:第34条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 224,
+   "category": "日本",
+   "question": "日本の関税法における輸入許可の手続きはどのようなものですか。",
+   "elapsed": 2.763,
+   "n_chunks": 30,
+   "n_articles": 19,
+   "top_articles": [
+    "kazei-hou:第2条",
+    "kazei-hou:第3条",
+    "kazei-teiritsu-hou:第20条",
+    "kazei-teiritsu-hou:第2条",
+    "kazei-hou:第47条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 225,
+   "category": "日本",
+   "question": "関税法上の課税価格はどのように決定されますか。",
+   "elapsed": 2.295,
+   "n_chunks": 30,
+   "n_articles": 13,
+   "top_articles": [
+    "kazei-teiritsu-hou:第4条",
+    "kazei-hou:第6条",
+    "kazei-hou:第8条",
+    "kazei-teiritsu-hou:第9条",
+    "kazei-teiritsu-hou:第3条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 226,
+   "category": "日本",
+   "question": "関税の納期限はいつですか。",
+   "elapsed": 2.581,
+   "n_chunks": 30,
+   "n_articles": 10,
+   "top_articles": [
+    "kazei-hou:第9条",
+    "kazei-hou:第11条",
+    "kazei-hou:第14条",
+    "kazei-hou:第2条",
+    "kazei-hou:第4条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 227,
+   "category": "日本",
+   "question": "関税の更正と賦課決定の違いは何ですか。",
+   "elapsed": 2.043,
+   "n_chunks": 30,
+   "n_articles": 14,
+   "top_articles": [
+    "kazei-hou:第14条",
+    "kazei-hou:第12条",
+    "kazei-hou:第9条",
+    "kazei-hou:第105条",
+    "kazei-hou:第7条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 228,
+   "category": "日本",
+   "question": "保税地域にはどのような種類がありますか。",
+   "elapsed": 3.635,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "kazei-hou:第29条",
+    "kazei-hou:第39条",
+    "kazei-hou:第37条",
+    "kazei-hou:第80条",
+    "kazei-hou:第62条"
+   ],
+   "strict_idx": [
+    3,
+    14,
+    21,
+    29
+   ],
+   "loose_idx": [
+    3,
+    14,
+    21,
+    29
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.25,
+   "has_any": true
+  },
+  {
+   "case_id": 229,
+   "category": "日本",
+   "question": "関税の減免制度にはどのようなものがありますか。",
+   "elapsed": 1.925,
+   "n_chunks": 30,
+   "n_articles": 16,
+   "top_articles": [
+    "kazei-teiritsu-hou:第1条",
+    "kazei-teiritsu-hou:第9条",
+    "kazei-teiritsu-hou:第20条",
+    "kazei-teiritsu-hou:第14条",
+    "kazei-teiritsu-hou:第15条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 230,
+   "category": "日本",
+   "question": "輸入貨物の検査はどのように行われますか。",
+   "elapsed": 1.906,
+   "n_chunks": 30,
+   "n_articles": 14,
+   "top_articles": [
+    "kazei-hou:第69条",
+    "kazei-hou:第105条",
+    "kazei-hou:第43条",
+    "kazei-hou:第68条",
+    "kazei-hou:第70条"
+   ],
+   "strict_idx": [
+    17,
+    19,
+    24,
+    26
+   ],
+   "loose_idx": [
+    17,
+    19,
+    24,
+    26
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0556,
+   "has_any": true
+  },
+  {
+   "case_id": 231,
+   "category": "日本",
+   "question": "関税定率法における原産地規則はどのように定められていますか。",
+   "elapsed": 1.779,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "进出口货物原产地条例:第6条",
+    "关税法:第11条",
+    "海关法:第41条",
+    "进出口货物原产地条例:第26条",
+    "进出口货物原产地条例:第27条"
+   ],
+   "strict_idx": [
+    5,
+    8,
+    10,
+    11,
+    13
+   ],
+   "loose_idx": [
+    5,
+    8,
+    10,
+    11,
+    13
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1667,
+   "has_any": true
+  },
+  {
+   "case_id": 232,
+   "category": "日本",
+   "question": "不服申立ての手続きはどうなっていますか。",
+   "elapsed": 2.902,
+   "n_chunks": 30,
+   "n_articles": 14,
+   "top_articles": [
+    "kazei-hou:第88条",
+    "gaiamei-hou:第7条",
+    "gaiamei-hou:第6条",
+    "kazei-hou:第6条",
+    "gaiamei-hou:第5条"
+   ],
+   "strict_idx": [
+    0,
+    6,
+    7,
+    23,
+    25
+   ],
+   "loose_idx": [
+    0,
+    6,
+    7,
+    23,
+    25
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 233,
+   "category": "日本",
+   "question": "密輸に対する罰則はどのようになっていますか。",
+   "elapsed": 2.333,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "kazei-hou:第5条",
+    "kazei-hou:第6条",
+    "海关法:第82条",
+    "kazei-hou:第117条",
+    "kazei-hou:第118条"
+   ],
+   "strict_idx": [
+    1,
+    3,
+    5,
+    6,
+    12
+   ],
+   "loose_idx": [
+    1,
+    3,
+    5,
+    6,
+    12
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 234,
+   "category": "日本",
+   "question": "外国為替及び外国貿易法に基づく輸出規制の仕組みは？",
+   "elapsed": 2.142,
+   "n_chunks": 30,
+   "n_articles": 19,
+   "top_articles": [
+    "yushutsu-boueki-kanri-rei:第1条",
+    "yushutsu-boueki-kanri-rei:第2条",
+    "gaiamei-hou:第48条",
+    "gaiamei-hou:第2条",
+    "gaiamei-hou:第4条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 235,
+   "category": "日本",
+   "question": "輸出貿易管理令に基づく許可が必要な貨物は？",
+   "elapsed": 2.472,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "yushutsu-boueki-kanri-rei:第5条",
+    "yushutsu-boueki-kanri-rei:第3条",
+    "yushutsu-boueki-kanri-rei:第2条",
+    "kazei-hou:第67条",
+    "yushutsu-boueki-kanri-rei:第4条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 236,
+   "category": "日本",
+   "question": "包括許可制度とはどのようなものですか。",
+   "elapsed": 2.05,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "货物进出口管理条例:第77条",
+    "出口管制法:第12条",
+    "两用物项出口管制条例:第14条",
+    "出口管制法:第14条",
+    "出口管制法:第4条"
+   ],
+   "strict_idx": [
+    23,
+    26,
+    29
+   ],
+   "loose_idx": [
+    23,
+    26,
+    29
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0417,
+   "has_any": true
+  },
+  {
+   "case_id": 237,
+   "category": "日本",
+   "question": "最終需要者確認の義務はどのように定められていますか。",
+   "elapsed": 2.091,
+   "n_chunks": 30,
+   "n_articles": 17,
+   "top_articles": [
+    "gaiamei-hou:第22条",
+    "gaiamei-hou:第17条",
+    "gaiamei-hou:第25条",
+    "gaiamei-hou:第18条",
+    "gaiamei-hou:第16条"
+   ],
+   "strict_idx": [
+    2,
+    5,
+    9,
+    16,
+    18
+   ],
+   "loose_idx": [
+    2,
+    5,
+    9,
+    16,
+    18
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.3333,
+   "has_any": true
+  },
+  {
+   "case_id": 238,
+   "category": "日本",
+   "question": "輸出管理の対象となる技術は？",
+   "elapsed": 2.311,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "技术进出口管理条例:第30条",
+    "两用物项出口管制条例:第47条",
+    "核两用品及相关技术出口管制条例:第8条",
+    "技术进出口管理条例:第1条",
+    "gaiamei-hou:第55条"
+   ],
+   "strict_idx": [
+    4,
+    5,
+    6,
+    7,
+    8
+   ],
+   "loose_idx": [
+    4,
+    5,
+    6,
+    7,
+    8
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.2,
+   "has_any": true
+  },
+  {
+   "case_id": 239,
+   "category": "日本",
+   "question": "キャッチオール規制とは何ですか。",
+   "elapsed": 2.354,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "出口管制法:第44条",
+    "出口管制法:第3条",
+    "出口管制法:第43条",
+    "两用物项出口管制条例:第47条",
+    "两用物项出口管制条例:第3条"
+   ],
+   "strict_idx": [
+    6,
+    18
+   ],
+   "loose_idx": [
+    6,
+    18
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1429,
+   "has_any": true
+  },
+  {
+   "case_id": 240,
+   "category": "日本",
+   "question": "対内直接投資の審査手続きは？",
+   "elapsed": 3.057,
+   "n_chunks": 30,
+   "n_articles": 11,
+   "top_articles": [
+    "gaiamei-hou:第27条",
+    "gaiamei-hou:第69条",
+    "gaiamei-hou:第3条",
+    "gaiamei-hou:第70条",
+    "gaiamei-hou:第29条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 241,
+   "category": "日本",
+   "question": "外為法違反の罰則は？",
+   "elapsed": 2.047,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "gaiamei-hou:第4条",
+    "gaiamei-hou:第3条",
+    "gaiamei-hou:第70条",
+    "kazei-hou:第117条",
+    "gaiamei-hou:第71条"
+   ],
+   "strict_idx": [
+    5,
+    6,
+    7,
+    9,
+    10
+   ],
+   "loose_idx": [
+    5,
+    6,
+    7,
+    9,
+    10
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1667,
+   "has_any": true
+  },
+  {
+   "case_id": 242,
+   "category": "澳洲",
+   "question": "Under the Australian Customs Act 1901, what are the requirements for entering goods for home consumption?",
+   "elapsed": 1.426,
+   "n_chunks": 30,
+   "n_articles": 16,
+   "top_articles": [
+    "customs-act-1901:sec-71G",
+    "customs-act-1901:sec-30",
+    "customs-act-1901:sec-71",
+    "customs-act-1901:sec-71A",
+    "customs-act-1901:sec-105"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    3,
+    4,
+    7
+   ],
+   "loose_idx": [
+    1,
+    2,
+    3,
+    4,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 243,
+   "category": "澳洲",
+   "question": "What is an import declaration under the Australian Customs Act 1901?",
+   "elapsed": 2.341,
+   "n_chunks": 30,
+   "n_articles": 13,
+   "top_articles": [
+    "customs-act-1901:sec-71A",
+    "customs-act-1901:sec-71D",
+    "customs-act-1901:sec-71B",
+    "customs-act-1901:sec-71C",
+    "customs-act-1901:sec-71G"
+   ],
+   "strict_idx": [
+    2,
+    10,
+    15,
+    16,
+    19
+   ],
+   "loose_idx": [
+    2,
+    10,
+    15,
+    16,
+    19
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.3333,
+   "has_any": true
+  },
+  {
+   "case_id": 244,
+   "category": "澳洲",
+   "question": "How is the customs value of imported goods determined in Australia?",
+   "elapsed": 1.926,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "cv_e:art-7",
+    "customs-act-1901:sec-68",
+    "cv_e:art-3",
+    "cv_e:art-2",
+    "cv_e:art-1"
+   ],
+   "strict_idx": [
+    0,
+    3,
+    4,
+    5,
+    6
+   ],
+   "loose_idx": [
+    0,
+    3,
+    4,
+    5,
+    6
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 245,
+   "category": "澳洲",
+   "question": "What licences or permissions are required to move goods into a warehouse in Australia?",
+   "elapsed": 2.022,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "customs-act-1901:sec-87",
+    "customs-act-1901:sec-101",
+    "customs-act-1901:sec-96B",
+    "customs-act-1901:sec-90",
+    "customs-act-1901:sec-71D"
+   ],
+   "strict_idx": [
+    0,
+    2,
+    6,
+    8,
+    9
+   ],
+   "loose_idx": [
+    0,
+    2,
+    6,
+    8,
+    9
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 246,
+   "category": "澳洲",
+   "question": "What are the powers of customs officers to examine goods in Australia?",
+   "elapsed": 3.109,
+   "n_chunks": 30,
+   "n_articles": 16,
+   "top_articles": [
+    "customs-act-1901:sec-122F",
+    "customs-act-1901:sec-122H",
+    "customs-act-1901:sec-68",
+    "customs-act-1901:sec-74",
+    "customs-act-1901:sec-122K"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    4,
+    5,
+    7
+   ],
+   "loose_idx": [
+    0,
+    1,
+    4,
+    5,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 247,
+   "category": "澳洲",
+   "question": "How does Australia's Customs Act deal with goods that are prohibited imports?",
+   "elapsed": 4.273,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "customs-act-1901:sec-51",
+    "customs-act-1901:sec-50",
+    "customs-act-1901:sec-77E",
+    "customs-act-1901:sec-64A",
+    "customs-act-1901:sec-68"
+   ],
+   "strict_idx": [
+    3,
+    5,
+    8,
+    9,
+    13
+   ],
+   "loose_idx": [
+    3,
+    5,
+    8,
+    9,
+    13
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.25,
+   "has_any": true
+  },
+  {
+   "case_id": 248,
+   "category": "澳洲",
+   "question": "What duty concessions are available under Australian customs law?",
+   "elapsed": 1.605,
+   "n_chunks": 30,
+   "n_articles": 21,
+   "top_articles": [
+    "customs-tariff-act-1995:sec-18",
+    "customs-tariff-act-1995:sec-15",
+    "customs-tariff-act-1995:sec-20A",
+    "part-10:10.721",
+    "customs-tariff-act-1995:sec-16B"
+   ],
+   "strict_idx": [
+    0,
+    3,
+    4,
+    5,
+    6
+   ],
+   "loose_idx": [
+    0,
+    3,
+    4,
+    5,
+    6
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 249,
+   "category": "澳洲",
+   "question": "What is the procedure for appealing a customs decision in Australia?",
+   "elapsed": 3.037,
+   "n_chunks": 30,
+   "n_articles": 18,
+   "top_articles": [
+    "part-115:115.17",
+    "cv_e:art-11",
+    "part-118:118.23",
+    "part-115:115.18",
+    "part-152:152.16"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    4,
+    5,
+    7
+   ],
+   "loose_idx": [
+    1,
+    2,
+    4,
+    5,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 250,
+   "category": "澳洲",
+   "question": "How are transit goods treated under the Australian Customs Act?",
+   "elapsed": 1.933,
+   "n_chunks": 30,
+   "n_articles": 13,
+   "top_articles": [
+    "customs-act-1901:sec-68A",
+    "customs-act-1901:sec-126A",
+    "customs-act-1901:sec-102D",
+    "customs-act-1901:sec-68",
+    "customs-act-1901:sec-31"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    3,
+    5,
+    9
+   ],
+   "loose_idx": [
+    1,
+    2,
+    3,
+    5,
+    9
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 251,
+   "category": "澳洲",
+   "question": "What are the record-keeping obligations for importers in Australia?",
+   "elapsed": 1.665,
+   "n_chunks": 30,
+   "n_articles": 5,
+   "top_articles": [
+    "customs-act-1901:sec-126A",
+    "part-163:163.2",
+    "part-10:10.137",
+    "customs-act-1901:sec-102C",
+    "part-163:163.3"
+   ],
+   "strict_idx": [
+    8,
+    9,
+    17,
+    23,
+    24
+   ],
+   "loose_idx": [
+    8,
+    9,
+    17,
+    23,
+    24
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1111,
+   "has_any": true
+  },
+  {
+   "case_id": 252,
+   "category": "澳洲",
+   "question": "Under the Australian Export Control Act 2020, what permits are required to export prescribed goods?",
+   "elapsed": 2.849,
+   "n_chunks": 30,
+   "n_articles": 17,
+   "top_articles": [
+    "export-control-act-2020:sec-225",
+    "export-control-act-2020:sec-4",
+    "export-control-act-2020:sec-224",
+    "export-control-act-2020:sec-233",
+    "export-control-act-2020:sec-29"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 253,
+   "category": "澳洲",
+   "question": "What are the export control rules for agricultural products in Australia?",
+   "elapsed": 2.164,
+   "n_chunks": 30,
+   "n_articles": 13,
+   "top_articles": [
+    "export-control-act-2020:sec-4",
+    "export-control-act-2020:sec-69",
+    "export-control-act-2020:sec-61",
+    "export-control-act-2020:sec-432",
+    "export-control-act-2020:sec-28"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 254,
+   "category": "澳洲",
+   "question": "Who issues export permits under Australian export control law?",
+   "elapsed": 1.423,
+   "n_chunks": 30,
+   "n_articles": 17,
+   "top_articles": [
+    "export-control-act-2020:sec-225",
+    "export-control-act-2020:sec-4",
+    "export-control-act-2020:sec-233",
+    "export-control-act-2020:sec-24",
+    "export-control-act-2020:sec-226"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 255,
+   "category": "澳洲",
+   "question": "What are the fit and proper person requirements for export licence holders in Australia?",
+   "elapsed": 2.914,
+   "n_chunks": 30,
+   "n_articles": 16,
+   "top_articles": [
+    "export-control-act-2020:sec-205",
+    "export-control-act-2020:sec-372",
+    "export-control-act-2020:sec-196",
+    "export-control-act-2020:sec-191",
+    "export-control-act-2020:sec-212"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 256,
+   "category": "澳洲",
+   "question": "What are the inspection and audit powers under Australia's export control legislation?",
+   "elapsed": 2.05,
+   "n_chunks": 30,
+   "n_articles": 11,
+   "top_articles": [
+    "export-control-act-2020:sec-272",
+    "export-control-act-2020:sec-265",
+    "export-control-act-2020:sec-314",
+    "export-control-act-2020:sec-284",
+    "export-control-act-2020:sec-266"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 257,
+   "category": "澳洲",
+   "question": "What sanctions apply for unlicensed exports under Australian law?",
+   "elapsed": 1.86,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "export-control-act-2020:sec-217",
+    "export-control-act-2020:sec-44",
+    "export-control-act-2020:sec-29",
+    "export-control-act-2020:sec-32",
+    "export-control-act-2020:sec-40"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 258,
+   "category": "澳洲",
+   "question": "How does Australia regulate the export of live animals?",
+   "elapsed": 2.439,
+   "n_chunks": 30,
+   "n_articles": 11,
+   "top_articles": [
+    "export-control-act-2020:sec-319",
+    "export-control-act-2020:sec-4",
+    "export-control-act-2020:sec-22",
+    "export-control-act-2020:sec-311",
+    "customs-tariff-act-1995:sec-22"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 259,
+   "category": "澳洲",
+   "question": "What are the requirements for exporting food under Australian export control law?",
+   "elapsed": 1.683,
+   "n_chunks": 30,
+   "n_articles": 14,
+   "top_articles": [
+    "export-control-act-2020:sec-4",
+    "export-control-act-2020:sec-28",
+    "export-control-act-2020:sec-432",
+    "export-control-act-2020:sec-61",
+    "export-control-act-2020:sec-69"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 260,
+   "category": "跨法域比较",
+   "question": "中国海关法和美国 CFR 对报关代理人资格的要求有什么不同？",
+   "elapsed": 1.7,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "海关法:第89条",
+    "海关法:第11条",
+    "海关法行政处罚实施细则:第25条",
+    "海关行政处罚实施条例:第28条",
+    "海关法:第10条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 261,
+   "category": "跨法域比较",
+   "question": "中国、美国与 WTO 对完税价格中运费保险费的处理规则有何差异？",
+   "elapsed": 2.466,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "海关法:第55条",
+    "进出口关税条例:第18条",
+    "进出口关税条例:第21条",
+    "进出口关税条例:第26条",
+    "进出口关税条例:第27条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 262,
+   "category": "跨法域比较",
+   "question": "中国原产地条例与 WTO 原产地规则协定在实质性改变标准上有何差异？",
+   "elapsed": 2.813,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "进出口货物原产地条例:第6条",
+    "进出口货物原产地条例:第3条",
+    "关税法:第11条",
+    "进出口货物原产地条例:第26条",
+    "进出口货物原产地条例:第11条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 263,
+   "category": "跨法域比较",
+   "question": "中国出口管制法和美国 EAR 在许可要求上的主要差异是什么？",
+   "elapsed": 3.11,
+   "n_chunks": 30,
+   "n_articles": 14,
+   "top_articles": [
+    "出口管制法:第12条",
+    "出口管制法:第4条",
+    "出口管制法:第13条",
+    "出口管制法:第19条",
+    "出口管制法:第11条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 264,
+   "category": "跨法域比较",
+   "question": "中国和澳洲对进境动植物产品的检疫审批要求有何不同？",
+   "elapsed": 1.695,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "进出口商品检验法:第4条",
+    "进出口货物原产地条例:第4条",
+    "进出口商品检验法:第6条",
+    "进出口货物原产地条例:第14条",
+    "货物进出口管理条例:第56条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 265,
+   "category": "跨法域比较",
+   "question": "中国反倾销条例与 WTO 反倾销协定在倾销认定上的差异是什么？",
+   "elapsed": 1.787,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "反倾销和反补贴条例:第3条",
+    "反倾销条例:第2条",
+    "反倾销条例:第3条",
+    "反倾销条例:第6条",
+    "反倾销条例:第12条"
+   ],
+   "strict_idx": [
+    3
+   ],
+   "loose_idx": [
+    3
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.25,
+   "has_any": true
+  },
+  {
+   "case_id": 266,
+   "category": "跨法域比较",
+   "question": "CISG 与国内法在货物瑕疵担保责任上有何区别？",
+   "elapsed": 1.932,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "cisg:art-36",
+    "cisg:art-101",
+    "cisg:art-35",
+    "cisg:art-68",
+    "cisg:art-42"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 267,
+   "category": "跨法域比较",
+   "question": "日本的課税価格認定与中国的完税价格审定规则有何不同？",
+   "elapsed": 2.084,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "海关法:第55条",
+    "进出口关税条例:第21条",
+    "进出口关税条例:第18条",
+    "进出口关税条例:第27条",
+    "进出口关税条例:第34条"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 276,
+   "category": "综合场景",
+   "question": "我们从越南进口一批纺织品，经香港转口，最终运到上海。整个链条涉及哪些海关手续和原产地认定问题？",
+   "elapsed": 2.034,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "进出口货物原产地条例:第11条",
+    "进出口货物原产地条例:第14条",
+    "进出口货物原产地条例:第13条",
+    "进出口货物原产地条例:第20条",
+    "海关事务担保条例:第4条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 277,
+   "category": "综合场景",
+   "question": "一批货物在海运途中受损，进口时已投保。报关时完税价格怎么申报？损失部分能否减征关税？",
+   "elapsed": 3.268,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "海关法:第55条",
+    "进出口关税条例:第18条",
+    "进出口关税条例:第21条",
+    "进出口关税条例:第22条",
+    "进出口关税条例:第26条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    4,
+    6
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    4,
+    6
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 278,
+   "category": "综合场景",
+   "question": "我们打算以加工贸易方式进口原材料，成品全部出口。需要办什么手续？如果部分内销又该怎么补税？",
+   "elapsed": 2.118,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "海关法:第33条",
+    "对外贸易法:第23条",
+    "进出口关税条例:第41条",
+    "关税法:第36条",
+    "关税法:第21条"
+   ],
+   "strict_idx": [
+    0,
+    2,
+    5,
+    7,
+    8
+   ],
+   "loose_idx": [
+    0,
+    2,
+    5,
+    7,
+    8
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 279,
+   "category": "综合场景",
+   "question": "海外客户要求我们出具原产地声明而不是原产地证书。这两种方式在法律效力和操作上有什么区别？",
+   "elapsed": 2.401,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "进出口货物原产地条例:第26条",
+    "进出口货物原产地条例:第19条",
+    "进出口货物原产地条例:第18条",
+    "进出口货物原产地条例:第14条",
+    "进出口货物原产地条例:第17条"
+   ],
+   "strict_idx": [
+    1,
+    3,
+    4,
+    5,
+    6
+   ],
+   "loose_idx": [
+    1,
+    3,
+    4,
+    5,
+    6
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 280,
+   "category": "综合场景",
+   "question": "进口货物被海关扣留查验，产生了仓储费用。这笔费用由谁承担？扣留期限有规定吗？",
+   "elapsed": 1.642,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "海关法:第30条",
+    "海关法:第61条",
+    "海关行政处罚实施条例:第40条",
+    "海关法:第38条",
+    "海关法:第24条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 281,
+   "category": "综合场景",
+   "question": "我们出口的一批设备被境外客户转卖给第三国，这属于再出口吗？需要履行什么义务？",
+   "elapsed": 3.024,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "两用物项出口管制条例:第18条",
+    "出口管制法:第44条",
+    "两用物项出口管制条例:第19条",
+    "两用物项出口管制条例:第49条",
+    "出口管制法:第13条"
+   ],
+   "strict_idx": [
+    5,
+    6,
+    13,
+    14,
+    21
+   ],
+   "loose_idx": [
+    5,
+    6,
+    13,
+    14,
+    21
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1667,
+   "has_any": true
+  },
+  {
+   "case_id": 282,
+   "category": "综合场景",
+   "question": "进口货物的成交价格因买方与卖方是关联企业而被海关质疑，我们应如何应对？",
+   "elapsed": 1.83,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "进出口关税条例:第18条",
+    "进出口关税条例:第21条",
+    "关税法:第27条",
+    "关税法:第24条",
+    "海关法:第55条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 283,
+   "category": "综合场景",
+   "question": "跨境电商保税进口模式下，商品从保税仓发货给消费者，涉及哪些海关和税收环节？",
+   "elapsed": 2.104,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "海关法:第59条",
+    "进出口关税条例:第16条",
+    "进出口关税条例:第41条",
+    "海关法:第32条",
+    "海关法:第33条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 284,
+   "category": "综合场景",
+   "question": "同一批货物同时涉及反倾销税和进口环节增值税，税款计算顺序是什么？",
+   "elapsed": 2.121,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "关税法:第16条",
+    "反倾销和反补贴条例:第22条",
+    "反倾销和反补贴条例:第28条",
+    "反倾销条例:第40条",
+    "反倾销条例:第28条"
+   ],
+   "strict_idx": [
+    6,
+    10,
+    13,
+    17,
+    19
+   ],
+   "loose_idx": [
+    6,
+    10,
+    13,
+    17,
+    19
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1429,
+   "has_any": true
+  },
+  {
+   "case_id": 285,
+   "category": "综合场景",
+   "question": "我们想申请海关高级认证企业资格，需要满足哪些条件？认证后能享受什么便利？",
+   "elapsed": 2.19,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "海关事务担保条例:第10条",
+    "海关法行政处罚实施细则:第25条",
+    "海关行政处罚实施条例:第27条",
+    "海关法:第87条",
+    "海关行政处罚实施条例:第26条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 286,
+   "category": "出口",
+   "question": "出口货物报关需要提交哪些单证？",
+   "elapsed": 2.143,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "海关法:第24条",
+    "两用物项出口管制条例:第21条",
+    "出口管制法:第19条",
+    "两用物项出口管制条例:第22条",
+    "货物进出口管理条例:第44条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 287,
+   "category": "出口",
+   "question": "出口货物的申报期限是如何规定的？",
+   "elapsed": 2.506,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "海关法:第24条",
+    "关税法:第39条",
+    "海关法:第31条",
+    "进出口关税条例:第29条",
+    "关税法:第42条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 288,
+   "category": "出口",
+   "question": "出口退税的申请条件是什么？",
+   "elapsed": 1.705,
+   "n_chunks": 30,
+   "n_articles": 21,
+   "top_articles": [
+    "进出口关税条例:第50条",
+    "反倾销和反补贴条例:第34条",
+    "反倾销条例:第46条",
+    "进出口关税条例:第52条",
+    "两用物项出口管制条例:第18条"
+   ],
+   "strict_idx": [
+    0,
+    4,
+    5,
+    6,
+    7
+   ],
+   "loose_idx": [
+    0,
+    4,
+    5,
+    6,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 289,
+   "category": "出口",
+   "question": "出口货物退关如何处理？",
+   "elapsed": 1.688,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "进出口关税条例:第50条",
+    "关税法:第52条",
+    "海关事务担保条例:第4条",
+    "海关法:第66条",
+    "海关法:第24条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    5,
+    7
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    5,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 290,
+   "category": "出口",
+   "question": "出口加工区货物出口的报关流程是什么？",
+   "elapsed": 1.931,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "货物进出口管理条例:第75条",
+    "出口管制法:第19条",
+    "两用物项出口管制条例:第21条",
+    "货物进出口管理条例:第41条",
+    "出口管制法:第45条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 291,
+   "category": "出口",
+   "question": "出口货物的报关单与进口报关单有何不同？",
+   "elapsed": 2.383,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "海关法:第25条",
+    "货物进出口管理条例:第2条",
+    "两用物项出口管制条例:第21条",
+    "出口管制法:第19条",
+    "海关法:第24条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 292,
+   "category": "出口",
+   "question": "出口货物退税申报需要哪些凭证？",
+   "elapsed": 1.732,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "进出口关税条例:第50条",
+    "关税法:第52条",
+    "进出口货物原产地条例:第23条",
+    "进出口货物原产地条例:第18条",
+    "对外贸易法:第37条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 293,
+   "category": "出口",
+   "question": "出口收汇核销制度现在如何实施？",
+   "elapsed": 1.579,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "出口管制法:第4条",
+    "外汇管理条例:第33条",
+    "外汇管理条例:第48条",
+    "外汇管理条例:第47条",
+    "外汇管理条例:第25条"
+   ],
+   "strict_idx": [
+    0,
+    15,
+    17,
+    19,
+    20
+   ],
+   "loose_idx": [
+    0,
+    15,
+    17,
+    19,
+    20
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 294,
+   "category": "出口",
+   "question": "出口货物的原产地证在报关时起什么作用？",
+   "elapsed": 2.548,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "进出口货物原产地条例:第26条",
+    "进出口货物原产地条例:第19条",
+    "进出口货物原产地条例:第18条",
+    "进出口货物原产地条例:第17条",
+    "进出口货物原产地条例:第23条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 295,
+   "category": "出口",
+   "question": "出口货物被境外退运，已退税的如何处理？",
+   "elapsed": 3.201,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "进出口关税条例:第50条",
+    "关税法:第52条",
+    "对外贸易法:第37条",
+    "反倾销条例:第46条",
+    "进出口关税条例:第43条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    4,
+    7
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    4,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 296,
+   "category": "稽查信用",
+   "question": "海关稽查的启动条件和程序是什么？",
+   "elapsed": 2.69,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "海关行政处罚实施条例:第67条",
+    "海关法:第45条",
+    "海关行政处罚实施条例:第33条",
+    "海关行政处罚实施条例:第46条",
+    "海关行政处罚实施条例:第34条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 297,
+   "category": "稽查信用",
+   "question": "海关稽查的期限范围是多久？",
+   "elapsed": 1.695,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "关税法:第47条",
+    "海关法:第45条",
+    "海关行政处罚实施条例:第40条",
+    "关税法:第45条",
+    "海关行政处罚实施条例:第37条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    5
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    5
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 298,
+   "category": "稽查信用",
+   "question": "企业在海关稽查中负有哪些配合义务？",
+   "elapsed": 2.345,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "海关行政处罚实施条例:第26条",
+    "海关法:第38条",
+    "进出口关税条例:第54条",
+    "海关法:第45条",
+    "海关行政处罚实施条例:第46条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 299,
+   "category": "稽查信用",
+   "question": "海关可以查阅企业账簿吗？",
+   "elapsed": 2.265,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "海关法:第45条",
+    "海关行政处罚实施条例:第46条",
+    "海关法:第6条",
+    "进出口关税条例:第33条",
+    "海关法:第87条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    5
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    5
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 300,
+   "category": "稽查信用",
+   "question": "高级认证企业的认证标准是什么？",
+   "elapsed": 3.001,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "海关事务担保条例:第10条",
+    "对外贸易法:第61条",
+    "货物进出口管理条例:第50条",
+    "进出口商品检验法:第23条",
+    "进出口商品检验法:第24条"
+   ],
+   "strict_idx": [
+    0,
+    5,
+    6,
+    7,
+    8
+   ],
+   "loose_idx": [
+    0,
+    5,
+    6,
+    7,
+    8
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 301,
+   "category": "稽查信用",
+   "question": "失信企业会被采取哪些惩戒措施？",
+   "elapsed": 2.783,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "货物进出口管理条例:第63条",
+    "货物进出口管理条例:第60条",
+    "海关行政处罚实施条例:第26条",
+    "两用物项出口管制条例:第28条",
+    "海关行政处罚实施条例:第60条"
+   ],
+   "strict_idx": [
+    2,
+    4,
+    5,
+    6,
+    7
+   ],
+   "loose_idx": [
+    2,
+    4,
+    5,
+    6,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.3333,
+   "has_any": true
+  },
+  {
+   "case_id": 302,
+   "category": "稽查信用",
+   "question": "企业信用等级如何修复？",
+   "elapsed": 2.092,
+   "n_chunks": 11,
+   "n_articles": 8,
+   "top_articles": [
+    "进出口关税条例:第21条",
+    "关税法:第27条",
+    "两用物项出口管制条例:第10条",
+    "关税法:第28条",
+    "进出口货物原产地条例:第4条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 303,
+   "category": "稽查信用",
+   "question": "AEO 互认对企业有什么实际好处？",
+   "elapsed": 2.163,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "海关行政处罚实施条例:第27条",
+    "海关行政处罚实施条例:第26条",
+    "海关事务担保条例:第10条",
+    "对外贸易法:第60条",
+    "海关法:第10条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 304,
+   "category": "稽查信用",
+   "question": "海关对企业分类管理的依据是什么？",
+   "elapsed": 1.682,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "海关法:第3条",
+    "海关法:第87条",
+    "海关法:第42条",
+    "海关事务担保条例:第10条",
+    "关税法:第31条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 305,
+   "category": "稽查信用",
+   "question": "企业主动披露违规可以减轻处罚吗？",
+   "elapsed": 2.806,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "海关法行政处罚实施细则:第8条",
+    "海关法行政处罚实施细则:第18条",
+    "海关对检举或协助查获违反海关法案件有功人员的奖励办法:第4条",
+    "海关法行政处罚实施细则:第24条",
+    "海关行政处罚实施条例:第11条"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    3,
+    4,
+    6
+   ],
+   "loose_idx": [
+    1,
+    2,
+    3,
+    4,
+    6
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 306,
+   "category": "关税",
+   "question": "关税的纳税义务人是谁？",
+   "elapsed": 1.639,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "进出口关税条例:第5条",
+    "海关法:第54条",
+    "进出口关税条例:第54条",
+    "进出口关税条例:第55条",
+    "进出口关税条例:第58条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 307,
+   "category": "关税",
+   "question": "关税的纳税期限是多少天？",
+   "elapsed": 2.438,
+   "n_chunks": 30,
+   "n_articles": 17,
+   "top_articles": [
+    "进出口关税条例:第40条",
+    "进出口关税条例:第42条",
+    "进出口关税条例:第37条",
+    "进出口关税条例:第29条",
+    "进出口关税条例:第52条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 308,
+   "category": "关税",
+   "question": "逾期缴纳税款会加收多少滞纳金？",
+   "elapsed": 1.826,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "进出口关税条例:第37条",
+    "关税法:第46条",
+    "关税法:第43条",
+    "关税法:第48条",
+    "海关法:第60条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 309,
+   "category": "关税",
+   "question": "纳税义务人可以提供担保延期缴税吗？",
+   "elapsed": 2.687,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "进出口关税条例:第39条",
+    "海关法:第61条",
+    "海关事务担保条例:第6条",
+    "进出口关税条例:第40条",
+    "关税法:第43条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 310,
+   "category": "关税",
+   "question": "海关可以采取哪些税收保全措施？",
+   "elapsed": 2.089,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "海关法:第61条",
+    "海关事务担保条例:第6条",
+    "进出口关税条例:第40条",
+    "关税法:第50条",
+    "关税法:第49条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 311,
+   "category": "关税",
+   "question": "强制执行措施包括哪些？",
+   "elapsed": 2.352,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "关税法:第50条",
+    "海关行政处罚实施条例:第60条",
+    "海关法行政处罚实施细则:第30条",
+    "海关法:第93条",
+    "海关法:第60条"
+   ],
+   "strict_idx": [
+    0,
+    4,
+    6,
+    8,
+    9
+   ],
+   "loose_idx": [
+    0,
+    4,
+    6,
+    8,
+    9
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 312,
+   "category": "关税",
+   "question": "纳税义务人对税款有异议怎么办？",
+   "elapsed": 2.068,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "海关法:第64条",
+    "进出口关税条例:第64条",
+    "进出口关税条例:第55条",
+    "关税法:第66条",
+    "进出口关税条例:第52条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 313,
+   "category": "关税",
+   "question": "关税的纳税地点在哪里？",
+   "elapsed": 1.78,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "进出口关税条例:第64条",
+    "关税法:第66条",
+    "进出口关税条例:第5条",
+    "海关法:第54条",
+    "进出口关税条例:第16条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 314,
+   "category": "关税",
+   "question": "进口环节海关代征税包括哪些？",
+   "elapsed": 1.987,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "进出口关税条例:第56条",
+    "进出口关税条例:第65条",
+    "海关法:第65条",
+    "关税法:第70条",
+    "进出口关税条例:第47条"
+   ],
+   "strict_idx": [
+    7,
+    11,
+    14,
+    18,
+    19
+   ],
+   "loose_idx": [
+    7,
+    11,
+    14,
+    18,
+    19
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.125,
+   "has_any": true
+  },
+  {
+   "case_id": 315,
+   "category": "关税",
+   "question": "减免税货物在监管期内转让需要补税吗？",
+   "elapsed": 6.853,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "关税法:第35条",
+    "进出口关税条例:第49条",
+    "进出口关税条例:第16条",
+    "关税法:第21条",
+    "进出口关税条例:第55条"
+   ],
+   "strict_idx": [
+    2,
+    3,
+    4,
+    6,
+    7
+   ],
+   "loose_idx": [
+    2,
+    3,
+    4,
+    6,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.3333,
+   "has_any": true
+  },
+  {
+   "case_id": 316,
+   "category": "商品归类",
+   "question": "商品归类的基本原则是什么？",
+   "elapsed": 2.045,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "进出口关税条例:第31条",
+    "关税法:第9条",
+    "海关法:第42条",
+    "进出口货物原产地条例:第6条",
+    "关税法:第31条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 317,
+   "category": "商品归类",
+   "question": "税则号列如何确定？",
+   "elapsed": 2.385,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "关税法:第9条",
+    "进出口关税条例:第31条",
+    "海关法:第42条",
+    "关税法:第31条",
+    "进出口关税条例:第32条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 318,
+   "category": "商品归类",
+   "question": "归类总规则包括哪几条？",
+   "elapsed": 2.63,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "关税法:第9条",
+    "进出口关税条例:第31条",
+    "进出口货物原产地条例:第6条",
+    "关税法:第4条",
+    "海关法:第41条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    23,
+    24
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    23,
+    24
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 319,
+   "category": "商品归类",
+   "question": "成套货物如何归类？",
+   "elapsed": 2.082,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "关税法:第9条",
+    "进出口货物原产地条例:第9条",
+    "进出口货物原产地条例:第8条",
+    "海关法:第42条",
+    "进出口关税条例:第31条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 320,
+   "category": "商品归类",
+   "question": "功能机组如何归类？",
+   "elapsed": 2.458,
+   "n_chunks": 16,
+   "n_articles": 16,
+   "top_articles": [
+    "关税法:第9条",
+    "进出口关税条例:第31条",
+    "海关法:第42条",
+    "进出口货物原产地条例:第9条",
+    "进出口关税条例:第32条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 321,
+   "category": "商品归类",
+   "question": "未完成品或拆散件如何归类？",
+   "elapsed": 1.857,
+   "n_chunks": 30,
+   "n_articles": 27,
+   "top_articles": [
+    "进出口货物原产地条例:第9条",
+    "海关法:第42条",
+    "海关法:第66条",
+    "进出口关税条例:第32条",
+    "进出口关税条例:第61条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 322,
+   "category": "商品归类",
+   "question": "对归类有争议可以申请预裁定吗？",
+   "elapsed": 1.49,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "海关法:第43条",
+    "海关法:第64条",
+    "进出口货物原产地条例:第15条",
+    "关税法:第66条",
+    "进出口货物原产地条例:第12条"
+   ],
+   "strict_idx": [
+    0,
+    3,
+    5,
+    6,
+    7
+   ],
+   "loose_idx": [
+    0,
+    3,
+    5,
+    6,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 323,
+   "category": "商品归类",
+   "question": "归类错误的补税期限如何确定？",
+   "elapsed": 2.36,
+   "n_chunks": 30,
+   "n_articles": 13,
+   "top_articles": [
+    "kazei-hou:第14条",
+    "进出口关税条例:第64条",
+    "kazei-hou:第12条",
+    "关税法:第45条",
+    "kazei-hou:第11条"
+   ],
+   "strict_idx": [
+    2,
+    14
+   ],
+   "loose_idx": [
+    2,
+    14
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.3333,
+   "has_any": true
+  },
+  {
+   "case_id": 324,
+   "category": "商品归类",
+   "question": "海关化验结果与申报归类不符如何处理？",
+   "elapsed": 2.586,
+   "n_chunks": 30,
+   "n_articles": 30,
+   "top_articles": [
+    "海关法:第42条",
+    "进出口关税条例:第32条",
+    "关税法:第31条",
+    "海关法:第24条",
+    "海关法:第30条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    7,
+    11
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    7,
+    11
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 325,
+   "category": "商品归类",
+   "question": "商标或品牌对商品归类有影响吗？",
+   "elapsed": 1.76,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "海关法:第43条",
+    "海关法:第42条",
+    "关税法:第31条",
+    "进出口关税条例:第32条",
+    "进出口关税条例:第64条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 326,
+   "category": "贸易便利化",
+   "question": "提前申报模式适用于哪些情形？",
+   "elapsed": 1.541,
+   "n_chunks": 30,
+   "n_articles": 18,
+   "top_articles": [
+    "进出口关税条例:第16条",
+    "海关事务担保条例:第4条",
+    "关税法:第21条",
+    "关税法:第20条",
+    "进出口关税条例:第15条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    10,
+    11,
+    17
+   ],
+   "loose_idx": [
+    0,
+    1,
+    10,
+    11,
+    17
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 327,
+   "category": "贸易便利化",
+   "question": "两步申报的具体流程是什么？",
+   "elapsed": 2.229,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "海关法:第24条",
+    "海关法:第25条",
+    "关税法:第42条",
+    "进出口关税条例:第29条",
+    "关税法:第20条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 328,
+   "category": "贸易便利化",
+   "question": "汇总征税的适用条件是什么？",
+   "elapsed": 2.532,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "关税法:第43条",
+    "进出口关税条例:第16条",
+    "进出口关税条例:第15条",
+    "进出口关税条例:第65条",
+    "海关法:第65条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 329,
+   "category": "贸易便利化",
+   "question": "关税保证保险与保证金有何区别？",
+   "elapsed": 1.735,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "海关法:第59条",
+    "反倾销条例:第29条",
+    "进出口关税条例:第42条",
+    "反倾销和反补贴条例:第22条",
+    "海关法行政处罚实施细则:第29条"
+   ],
+   "strict_idx": [
+    22
+   ],
+   "loose_idx": [
+    22
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0435,
+   "has_any": true
+  },
+  {
+   "case_id": 330,
+   "category": "贸易便利化",
+   "question": "单一窗口可以办理哪些业务？",
+   "elapsed": 2.328,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "对外贸易法:第14条",
+    "海关法:第2条",
+    "海关法:第100条",
+    "海关事务担保条例:第20条",
+    "海关事务担保条例:第5条"
+   ],
+   "strict_idx": [
+    21
+   ],
+   "loose_idx": [
+    21
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0455,
+   "has_any": true
+  },
+  {
+   "case_id": 331,
+   "category": "贸易便利化",
+   "question": "原产地证书自助打印需要什么条件？",
+   "elapsed": 2.153,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "进出口货物原产地条例:第19条",
+    "进出口货物原产地条例:第26条",
+    "进出口货物原产地条例:第18条",
+    "进出口货物原产地条例:第17条",
+    "进出口货物原产地条例:第14条"
+   ],
+   "strict_idx": [
+    2,
+    17,
+    24,
+    29
+   ],
+   "loose_idx": [
+    2,
+    17,
+    24,
+    29
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.3333,
+   "has_any": true
+  },
+  {
+   "case_id": 332,
+   "category": "贸易便利化",
+   "question": "海关预裁定申请的有效期和适用范围是什么？",
+   "elapsed": 1.782,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "进出口货物原产地条例:第15条",
+    "海关法:第43条",
+    "进出口货物原产地条例:第12条",
+    "进出口货物原产地条例:第13条",
+    "进出口关税条例:第42条"
+   ],
+   "strict_idx": [
+    3,
+    6,
+    7,
+    8,
+    14
+   ],
+   "loose_idx": [
+    3,
+    6,
+    7,
+    8,
+    14
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.25,
+   "has_any": true
+  },
+  {
+   "case_id": 333,
+   "category": "贸易便利化",
+   "question": "经核准出口商制度是什么？",
+   "elapsed": 2.596,
+   "n_chunks": 30,
+   "n_articles": 29,
+   "top_articles": [
+    "进出口货物原产地条例:第20条",
+    "进出口货物原产地条例:第17条",
+    "进出口货物原产地条例:第24条",
+    "进出口货物原产地条例:第14条",
+    "出口管制法:第19条"
+   ],
+   "strict_idx": [
+    8,
+    17
+   ],
+   "loose_idx": [
+    8,
+    17
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1111,
+   "has_any": true
+  },
+  {
+   "case_id": 334,
+   "category": "贸易便利化",
+   "question": "集中申报与逐票申报的区别是什么？",
+   "elapsed": 2.383,
+   "n_chunks": 30,
+   "n_articles": 28,
+   "top_articles": [
+    "海关法:第25条",
+    "关税法:第42条",
+    "海关法:第24条",
+    "关税法:第20条",
+    "进出口货物原产地条例:第11条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 335,
+   "category": "贸易便利化",
+   "question": "免除查验没有问题外贸企业吊装移位仓储费用政策是什么？",
+   "elapsed": 2.258,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "海关法:第38条",
+    "海关事务担保条例:第10条",
+    "海关法:第28条",
+    "kazei-hou:第101条",
+    "kazei-hou:第83条"
+   ],
+   "strict_idx": [
+    23
+   ],
+   "loose_idx": [
+    23
+   ],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0417,
+   "has_any": true
+  },
+  {
+   "case_id": 336,
+   "category": "US报关",
+   "question": "What is the process for filing an entry summary with US Customs?",
+   "elapsed": 2.25,
+   "n_chunks": 30,
+   "n_articles": 25,
+   "top_articles": [
+    "part-142:142.14",
+    "part-142:142.13",
+    "part-143:143.35",
+    "part-132:132.11a",
+    "part-141:141.61"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 337,
+   "category": "US报关",
+   "question": "What is the difference between a formal and an informal entry in the United States?",
+   "elapsed": 2.05,
+   "n_chunks": 30,
+   "n_articles": 19,
+   "top_articles": [
+    "part-141:141.4",
+    "part-143:143.21",
+    "part-143:143.23",
+    "part-145:145.12",
+    "part-148:148.5"
+   ],
+   "strict_idx": [
+    1,
+    6,
+    8,
+    10,
+    20
+   ],
+   "loose_idx": [
+    1,
+    6,
+    8,
+    10,
+    20
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 338,
+   "category": "US报关",
+   "question": "What is Customs Bonded Warehouse procedure in the US?",
+   "elapsed": 2.117,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "part-144:144.15",
+    "part-146:146.64",
+    "part-144:144.39",
+    "part-144:144.41",
+    "part-144:144.34"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 339,
+   "category": "US报关",
+   "question": "What are the recordkeeping requirements under 19 CFR Part 163?",
+   "elapsed": 2.997,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "part-163:163.2",
+    "part-163:163.1",
+    "part-163:163.4",
+    "part-163:163.0",
+    "part-10:10.767"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "loose_idx": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 340,
+   "category": "US关税",
+   "question": "How does US Customs determine the transaction value of imported merchandise?",
+   "elapsed": 2.287,
+   "n_chunks": 30,
+   "n_articles": 9,
+   "top_articles": [
+    "part-152:152.103",
+    "cv_e:art-1",
+    "cv_e:art-24",
+    "part-152:152.105",
+    "cv_e:art-2"
+   ],
+   "strict_idx": [
+    9,
+    13,
+    15,
+    16,
+    17
+   ],
+   "loose_idx": [
+    9,
+    13,
+    15,
+    16,
+    17
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1,
+   "has_any": true
+  },
+  {
+   "case_id": 341,
+   "category": "US关税",
+   "question": "What is the Merchandise Processing Fee in US customs?",
+   "elapsed": 2.116,
+   "n_chunks": 30,
+   "n_articles": 11,
+   "top_articles": [
+    "part-24:24.23",
+    "part-10:10.502",
+    "part-24:24.24",
+    "part-10:10.903",
+    "part-10:10.510"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 342,
+   "category": "US关税",
+   "question": "How does the US apply the Harmonized Tariff Schedule?",
+   "elapsed": 1.645,
+   "n_chunks": 30,
+   "n_articles": 23,
+   "top_articles": [
+    "part-10:10.11",
+    "part-142:142.17",
+    "part-159:159.43",
+    "part-7:7.3",
+    "part-152:152.11"
+   ],
+   "strict_idx": [
+    6,
+    12,
+    28
+   ],
+   "loose_idx": [
+    6,
+    12,
+    28
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1429,
+   "has_any": true
+  },
+  {
+   "case_id": 343,
+   "category": "US关税",
+   "question": "What is the protest procedure for US customs decisions?",
+   "elapsed": 1.948,
+   "n_chunks": 30,
+   "n_articles": 22,
+   "top_articles": [
+    "part-152:152.16",
+    "part-148:148.25",
+    "part-118:118.23",
+    "part-163:163.13",
+    "part-115:115.17"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    5,
+    9
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    5,
+    9
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 344,
+   "category": "US原产地",
+   "question": "What are the US rules of origin for preferential tariff treatment?",
+   "elapsed": 2.195,
+   "n_chunks": 30,
+   "n_articles": 14,
+   "top_articles": [
+    "part-10:10.862",
+    "part-10:10.722",
+    "part-10:10.902",
+    "part-10:10.3002",
+    "part-10:10.2002"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 345,
+   "category": "US原产地",
+   "question": "How does US Customs determine country of origin marking requirements?",
+   "elapsed": 2.184,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "part-134:134.11",
+    "part-102:102.0",
+    "part-134:134.41",
+    "part-134:134.44",
+    "part-145:145.14"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 346,
+   "category": "US出口管制",
+   "question": "What is the Commerce Control List under the EAR?",
+   "elapsed": 1.963,
+   "n_chunks": 30,
+   "n_articles": 13,
+   "top_articles": [
+    "part-738:738.2",
+    "part-738:738.1",
+    "part-734:734.2",
+    "part-736:736.2",
+    "part-738:738.3"
+   ],
+   "strict_idx": [
+    0,
+    2,
+    3,
+    4,
+    6
+   ],
+   "loose_idx": [
+    0,
+    2,
+    3,
+    4,
+    6
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 347,
+   "category": "US出口管制",
+   "question": "What is an export licence exception under the EAR?",
+   "elapsed": 2.709,
+   "n_chunks": 30,
+   "n_articles": 13,
+   "top_articles": [
+    "part-732:732.4",
+    "part-746:746.7",
+    "part-730:730.7",
+    "part-744:744.21",
+    "part-734:734.20"
+   ],
+   "strict_idx": [
+    0,
+    2,
+    5,
+    8,
+    9
+   ],
+   "loose_idx": [
+    0,
+    2,
+    5,
+    8,
+    9
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 348,
+   "category": "US出口管制",
+   "question": "What are the deemed export rules under the EAR?",
+   "elapsed": 2.865,
+   "n_chunks": 30,
+   "n_articles": 14,
+   "top_articles": [
+    "part-734:734.20",
+    "part-730:730.5",
+    "part-734:734.13",
+    "part-732:732.1",
+    "part-734:734.1"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    3,
+    4,
+    7
+   ],
+   "loose_idx": [
+    1,
+    2,
+    3,
+    4,
+    7
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 349,
+   "category": "US出口管制",
+   "question": "Who is a US person for export control purposes?",
+   "elapsed": 1.589,
+   "n_chunks": 30,
+   "n_articles": 12,
+   "top_articles": [
+    "export-control-act-2020:sec-21",
+    "export-control-act-2020:sec-220",
+    "part-730:730.5",
+    "part-734:734.18",
+    "part-734:734.13"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 350,
+   "category": "US出口管制",
+   "question": "What is the Entity List and what effect does listing have?",
+   "elapsed": 2.015,
+   "n_chunks": 30,
+   "n_articles": 8,
+   "top_articles": [
+    "part-744:744.16",
+    "part-744:744.21",
+    "part-744:744.8",
+    "part-744:744.11",
+    "part-736:736.2"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 351,
+   "category": "US保税",
+   "question": "What are the requirements for a US foreign trade zone?",
+   "elapsed": 2.133,
+   "n_chunks": 30,
+   "n_articles": 21,
+   "top_articles": [
+    "part-146:146.0",
+    "part-112:112.2",
+    "part-113:113.73",
+    "part-147:147.45",
+    "part-146:146.91"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 352,
+   "category": "US保税",
+   "question": "How are goods admitted to a US bonded warehouse?",
+   "elapsed": 2.813,
+   "n_chunks": 30,
+   "n_articles": 26,
+   "top_articles": [
+    "part-123:123.10",
+    "part-122:122.50",
+    "part-144:144.39",
+    "part-144:144.5",
+    "part-144:144.41"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 353,
+   "category": "US担保",
+   "question": "What forms of customs bond are accepted by US Customs?",
+   "elapsed": 1.828,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "part-24:24.1",
+    "part-141:141.15",
+    "part-113:113.4",
+    "part-142:142.4",
+    "part-144:144.25"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 354,
+   "category": "US担保",
+   "question": "What is the difference between a single entry and a continuous bond in the US?",
+   "elapsed": 2.551,
+   "n_chunks": 30,
+   "n_articles": 16,
+   "top_articles": [
+    "part-113:113.11",
+    "part-113:113.45",
+    "part-141:141.57",
+    "part-142:142.4",
+    "part-113:113.62"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 355,
+   "category": "WTO",
+   "question": "What are the transparency obligations under the TBT Agreement?",
+   "elapsed": 2.463,
+   "n_chunks": 30,
+   "n_articles": 7,
+   "top_articles": [
+    "tbt_e:art-12",
+    "tbt_e:art-15",
+    "tbt_e:art-3",
+    "trims_e:art-6",
+    "tbt_e:art-13"
+   ],
+   "strict_idx": [],
+   "loose_idx": [],
+   "hit5": false,
+   "hit10": false,
+   "hit5_loose": false,
+   "rr": 0.0,
+   "has_any": true
+  },
+  {
+   "case_id": 356,
+   "category": "WTO",
+   "question": "How does the SPS Agreement require risk assessment?",
+   "elapsed": 2.086,
+   "n_chunks": 30,
+   "n_articles": 18,
+   "top_articles": [
+    "sps_e:art-14",
+    "sps_e:art-5",
+    "sps_e:art-2",
+    "tfa_e:7.2",
+    "sps_e:art-3"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    6
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    6
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 357,
+   "category": "日本",
+   "question": "日本の輸入通関手続きの流れを教えてください。",
+   "elapsed": 2.387,
+   "n_chunks": 30,
+   "n_articles": 15,
+   "top_articles": [
+    "kazei-hou:第76条",
+    "kazei-hou:第95条",
+    "kazei-hou:第7条",
+    "kazei-hou:第1条",
+    "kazei-hou:第67条"
+   ],
+   "strict_idx": [
+    1,
+    2,
+    3,
+    14,
+    17
+   ],
+   "loose_idx": [
+    1,
+    2,
+    3,
+    14,
+    17
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 358,
+   "category": "日本",
+   "question": "日本の関税の税率種類にはどのようなものがありますか。",
+   "elapsed": 2.694,
+   "n_chunks": 30,
+   "n_articles": 19,
+   "top_articles": [
+    "进出口关税条例:第9条",
+    "关税法:第10条",
+    "关税法:第12条",
+    "进出口关税条例:第10条",
+    "kazei-teiritsu-hou:第9条"
+   ],
+   "strict_idx": [
+    4,
+    7,
+    8,
+    9,
+    10
+   ],
+   "loose_idx": [
+    4,
+    7,
+    8,
+    9,
+    10
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.2,
+   "has_any": true
+  },
+  {
+   "case_id": 359,
+   "category": "日本",
+   "question": "日本の特恵関税制度とは何ですか。",
+   "elapsed": 1.385,
+   "n_chunks": 30,
+   "n_articles": 17,
+   "top_articles": [
+    "kazei-teiritsu-hou:第1条",
+    "kazei-teiritsu-hou:第9条",
+    "kazei-teiritsu-hou:第5条",
+    "kazei-teiritsu-hou:第7条",
+    "kazei-teiritsu-hou:第14条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 360,
+   "category": "日本",
+   "question": "日本の輸入禁止品目にはどのようなものがありますか。",
+   "elapsed": 1.837,
+   "n_chunks": 30,
+   "n_articles": 20,
+   "top_articles": [
+    "kazei-teiritsu-hou:第15条",
+    "kazei-hou:第74条",
+    "kazei-hou:第69条",
+    "gaiamei-hou:第6条",
+    "kazei-hou:第109条"
+   ],
+   "strict_idx": [
+    1,
+    10,
+    17,
+    18,
+    22
+   ],
+   "loose_idx": [
+    1,
+    10,
+    17,
+    18,
+    22
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.5,
+   "has_any": true
+  },
+  {
+   "case_id": 361,
+   "category": "日本",
+   "question": "日本の税関検査はどのように行われますか。",
+   "elapsed": 1.963,
+   "n_chunks": 30,
+   "n_articles": 16,
+   "top_articles": [
+    "kazei-hou:第76条",
+    "kazei-hou:第105条",
+    "kazei-hou:第69条",
+    "kazei-hou:第77条",
+    "kazei-hou:第78条"
+   ],
+   "strict_idx": [
+    6,
+    7,
+    10,
+    11,
+    14
+   ],
+   "loose_idx": [
+    6,
+    7,
+    10,
+    11,
+    14
+   ],
+   "hit5": false,
+   "hit10": true,
+   "hit5_loose": false,
+   "rr": 0.1429,
+   "has_any": true
+  },
+  {
+   "case_id": 362,
+   "category": "日本",
+   "question": "日本の関税評価における加算要素は何ですか。",
+   "elapsed": 2.53,
+   "n_chunks": 30,
+   "n_articles": 9,
+   "top_articles": [
+    "kazei-teiritsu-hou:第4条",
+    "kazei-hou:第2条",
+    "kazei-hou:第14条",
+    "kazei-teiritsu-hou:第9条",
+    "kazei-hou:第12条"
+   ],
+   "strict_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "loose_idx": [
+    0,
+    1,
+    2,
+    4,
+    5
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 1.0,
+   "has_any": true
+  },
+  {
+   "case_id": 363,
+   "category": "日本",
+   "question": "日本の輸入貨物の原産地証明はどう取得しますか。",
+   "elapsed": 1.764,
+   "n_chunks": 30,
+   "n_articles": 24,
+   "top_articles": [
+    "kazei-hou:第71条",
+    "kazei-hou:第87条",
+    "kazei-hou:第78条",
+    "kazei-hou:第76条",
+    "进出口货物原产地条例:第26条"
+   ],
+   "strict_idx": [
+    3,
+    8
+   ],
+   "loose_idx": [
+    3,
+    8
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.25,
+   "has_any": true
+  },
+  {
+   "case_id": 364,
+   "category": "日本",
+   "question": "日本の保税蔵置場の利用条件は？",
+   "elapsed": 2.433,
+   "n_chunks": 30,
+   "n_articles": 21,
+   "top_articles": [
+    "kazei-hou:第43条",
+    "kazei-hou:第80条",
+    "kazei-hou:第42条",
+    "kazei-hou:第37条",
+    "kazei-hou:第38条"
+   ],
+   "strict_idx": [
+    2,
+    8,
+    9,
+    11,
+    15
+   ],
+   "loose_idx": [
+    2,
+    8,
+    9,
+    11,
+    15
+   ],
+   "hit5": true,
+   "hit10": true,
+   "hit5_loose": true,
+   "rr": 0.3333,
+   "has_any": true
+  }
+ ]
+}
