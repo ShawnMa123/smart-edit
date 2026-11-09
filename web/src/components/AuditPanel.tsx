@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { explainError } from '../api/errors';
 import type { AuditState } from '../auditMachine';
 import {
@@ -9,6 +11,7 @@ import {
   SCOPE_RAN,
   buildAuditView,
   type AuditSummary,
+  type FindingRow,
   type TemplateSummary,
 } from '../auditView';
 import {
@@ -30,9 +33,29 @@ export interface AuditPanelProps {
   onTemplateChange?: (templateId: string) => void;
   /** Injected clock so the elapsed timer is testable. */
   now?: number;
+  /** Ask one protected operation; the caller refreshes the envelope afterwards. */
+  onAskGate?: (operation: string) => void;
+  /** Append a disposition; the caller re-asks `operation` afterwards. */
+  onDispose?: (
+    findingId: string,
+    disposition: string,
+    reason: string | undefined,
+    operation: string,
+  ) => void;
+  /** Last gate/disposition failure from the caller. */
+  actionError?: string | null;
 }
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+
+const GATE_OPERATIONS = [
+  'start_approval',
+  'submit_version',
+  'formal_export',
+  'handoff',
+  'formal_mapping',
+  'save_draft',
+];
 
 function ScopeBlock() {
   return (
@@ -217,7 +240,28 @@ export function AuditPanel({
   templateId = '',
   onTemplateChange,
   now,
+  onAskGate,
+  onDispose,
+  actionError = null,
 }: AuditPanelProps) {
+  const [operation, setOperation] = useState('start_approval');
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const askGate = () => {
+    setLocalError(null);
+    onAskGate?.(operation);
+  };
+
+  const dispose = (finding: FindingRow, disposition: 'accepted' | 'rejected') => {
+    const reason = (reasons[finding.id] ?? '').trim();
+    if (disposition === 'rejected' && finding.severity === 'critical' && !reason) {
+      setLocalError(`A reason is required to reject critical finding ${finding.id}.`);
+      return;
+    }
+    setLocalError(null);
+    onDispose?.(finding.id, disposition, reason || undefined, operation);
+  };
   if (state.phase === 'idle') {
     return (
       <div>
@@ -337,6 +381,32 @@ export function AuditPanel({
       <h3 className="tiny muted">Rule audit</h3>
       <RuleAuditBlock audit={view.audit} />
 
+      <div className="row" data-testid="gate-controls">
+        <label className="tiny muted" htmlFor="gate-operation">
+          Operation
+        </label>
+        <select
+          id="gate-operation"
+          aria-label="Gate operation"
+          value={operation}
+          onChange={(event) => setOperation(event.target.value)}
+        >
+          {GATE_OPERATIONS.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <button type="button" onClick={askGate} data-testid="gate-ask">
+          Ask gate
+        </button>
+      </div>
+      {actionError || localError ? (
+        <div className="notice notice--bad" role="alert" data-testid="gate-action-error">
+          {actionError ?? localError}
+        </div>
+      ) : null}
+
       {view.audit.ran ? <TemplateBlock template={view.audit.template} /> : null}
 
       {view.fieldChecks === 'did-not-run' ? (
@@ -425,6 +495,33 @@ export function AuditPanel({
                     <div className="tiny muted">evidence: {finding.evidence}</div>
                   ) : null}
                   <div className="tiny muted">fields: {finding.fieldKeys.join(', ') || '—'}</div>
+                  {onDispose ? (
+                    <div className="row">
+                      <input
+                        type="text"
+                        aria-label={`Reason for ${finding.id}`}
+                        placeholder="reason (required to reject a critical finding)"
+                        value={reasons[finding.id] ?? ''}
+                        onChange={(event) =>
+                          setReasons((current) => ({ ...current, [finding.id]: event.target.value }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => dispose(finding, 'accepted')}
+                        aria-label={`Accept ${finding.id}`}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => dispose(finding, 'rejected')}
+                        aria-label={`Reject ${finding.id}`}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

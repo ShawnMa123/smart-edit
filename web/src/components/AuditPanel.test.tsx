@@ -4,9 +4,10 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AuditPanel } from './AuditPanel';
+import { AuditPanel, type AuditPanelProps } from './AuditPanel';
 import type { AuditState } from '../auditMachine';
 import { explainError } from '../api/errors';
+import type { RunEnvelope } from '../api/types';
 import type { Snapshot } from '../snapshot';
 import {
   NO_PROVIDER_REASON,
@@ -28,11 +29,17 @@ const snapshot = (digest = 'digest-1'): Snapshot => ({
   capturedAt: '2026-11-08T09:00:00.000Z',
 });
 
-const renderPanel = (state: AuditState, currentDigest = 'digest-1', now = 0) => {
+const renderPanel = (
+  state: AuditState,
+  currentDigest = 'digest-1',
+  now = 0,
+  extra: Partial<AuditPanelProps> = {},
+) => {
   const onRun = vi.fn();
   const onStopWaiting = vi.fn();
   render(
     <AuditPanel
+      {...extra}
       state={state}
       currentDigest={currentDigest}
       onRun={onRun}
@@ -320,6 +327,47 @@ describe('template block (agent-audit verification.audit.template)', () => {
       screen.getByText(/adidas-guarantee v1\.0\.0, adidas-guarantee-second v2\.0\.0/),
     ).toBeTruthy();
     expect(screen.queryByText(/Synthetic template/)).toBeNull();
+  });
+});
+
+describe('gate and disposition controls (agent4 audit)', () => {
+  const report = (envelopeValue: RunEnvelope) => ({
+    phase: 'report' as const,
+    envelope: envelopeValue,
+    snapshot: snapshot(),
+    completedAt: 2_000,
+  });
+
+  it('asks the selected operation', async () => {
+    const onAskGate = vi.fn();
+    renderPanel(report(auditedEnvelope()), 'digest-1', 0, { onAskGate });
+
+    await userEvent.selectOptions(screen.getByLabelText('Gate operation'), 'save_draft');
+    await userEvent.click(screen.getByTestId('gate-ask'));
+
+    expect(onAskGate).toHaveBeenCalledWith('save_draft');
+  });
+
+  it('refuses to reject a critical finding without a reason', async () => {
+    const onDispose = vi.fn();
+    renderPanel(report(findingsEnvelope()), 'digest-1', 0, { onDispose });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reject N-002' }));
+
+    expect(onDispose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('gate-action-error').textContent).toContain(
+      'A reason is required',
+    );
+
+    await userEvent.type(screen.getByLabelText('Reason for N-002'), 'vendor will resend');
+    await userEvent.click(screen.getByRole('button', { name: 'Reject N-002' }));
+
+    expect(onDispose).toHaveBeenCalledWith(
+      'N-002',
+      'rejected',
+      'vendor will resend',
+      'start_approval',
+    );
   });
 });
 

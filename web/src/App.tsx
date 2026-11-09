@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 
 import { ApiError } from './api/errors';
-import { createRun, createRunWithFiles, triggerStage } from './api/client';
+import {
+  askGate,
+  createRun,
+  createRunWithFiles,
+  disposeFinding,
+  getRun,
+  triggerStage,
+} from './api/client';
 import type { ImportedDocument } from './api/types';
 import { auditReducer, initialAuditState } from './auditMachine';
 import { fieldChecksRan } from './auditView';
@@ -34,6 +41,7 @@ export function App() {
   const [audit, dispatch] = useReducer(auditReducer, initialAuditState);
   const [legalState, setLegalState] = useState<LegalState>({ phase: 'idle' });
   const [legalRun, setLegalRun] = useState<{ threadId: string; digest: string } | null>(null);
+  const [auditActionError, setAuditActionError] = useState<string | null>(null);
   /** Which published template to audit against; empty means "rule bundle only" (design D18). */
   const [templateId, setTemplateId] = useState('');
   /** File-import round: what was uploaded and how it went (`document-import` D10). */
@@ -138,6 +146,7 @@ export function App() {
   const handleRunAudit = async () => {
     const snapshot = await createSnapshot(text, currentVersionId);
     setLegalState({ phase: 'idle' });
+    setAuditActionError(null);
     dispatch({ type: 'start', snapshot, at: Date.now() });
     try {
       const created = await createRun(snapshot.text);
@@ -194,9 +203,48 @@ export function App() {
     }
   };
 
+  const refreshAudit = async (threadId: string) => {
+    const refreshed = await getRun(threadId);
+    dispatch({ type: 'refresh', envelope: refreshed, at: Date.now() });
+  };
+
+  const handleAskGate = async (operation: string) => {
+    if (audit.phase !== 'report') return;
+    const threadId = audit.envelope.thread_id;
+    setAuditActionError(null);
+    try {
+      await askGate(threadId, operation);
+      await refreshAudit(threadId);
+    } catch (error) {
+      setAuditActionError(error instanceof ApiError ? error.message : String(error));
+    }
+  };
+
+  const handleDispose = async (
+    findingId: string,
+    disposition: string,
+    reason: string | undefined,
+    operation: string,
+  ) => {
+    if (audit.phase !== 'report') return;
+    const threadId = audit.envelope.thread_id;
+    setAuditActionError(null);
+    try {
+      await disposeFinding(threadId, findingId, disposition, reason);
+      // The old decision is stale after a disposition; ask again for the operation the operator chose.
+      await askGate(threadId, operation);
+      await refreshAudit(threadId);
+    } catch (error) {
+      setAuditActionError(error instanceof ApiError ? error.message : String(error));
+    }
+  };
+
   // "Stop waiting" only drops this client's interest: the reducer ignores the late response, so a
   // run that finishes afterwards can never be rendered as if it were still current.
-  const handleStopWaiting = () => dispatch({ type: 'reset' });
+  const handleStopWaiting = () => {
+    setAuditActionError(null);
+    dispatch({ type: 'reset' });
+  };
 
   const panes: Record<PaneId, JSX.Element> = {
     versions: (
@@ -224,6 +272,11 @@ export function App() {
         onRunLegal={() => void handleRunLegal()}
         canRunLegal={text.trim().length > 0}
         legalHint="Type or import a document first."
+        onAskGate={(operation) => void handleAskGate(operation)}
+        onDispose={(findingId, disposition, reason, operation) =>
+          void handleDispose(findingId, disposition, reason, operation)
+        }
+        actionError={auditActionError}
       />
     ),
   };

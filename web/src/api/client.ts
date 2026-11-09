@@ -5,7 +5,11 @@
 
 import { assertEnvelope } from './envelope';
 import { ApiError, NETWORK_CODE, TIMEOUT_CODE } from './errors';
-import type { RunEnvelope } from './types';
+import type {
+  DispositionResponse,
+  GateResponse,
+  RunEnvelope,
+} from './types';
 
 export const API_BASE: string = import.meta.env?.VITE_API_BASE ?? '/api';
 export const DEFAULT_TIMEOUT_MS = 120_000;
@@ -23,11 +27,11 @@ const isAbortError = (error: unknown): boolean =>
   error !== null &&
   (error as { name?: string }).name === 'AbortError';
 
-async function request(
+async function send(
   path: string,
   init: RequestInit,
   { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl }: RequestOptions = {},
-): Promise<RunEnvelope> {
+): Promise<unknown> {
   const doFetch = fetchImpl ?? globalThis.fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -43,7 +47,7 @@ async function request(
         body.detail,
       );
     }
-    return assertEnvelope(payload);
+    return payload;
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (isAbortError(error)) {
@@ -53,6 +57,22 @@ async function request(
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function request(
+  path: string,
+  init: RequestInit,
+  options: RequestOptions = {},
+): Promise<RunEnvelope> {
+  return assertEnvelope(await send(path, init, options));
+}
+
+async function requestJson<T>(
+  path: string,
+  init: RequestInit,
+  options: RequestOptions = {},
+): Promise<T> {
+  return (await send(path, init, options)) as T;
 }
 
 /** Create one run from pasted document text. */
@@ -106,4 +126,42 @@ export function triggerStage(
 
 export function getRun(threadId: string, options: RequestOptions = {}): Promise<RunEnvelope> {
   return request(`/runs/${encodeURIComponent(threadId)}`, { method: 'GET' }, options);
+}
+
+/** Ask one protected operation about the current candidate (`POST /runs/{id}/gate`). */
+export function askGate(
+  threadId: string,
+  operation: string,
+  candidateDigest?: string | null,
+  options: RequestOptions = {},
+): Promise<GateResponse> {
+  return requestJson<GateResponse>(
+    `/runs/${encodeURIComponent(threadId)}/gate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation, candidate_digest: candidateDigest ?? null }),
+    },
+    options,
+  );
+}
+
+/** Append one human disposition event; the finding itself is never edited. */
+export function disposeFinding(
+  threadId: string,
+  findingId: string,
+  disposition: string,
+  reason?: string,
+  actor = 'console',
+  options: RequestOptions = {},
+): Promise<DispositionResponse> {
+  return requestJson<DispositionResponse>(
+    `/runs/${encodeURIComponent(threadId)}/findings/${encodeURIComponent(findingId)}/disposition`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disposition, reason: reason || null, actor }),
+    },
+    options,
+  );
 }

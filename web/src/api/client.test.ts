@@ -2,9 +2,18 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { API_BASE, createRun, createRunWithFiles, getRun, triggerStage } from './client';
+import {
+  API_BASE,
+  askGate,
+  createRun,
+  createRunWithFiles,
+  disposeFinding,
+  getRun,
+  triggerStage,
+} from './client';
 import { INVALID_RESPONSE_CODE, TIMEOUT_CODE } from './errors';
-import { doneEnvelope } from '../test/fixtures';
+import type { DispositionResponse, GateResponse } from './types';
+import { doneEnvelope, gateDecision } from '../test/fixtures';
 
 interface Call {
   url: string;
@@ -134,5 +143,60 @@ describe('triggerStage / getRun', () => {
     await triggerStage('R-1', 'audit', { fetchImpl: record(calls, doneEnvelope()), template: '   ' });
 
     expect(calls[0].url).toBe(`${API_BASE}/runs/R-1/stages/audit`);
+  });
+});
+
+describe('askGate / disposeFinding', () => {
+  it('asks one operation with the candidate digest the caller supplies', async () => {
+    const calls: Call[] = [];
+    const response: GateResponse = {
+      thread_id: 'R-1',
+      operation: 'start_approval',
+      gate: gateDecision({ decision: 'allowed', reason_codes: [] }),
+      verification: null,
+    };
+
+    const result = await askGate('R-1', 'start_approval', 'digest-1', {
+      fetchImpl: record(calls, response),
+    });
+
+    expect(result.gate.decision).toBe('allowed');
+    expect(calls[0].url).toBe(`${API_BASE}/runs/R-1/gate`);
+    expect(calls[0].init.method).toBe('POST');
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({
+      operation: 'start_approval',
+      candidate_digest: 'digest-1',
+    });
+  });
+
+  it('appends a disposition with actor and reason', async () => {
+    const calls: Call[] = [];
+    const response: DispositionResponse = {
+      thread_id: 'R-1',
+      finding_id: 'B-001',
+      events: [],
+      latest: 'rejected',
+    };
+
+    await disposeFinding('R-1', 'B-001', 'rejected', 'vendor will resend', 'ops', {
+      fetchImpl: record(calls, response),
+    });
+
+    expect(calls[0].url).toBe(`${API_BASE}/runs/R-1/findings/B-001/disposition`);
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({
+      disposition: 'rejected',
+      reason: 'vendor will resend',
+      actor: 'ops',
+    });
+  });
+
+  it('keeps the server error code for a refused disposition', async () => {
+    const body = { code: 'REASON_REQUIRED', message: 'rejecting a critical finding requires a reason' };
+
+    await expect(
+      disposeFinding('R-1', 'B-001', 'rejected', undefined, 'ops', {
+        fetchImpl: respond(body, 400),
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'REASON_REQUIRED' });
   });
 });

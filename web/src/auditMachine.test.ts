@@ -63,6 +63,33 @@ describe('auditReducer', () => {
     }
   });
 
+  it('refreshes a rendered report without rebinding its snapshot', () => {
+    const running = auditReducer(initialAuditState, {
+      type: 'start',
+      snapshot: snapshot('aaa'),
+      at: 1000,
+    });
+    const report = auditReducer(running, {
+      type: 'succeed',
+      envelope: doneEnvelope(),
+      at: 2000,
+    });
+    const refreshed = auditReducer(report, {
+      type: 'refresh',
+      envelope: doneEnvelope({ thread_id: 'R-2' }),
+      at: 3000,
+    });
+
+    expect(refreshed.phase).toBe('report');
+    if (refreshed.phase !== 'report') return;
+    expect(refreshed.envelope.thread_id).toBe('R-2');
+    expect(refreshed.snapshot.digest).toBe('aaa');
+    expect(refreshed.completedAt).toBe(2000);
+    expect(
+      auditReducer(initialAuditState, { type: 'refresh', envelope: doneEnvelope(), at: 1 }),
+    ).toBe(initialAuditState);
+  });
+
   it('ignores success or failure events when nothing is running', () => {
     expect(auditReducer(initialAuditState, { type: 'succeed', envelope: doneEnvelope(), at: 1 })).toBe(
       initialAuditState,

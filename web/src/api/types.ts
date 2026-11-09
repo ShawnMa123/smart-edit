@@ -276,6 +276,31 @@ export interface GateDecision {
   unsupported_capability?: string | null;
 }
 
+/** `POST /runs/{id}/gate` — the decision plus the report it was read from. */
+export interface GateResponse {
+  thread_id: string;
+  operation: string;
+  gate: GateDecision;
+  verification: VerificationReport | null;
+}
+
+/** One append-only human disposition event. */
+export interface DispositionEvent {
+  finding_id: string;
+  disposition: string;
+  reason: string | null;
+  actor: string;
+  at: string;
+}
+
+/** `POST /runs/{id}/findings/{fid}/disposition`. */
+export interface DispositionResponse {
+  thread_id: string;
+  finding_id: string;
+  events: DispositionEvent[];
+  latest: string;
+}
+
 export interface ErrorBody {
   code: string;
   message: string;
