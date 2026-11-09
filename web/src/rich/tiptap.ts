@@ -5,23 +5,77 @@
  * not a translation — one less place where the audit's text can drift from what the user sees.
  */
 
+import { Node, Extension } from '@tiptap/core';
 import { FindAndReplace } from '@tiptap/extension-find-and-replace';
 import { TableKit } from '@tiptap/extension-table';
-import { Underline } from '@tiptap/extension-underline';
 import type { JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 
 import { isRichDocument, type RichDocument } from './richDocument';
 
+/**
+ * Display-only attributes (design D14): a PDF block knows its size, font and page. They are rendered so
+ * the editor looks like the original, and `richToPlainText` ignores them entirely.
+ */
+const DisplayAttributes = Extension.create({
+  name: 'displayAttributes',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['paragraph', 'heading'],
+        attributes: {
+          fontSize: {
+            default: null,
+            parseHTML: (element) => element.getAttribute('data-font-size'),
+            renderHTML: (attributes) =>
+              attributes.fontSize
+                ? { 'data-font-size': String(attributes.fontSize), style: `font-size:${attributes.fontSize}pt` }
+                : {},
+          },
+          fontFamily: {
+            default: null,
+            parseHTML: (element) => element.getAttribute('data-font-family'),
+            renderHTML: (attributes) =>
+              attributes.fontFamily
+                ? {
+                    'data-font-family': String(attributes.fontFamily),
+                    style: `font-family:'${attributes.fontFamily}'`,
+                  }
+                : {},
+          },
+          page: {
+            default: null,
+            parseHTML: (element) => element.getAttribute('data-page'),
+            renderHTML: (attributes) =>
+              attributes.page ? { 'data-page': String(attributes.page) } : {},
+          },
+        },
+      },
+    ];
+  },
+});
+
+/** A page boundary the reader can see; it carries no text (design D15). */
+const PageBreak = Node.create({
+  name: 'pageBreak',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  parseHTML: () => [{ tag: 'hr[data-page-break]' }],
+  renderHTML: () => ['hr', { 'data-page-break': 'true', class: 'page-break' }],
+});
+
 /** Everything ED-02 asks for that the library provides in one place. */
 export const extensions = [
   StarterKit.configure({
     heading: { levels: [1, 2, 3] },
-    // History is part of StarterKit; undo/redo come with it.
+    // History is part of StarterKit; undo/redo come with it. Underline is part of StarterKit too
+    // (v3), so adding `Underline` separately would register the same extension twice.
   }),
-  Underline,
   TableKit.configure({ table: { resizable: false } }),
   FindAndReplace.configure({ searchTerm: '', searchDebounceMs: 0 }),
+  DisplayAttributes,
+  PageBreak,
 ];
 
 type AnyNode = {

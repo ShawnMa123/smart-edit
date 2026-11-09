@@ -14,9 +14,9 @@
     "verify": "npm run typecheck && npm run test && npm run e2e"
   },
   "dependencies": {
+    "@tiptap/core": "^3.33.0",
     "@tiptap/extension-find-and-replace": "^3.33.0",
     "@tiptap/extension-table": "^3.33.0",
-    "@tiptap/extension-underline": "^3.33.0",
     "@tiptap/react": "^3.33.0",
     "@tiptap/starter-kit": "^3.33.0",
     "react": "^18.3.1",

@@ -121,6 +121,28 @@ describe('the projection (0.2)', () => {
   });
 });
 
+describe('display attributes and page breaks (8.1)', () => {
+  it('renders a page boundary without adding a single character', () => {
+    const withBreak = doc([paragraph('page one'), { type: 'pageBreak' }, paragraph('page two')]);
+
+    expect(richToPlainText(withBreak)).toBe('page one\n\npage two');
+    expect(richToPlainText(withBreak)).toBe(richToPlainText(doc([paragraph('page one'), paragraph('page two')])));
+  });
+
+  it('ignores font size, font family and page attributes', () => {
+    const styled = doc([
+      {
+        type: 'paragraph',
+        attrs: { fontSize: 9, fontFamily: 'Helvetica', page: 3 },
+        content: [text('Amount: USD 500,000.00')],
+      },
+      { type: 'heading', attrs: { level: 2, fontSize: 20, page: 4 }, content: [text('Section')] },
+    ]);
+
+    expect(richToPlainText(styled)).toBe('Amount: USD 500,000.00\n\n## Section');
+  });
+});
+
 describe('plain-text regression (0.3)', () => {
   it('a pasted document projects back to exactly what was pasted', () => {
     const source = readFileSync(

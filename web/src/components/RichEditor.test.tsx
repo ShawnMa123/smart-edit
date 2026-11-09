@@ -190,6 +190,68 @@ describe('the component (2.1/2.3)', () => {
   });
 });
 
+describe('display attributes and page breaks in the editor (8.2)', () => {
+  it('draws the original font size and shows a page boundary', async () => {
+    const onChange = vi.fn();
+    render(
+      <RichEditor
+        document={{
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              attrs: { fontSize: 9, fontFamily: 'Helvetica', page: 1 },
+              content: [{ type: 'text', text: 'Amount: USD 500,000.00' }],
+            },
+            { type: 'pageBreak' },
+            {
+              type: 'heading',
+              attrs: { level: 2, fontSize: 20, page: 2 },
+              content: [{ type: 'text', text: 'Section' }],
+            },
+          ],
+        }}
+        onChange={onChange}
+      />,
+    );
+
+    const surface = await screen.findByTestId('editor-rich');
+    const styled = surface.querySelector('[data-font-size="9"]') as HTMLElement | null;
+    const heading = surface.querySelector('[data-font-size="20"]') as HTMLElement | null;
+
+    expect(styled?.style.fontSize).toBe('9pt');
+    expect(styled?.style.fontFamily).toContain('Helvetica');
+    expect(styled?.getAttribute('data-page')).toBe('1');
+    expect(heading?.style.fontSize).toBe('20pt');
+    expect(surface.querySelector('hr[data-page-break]')).toBeTruthy();
+  });
+
+  it('keeps the projection free of markup added by the attributes', async () => {
+    const onChange = vi.fn();
+    render(
+      <RichEditor
+        document={{
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              attrs: { fontSize: 9 },
+              content: [{ type: 'text', text: 'plain words' }],
+            },
+            { type: 'pageBreak' },
+          ],
+        }}
+        onChange={onChange}
+      />,
+    );
+
+    const surface = await screen.findByTestId('editor-rich');
+    expect(surface.textContent).toContain('plain words');
+    // The page marker contributes no characters: the projection is exactly the 11 characters of the text.
+    expect(await screen.findByText('11 characters in the audit text')).toBeTruthy();
+  });
+});
+
 describe('fallback (2.4)', () => {
   it('falls back to a textarea and says why when the editor cannot start', async () => {
     const onChange = vi.fn();

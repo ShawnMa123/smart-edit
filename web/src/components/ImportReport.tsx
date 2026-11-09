@@ -105,6 +105,12 @@ export function ImportReport({ state, onUse, onRetry, onStartBlank }: ImportRepo
           <li key={document.file_id} data-testid={`import-result-${document.file_id}`}>
             <strong>{document.filename}</strong>{' '}
             <span className="muted">{FORM_LABELS[document.form] ?? document.form}</span>
+            {document.rich?.provenance ? (
+              <div className="tiny muted" data-testid={`import-provenance-${document.file_id}`}>
+                structure: {document.rich.provenance}
+                {document.rich.provenanceNote ? ` · ${document.rich.provenanceNote}` : ''}
+              </div>
+            ) : null}
             {document.errors.length > 0 ? (
               <ul>
                 {document.errors.map((error) => (

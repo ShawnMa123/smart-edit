@@ -70,6 +70,29 @@ describe('a document that was read', () => {
 
     expect(screen.getByText(/Image · recognised text, please check/)).toBeTruthy();
   });
+
+  it('says how the structure was obtained (8.3)', () => {
+    renderReport(
+      state({
+        documents: [
+          document({
+            form: 'pdf_text',
+            rich: {
+              type: 'doc',
+              provenance: 'heuristic',
+              provenanceNote: 'heuristic: 25 pages, levels from font-size rank, 25 headings, 24 page breaks',
+              content: [],
+            },
+          }),
+        ],
+      }),
+    );
+
+    const note = screen.getByTestId('import-provenance-F-1').textContent ?? '';
+    expect(note).toContain('heuristic');
+    expect(note).toContain('25 pages');
+    expect(note).toContain('24 page breaks');
+  });
 });
 
 describe('a document that failed', () => {

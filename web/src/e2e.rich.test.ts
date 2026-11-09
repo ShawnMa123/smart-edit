@@ -61,8 +61,14 @@ describe.skipIf(!enabled)('rich structure over HTTP', () => {
     expect(counts.blocks).toBeGreaterThan(2);
   });
 
-  it('6.1 the real contract PDF arrives as heuristic structure with headings', async () => {
-    const document = await structureOf(fixture('t1_contract.pdf', 't1_contract.pdf', 'application/pdf'));
+  it('6.1/9.1 the shipped 25-page booklet arrives as heuristic structure with headings', async () => {
+    const document = await structureOf(
+      fixture(
+        'fixtures/imports/guarantee-and-standby-letters-of-credit-wording.pdf',
+        'guarantee-and-standby-letters-of-credit-wording.pdf',
+        'application/pdf',
+      ),
+    );
     const counts = countBlocks(document);
 
     // eslint-disable-next-line no-console
@@ -72,5 +78,25 @@ describe.skipIf(!enabled)('rich structure over HTTP', () => {
     expect(document.rich?.provenance).toBe('heuristic');
     expect(counts.headings).toBeGreaterThan(0);
     expect(counts.blocks).toBeGreaterThan(50);
+  });
+
+  it('9.1 overload: page breaks and display attributes survive the trip', async () => {
+    const document = await structureOf(
+      fixture(
+        'fixtures/imports/guarantee-and-standby-letters-of-credit-wording.pdf',
+        'guarantee-and-standby-letters-of-credit-wording.pdf',
+        'application/pdf',
+      ),
+    );
+    const content = (document.rich?.content ?? []) as Array<{ type: string; attrs?: Record<string, unknown> }>;
+    const breaks = content.filter((block) => block.type === 'pageBreak').length;
+    const withFont = content.filter((block) => block.attrs?.fontSize !== undefined).length;
+
+    // eslint-disable-next-line no-console
+    console.log('Booklet rich:', JSON.stringify({ blocks: content.length, breaks, withFont }));
+
+    expect(document.rich?.provenanceNote ?? '').toContain('25 pages');
+    expect(breaks).toBe(24);
+    expect(withFont).toBe(content.length - breaks);
   });
 });

@@ -35,6 +35,9 @@ const itemText = (item: ListItemNode): string =>
 
 function projectBlock(block: BlockNode): string {
   switch (block.type) {
+    case 'pageBreak':
+      // A page boundary is a display marker: it must not add a single character to the audit text.
+      return '';
     case 'paragraph':
       return textOf(block.content);
     case 'heading':
@@ -62,5 +65,8 @@ function projectBlock(block: BlockNode): string {
  */
 export function richToPlainText(document: RichDocument | null | undefined): string {
   if (!document || !Array.isArray(document.content)) return '';
-  return document.content.map(projectBlock).join('\n\n');
+  return document.content
+    .filter((block) => block.type !== 'pageBreak')
+    .map(projectBlock)
+    .join('\n\n');
 }

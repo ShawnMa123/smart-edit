@@ -1,8 +1,12 @@
 # Tasks
 
-> 依据：`proposal.md`（范围）、`specs/document-import/spec.md`（要求）、`design.md`（做法 D1–D10）、
+> 依据：`proposal.md`（范围）、`specs/document-import/spec.md`（要求）、`design.md`（做法 D1–D16）、
 > `TBD-image-recognition.md`（明确暂缓的视觉模型路线）。
 > 每组自带该组的测试与文档；第 6 组只做跨组集成与验收。
+>
+> **状态（2026-11-09）：** 第 0–6 组已完成并上线（21/21）。**第 7–9 组是第二轮**（PDF 版面保真，9/9 已完成），
+> 因客户实测 `guarantee-and-standby-letters-of-credit-wording.pdf` 指出"格式不像 PDF 原样"而加入。
+> 原第一版方案曾建议"删掉页脚与页码"，现已按客户要求改为**保留原样**（design D15）。
 
 ## 0. 契约与签字（最先做，且只做加法）
 
@@ -51,10 +55,37 @@
 - [x] 6.2 回归：不传文件的既有路径（粘贴文本 → normalize → audit）行为与今天完全一致。Verify: 既有 330 个 Python 测试 + 109 个前端测试全绿。
 - [x] 6.3 写 `openspec/changes/document-import/DEMO.md`：命令、系统依赖、实测的四种输入结果（含失败样例）、以及"OCR 文本为何仍需人工确认"的声明。Verify: 文件存在且数字/状态与 6.1 输出一致。
 
+## 7. PDF 版面保真（第二轮，2026-11-09）
+
+- [x] 7.1 `app/parsing/rich_pdf.py`：层级改为**字号排名**（去重降序：最大 → H1、次之 → H2、再 → H3，正文不入级），正文基准仍取出现次数最多的字号。Verify: 单测用 4 档字号（48/20/14/9）断言"封面 H1、章节 H2、副标题 H3、正文段落"；再断言"只有一种字号 → 0 个标题"。
+- [x] 7.2 书签优先：若 `doc.get_toc()` 非空，按书签 `title` + 页匹配块并决定层级，匹配不到的块退回字号排名。Verify: 用带书签的 PDF 断言层级来自书签、`provenanceNote` 写明来源；用无书签的断言退回字号排名。
+- [x] 7.3 粗体/斜体从 span `flags` 与字体名（`Bold`/`Black`/`Heavy`、`Italic`/`Oblique`）取"或"写入 marks。Verify: 单测构造粗体 span 断言 `marks` 含 `bold`；断言普通字体不产生 marks；断言加粗前后**投影文本完全相同**。
+- [x] 7.4 显示属性：每个块带 `attrs: {fontSize, fontFamily, page}`。Verify: 单测断言 9pt Helvetica 的块带这两个属性；断言缺少属性时编辑器仍渲染（前端测试）。
+- [x] 7.5 页边界：相邻块 `page` 变化处插入 `{"type": "pageBreak"}`。Verify: 单测断言 3 页文档恰好 2 个 `pageBreak`；断言 `richToPlainText` 忽略它（字符数不变）。
+- [x] 7.6 页码/页脚**保留**且不与正文粘连：页码为独立段落、页脚为所在页最后一块。Verify: 单测断言纯数字块仍在、页脚块仍在，且都不与相邻正文合并。
+- [x] 7.7 守恒与逐字：`rich` 块数等于解析块数（`pageBreak` 另计），文字逐字相同（含 `\xa0`）。Verify: 单测把 `rich` 投影回来，忽略 `pageBreak` 与块间隔符，断言字符序列与 `full_text` 一致。
+
+## 8. 前端渲染保真（第二轮）
+
+- [x] 8.1 `RichDocument` 类型与 TipTap schema 支持 `fontSize` / `fontFamily` / `page` 可选属性与 `pageBreak` 节点；`richToPlainText` 忽略它们。Verify: 投影黄金样例新增"含属性与 pageBreak 的文档投影不变"；schema 校验通过。
+- [x] 8.2 编辑器按属性渲染：段落/标题使用 `font-size`、`font-family` 内联样式；`pageBreak` 渲染为分隔线（可在编辑器里删除，但不产生文字）。Verify: 组件测试断言内联样式与分隔线存在；断言导入 25 页 PDF 后块数与页边界数正确。
+- [x] 8.3 导入提示：面板显示 `provenance` 与"层级来自书签/字号、N 页、K 个页边界"。Verify: 组件测试断言文案随 `provenanceNote` 变化。
+
+## 9. 验收（第二轮）
+
+- [x] 9.1 真实样本回归：`fixtures/imports/guarantee-and-standby-letters-of-credit-wording.pdf`（25 页）——断言层级数分布为 H1=1 / H2=23 / H3=1、粗体数量 > 0、`pageBreak` = 24、文本块数 = 715（另 24 个页边界，共 739）、投影与 `full_text` 逐字一致。Verify: pytest/HTTP e2e 记录实测数字到 `DEMO.md`。
+- [x] 9.2 旧行为不变：`fixtures/imports/guarantee.docx` 的既有断言仍成立（仍 `deterministic`）；扫描版 PDF 仍 `heuristic`；`tests/test_rich_mapping.py` 的既有 PDF 用例全绿（`t1_contract.pdf` 已不在仓库，见 `DEMO.md`「一处样本变动」）。Verify: 既有测试全绿。
+- [x] 9.3 审计不受影响：同一文本只改字号/粗体/页边界后，审计 counts/outcome 不变。Verify: `tests/test_rich_honesty.py` 扩充一条"含 pageBreak 与字体属性"的用例。
+- [x] 9.4 更新 `DEMO.md`：加入这份 25 页样本的实测（层级分布、粗体数、页边界数、与 `full_text` 的逐字一致性），并说明"我们保留页码与页脚"这一口径。Verify: 数字与实际输出一致。
+
 ## Workflow follow-up
 
+- **跨 change 一致性（第二轮）**：`rich-text-editor` 的 `rich-text-editing` spec 只覆盖了"投影与渲染现有结构"，
+  本轮的 `fontSize` / `fontFamily` / `page` 可选属性与 `pageBreak` 节点属于**新增渲染能力**，需由那个 change 的所有者
+  在它的 delta 里补一条（本 change 不改别人的规格）。**2026-11-09 已完成**：该 delta 新增
+  "富文档可携带显示属性与页边界"要求（3 个 scenario）。
 - `ParsedDoc.form` 的两个新取值需要在归档前记录批准（与 `agent-audit` 0.2 同一张签字表）；未签字前不得把本 change 归档。
-- `editor-shell` 的 `document-editor` delta 把 "file import" 列为"present but marked not implemented"；本 change 落地后需要在那份 delta 里同步（改它自己 change 的规格，不是本 change 的）。
+- `editor-shell` 的 `document-editor` delta 把 "file import" 列为"present but marked not implemented"；本 change 落地后需要在那份 delta 里同步（改它自己 change 的规格，不是本 change 的）。**2026-11-09 已完成**：该 delta 已按实际能力区分 file import / formatting（可用）与 export / approval（仍不可用）。
 - 视觉模型图像识别见 `TBD-image-recognition.md`：独立 change，动手前必须先回答该文件第 4 节的五项待定。
 - 若后续要求审计报告引用原始文件的 `sha256`，按 `design.md` Open Questions 1 处理（让审计复用导入的 run），只改前端流程。
 - 模板编辑页面与"另存为模板"仍是 TBD，不在任何 change 里；等导入主干稳定后单独提。

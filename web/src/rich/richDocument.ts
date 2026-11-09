@@ -17,15 +17,28 @@ export interface TextNode {
   marks?: Mark[];
 }
 
+/** Display-only facts a PDF gives us; they never reach the audit text (`plainText.ts` ignores them). */
+export interface BlockAttrs {
+  fontSize?: number;
+  fontFamily?: string;
+  page?: number;
+}
+
 export interface ParagraphNode {
   type: 'paragraph';
+  attrs?: BlockAttrs;
   content?: TextNode[];
 }
 
 export interface HeadingNode {
   type: 'heading';
-  attrs: { level: 1 | 2 | 3 };
+  attrs: { level: 1 | 2 | 3 } & BlockAttrs;
   content?: TextNode[];
+}
+
+/** A page boundary: visible in the editor, contributes no characters to the audit text. */
+export interface PageBreakNode {
+  type: 'pageBreak';
 }
 
 export interface ListItemNode {
@@ -65,7 +78,8 @@ export type BlockNode =
   | HeadingNode
   | BulletListNode
   | OrderedListNode
-  | TableNode;
+  | TableNode
+  | PageBreakNode;
 
 export interface RichDocument {
   type: 'doc';
@@ -82,6 +96,7 @@ const BLOCK_TYPES = new Set([
   'bulletList',
   'orderedList',
   'table',
+  'pageBreak',
 ]);
 
 export const emptyDocument = (): RichDocument => ({ type: 'doc', content: [] });

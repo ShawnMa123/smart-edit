@@ -23,8 +23,8 @@ VITE_E2E=1 VITE_E2E_IMPORT=1 VITE_API_BASE=http://127.0.0.1:8010 \
   npm --prefix web run test -- src/e2e.import.test.ts             # 4 passed
 
 # 3) 回归
-.venv/bin/python -m pytest -q                                     # 347 passed
-npm --prefix web run test                                         # 125 passed / 9 skipped (http e2e)
+.venv/bin/python -m pytest -q                                     # 347 passed（第一轮当时；第二轮后为 378）
+npm --prefix web run test                                         # 125 passed / 9 skipped（第一轮当时；第二轮后为 150 / 12）
 npm --prefix web run typecheck                                    # clean
 ```
 
@@ -73,6 +73,53 @@ npm --prefix web run typecheck                                    # clean
 - **文本框 / 页眉页脚文字**：只承诺正文段落与表格。
 - **异步任务与进度推送**：POC 同步执行，`StageReport` 表达完成/失败。
 - **`.doc`（旧版二进制 Word）**：明确拒绝，不"尽力解析"。
+
+## 第二轮：PDF 版面保真（2026-11-09）
+
+客户实测 `fixtures/imports/guarantee-and-standby-letters-of-credit-wording.pdf`（**25 页 / 715 块 / 50799 字符**）后指出"导入的格式还是不像 PDF 原来的样式"。
+
+```bash
+.venv/bin/python -m pytest tests/test_rich_pdf_fidelity.py -q   # 11 passed
+.venv/bin/python -m pytest tests/test_import_acceptance.py -q   # 7 passed（真实样本）
+npm --prefix web run test -- src/components/RichEditor.test.tsx # 13 passed（含属性与页边界）
+VITE_E2E=1 VITE_E2E_RICH=1 VITE_API_BASE=http://127.0.0.1:8010 \
+  npm --prefix web run test -- src/e2e.rich.test.ts             # 3 passed
+.venv/bin/python -m pytest -q                                   # 378 passed
+npm --prefix web run test                                       # 150 passed / 12 skipped（HTTP e2e 需显式开关）
+```
+
+### 修前 / 修后（同一份 25 页样本，实测）
+
+| 指标 | 第一轮 | 第二轮 | 说明 |
+|---|---|---|---|
+| 标题层级 | 25 个**全 H1** | **H1=1 / H2=23 / H3=1** | 按字号排名：48pt 封面 → H1、20pt 章节 → H2、14pt 副标题 → H3、9pt 正文不入级 |
+| 粗体 | 0 | **75 处** | 从 span `flags` 与字体名取"或" |
+| 页边界 | 0 | **24** | 25 页 → 24 个不产生文本的 `pageBreak` |
+| 页码 / 页脚 | 混在正文里 | **保留**为独立块 | 客户要求"保留原样"，我们不删内容 |
+| 富文档块数 | — | **739 = 715 + 24 页边界** | 解析块一个不少 |
+| 投影 vs `full_text` | 有差异（分隔符） | **逐字相同** | `pageBreak` 与显示属性都不进投影 |
+| 显示属性 | 无 | 每块带 `fontSize` / `fontFamily` / `page` | 编辑器按原字号渲染 |
+
+`provenanceNote` 现在写成一句可读的话：
+
+```
+heuristic: 25 pages, levels from font-size rank, 25 headings, 24 page breaks, page numbers and footers kept
+```
+
+有 PDF 书签时改成 `levels from PDF bookmarks`（书签是该文件作者给的层级，优先于字号推断）。
+
+### 判据与失败路径
+
+- **只有一种字号** → 不产生任何标题（不猜）。
+- **块内混排多种字号** → 整块按段落处理，绝不把"首行较大"的段落整段变成标题。
+- **文字改动零容忍**：`test_import_acceptance.py` 断言投影逐字等于 `full_text`、块数相等。
+- **审计不受影响**：`tests/test_rich_honesty.py` 用带 `pageBreak` + 字体属性的富文档再跑一遍，`counts` / `outcome` 与原样一致。
+- **体积**：`npm --prefix web run build` 实测 **801.12 kB → 802.19 kB（+1.07 kB）**（HEAD 与本轮各构建一次，gzip 254.51 → 254.80 kB）；本轮只加了一个 `pageBreak` 节点与三个显示属性，**没有引入新包**（`@tiptap/core` 只是从传递依赖提为显式依赖），并移除了与 StarterKit 重复注册的 `underline`（测试日志里那条 duplicate extension 警告随之消失）。
+
+### 一处样本变动
+
+`t1_contract.pdf` 已不在仓库根目录（只剩 `runs/` 下的上传副本，含个人姓名与证件号，**不应入库**），
+因此把它从 HTTP e2e 中移除，改用已提交的 25 页样本作为 PDF 证据。
 
 ## 已知边界
 

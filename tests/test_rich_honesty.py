@@ -74,6 +74,36 @@ def test_a_rich_document_cannot_change_the_verdict():
     assert formatted["findings"] == plain["findings"]
 
 
+def test_page_breaks_and_font_attributes_cannot_change_the_verdict():
+    """9.3 Page markers and display attributes are presentation only: the engine never sees them."""
+    decorated = {
+        "type": "doc",
+        "provenance": "heuristic",
+        "content": [
+            {
+                "type": "heading",
+                "attrs": {"level": 1, "fontSize": 48.0, "fontFamily": "Helvetica-Bold", "page": 1},
+                "content": [{"type": "text", "text": "DEMAND GUARANTEE", "marks": ["bold"]}],
+            },
+            {"type": "pageBreak"},
+            *(
+                {
+                    "type": "paragraph",
+                    "attrs": {"fontSize": 9.0, "fontFamily": "Helvetica", "page": 2},
+                    "content": [{"type": "text", "text": f"{key}: {value}"}],
+                }
+                for key, value in VALUES.items()
+            ),
+        ],
+    }
+
+    plain = audit_state(_state(), snapshot_digest="d-1")["report"]
+    formatted = audit_state(_state(rich=decorated), snapshot_digest="d-1")["report"]
+
+    assert formatted["counts"] == plain["counts"]
+    assert formatted["outcome"] == plain["outcome"]
+
+
 def test_formatting_an_ocr_value_does_not_confirm_it():
     """4.2 An OCR-derived value stays unconfirmed; bold text is not evidence."""
     plain = audit_state(_state(status="inferred"), snapshot_digest="d-1")["report"]
