@@ -255,6 +255,32 @@ def test_verdict_answers_whether_the_audit_can_stand_behind_the_report():
     assert verdict_for({"outcome": OUTCOME_UNABLE}) == "fail"
 
 
+def test_a_failed_issue_makes_the_verdict_fail_even_when_the_outcome_is_only_findings():
+    assert verdict_for({"outcome": OUTCOME_FINDINGS}, [{"level": "fail"}]) == "fail"
+    assert verdict_for({"outcome": OUTCOME_NONE}, [{"level": "fail"}]) == "fail"
+
+
+def test_warn_and_info_issues_are_warn_and_pass():
+    assert verdict_for({"outcome": OUTCOME_NONE}, [{"level": "warn"}]) == "warn"
+    assert verdict_for({"outcome": OUTCOME_NONE}, [{"level": "info"}]) == "pass"
+
+
+def test_unable_to_assess_is_fail_even_with_only_warnings():
+    assert verdict_for({"outcome": OUTCOME_UNABLE}, [{"level": "warn"}]) == "fail"
+
+
+def test_a_real_critical_failure_does_not_report_warn():
+    """The bug this closes: seven critical issues were projected while `verdict` stayed `warn`."""
+    result = _audited(_state(omit=("guarantee_amount",)))
+    units = {unit.check_id: unit for unit in result["units"]}
+    issues = [project_issue(row, units[row.check_id]) for row in result["results"]]
+
+    verification = to_verification(result["report"], issues=issues, findings=[])
+
+    assert any(issue["level"] == "fail" for issue in issues)
+    assert verification["verdict"] == "fail"
+
+
 def test_credibility_is_recomputable_from_the_plan():
     """No subjective score: the number is `assessed / planned` and says how it was computed."""
     report = _audited()["report"]

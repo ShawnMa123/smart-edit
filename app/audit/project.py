@@ -16,7 +16,12 @@ Severity never implies blocking: `gate_type` comes from the rule, `blocking` mir
 
 from __future__ import annotations
 
-from app.audit.report import OUTCOME_FINDINGS, OUTCOME_NEEDS_INPUT, OUTCOME_NONE
+from app.audit.report import (
+    OUTCOME_FINDINGS,
+    OUTCOME_NEEDS_INPUT,
+    OUTCOME_NONE,
+    OUTCOME_UNABLE,
+)
 from app.rules.types import (
     FAILED,
     FINDING,
@@ -162,14 +167,23 @@ def _detail(result: CheckResult) -> str:
     return f"{result.status}" + (f" ({result.reason_code})" if result.reason_code else "")
 
 
-def verdict_for(report: dict) -> str:
-    """`verdict` answers "can the audit stand behind this report", not "is the document good"."""
-    outcome = report.get("outcome")
-    if outcome == OUTCOME_NONE:
-        return "pass"
-    if outcome in (OUTCOME_FINDINGS, OUTCOME_NEEDS_INPUT):
+def verdict_for(report: dict, issues: list[dict] | None = None) -> str:
+    """`verdict` answers "can the audit stand behind this report", not "is the document good".
+
+    The outcome alone cannot decide: a `findings_present` report may contain only advisory rows or a
+    critical hard block. The projected `Issue.level` is the same row a client reads, so the verdict and
+    the check list can never contradict each other.
+    """
+    issues = issues or []
+    if any(issue.get("level") == "fail" for issue in issues):
+        return "fail"
+    if report.get("outcome") == OUTCOME_UNABLE:
+        return "fail"
+    if any(issue.get("level") == "warn" for issue in issues):
         return "warn"
-    return "fail"  # unable_to_assess: nothing may be read off this report
+    if report.get("outcome") in (OUTCOME_FINDINGS, OUTCOME_NEEDS_INPUT):
+        return "warn"
+    return "pass"
 
 
 def credibility(report: dict) -> dict:
@@ -187,7 +201,7 @@ def to_verification(report: dict, *, issues: list[dict], findings: list[dict]) -
     """The `VerificationReport` written on the run (`VerificationReport.audit` is the 0.2 addition)."""
     return {
         "checks": issues,
-        "verdict": verdict_for(report),
+        "verdict": verdict_for(report, issues),
         "credibility": credibility(report),
         "score": None,
         "audit": {**report, "findings": findings},
