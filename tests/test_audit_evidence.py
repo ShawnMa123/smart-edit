@@ -190,7 +190,7 @@ def test_entity_missing_from_cited_chunk_is_a_hard_block():
 
     assert result.status == FINDING
     assert result.finding["gate_type"] == "hard_block"
-    assert result.finding["detail"]["entity_gaps"][0]["missing_entities"] == ["amount:USD750000.00"]
+    assert result.finding["detail"]["entity_gaps"][0]["missing_entities"] == ["USD 750,000.00"]
 
 
 def test_insufficient_claim_with_chunk_is_a_warning():

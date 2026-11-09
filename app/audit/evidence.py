@@ -7,9 +7,8 @@ identity.
 
 from __future__ import annotations
 
-import re
-
 from app.parsing.normalize import normalized_full_texts, span_locatable
+from app.regulatory.entities import extract_entities
 from app.rules.types import (
     FAILED,
     FINDING,
@@ -100,26 +99,6 @@ def _check_finding_anchor(unit: Unit, state: dict) -> CheckResult:
     )
 
 
-_CURRENCY = r"USD|EUR|GBP|JPY|CNY|RMB|SGD|HKD|AUD|CAD|CHF"
-_AMOUNT_RE = re.compile(rf"\b({_CURRENCY})\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b", re.IGNORECASE)
-_ISO_DATE_RE = re.compile(r"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b")
-_DMY_DATE_RE = re.compile(r"\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b")
-_RULE_RE = re.compile(r"\b(UCP|URDG|URC|ISP|eUCP|ISBP)\s*(\d{3})\b", re.IGNORECASE)
-_CLAUSE_RE = re.compile(r"\b(?:article|clause|section)\s+(\d+(?:\.\d+)*)\b|第\s*(\d+)\s*条", re.IGNORECASE)
-_COUNTRY_CODE_RE = re.compile(r"\b(AE|CN|GB|HK|SG|US|UAE)\b")
-_COUNTRY_NAME_RE = re.compile(
-    r"\b(United Arab Emirates|United Kingdom|United States|China|Hong Kong|Singapore)\b",
-    re.IGNORECASE,
-)
-_COUNTRY_BY_NAME = {
-    "united arab emirates": "AE",
-    "united kingdom": "GB",
-    "united states": "US",
-    "china": "CN",
-    "hong kong": "HK",
-    "singapore": "SG",
-}
-
 _UNCOVERED_MARKERS = (
     "未覆盖",
     "未涵盖",
@@ -128,38 +107,6 @@ _UNCOVERED_MARKERS = (
     "法规建议未覆盖",
 )
 _UNCERTAIN_MARKERS = ("业务类型不确定", "business type uncertain")
-
-
-def _entities(text: str) -> set[str]:
-    """Key facts a citation must carry (amount / date / country / rule / clause).
-
-    Minimal local implementation so Agent 4 does not import Agent 3's extractor. TODO(agent3):
-    unify with `app.regulatory.entities.extract_entities` once that module lands; until then the
-    audit must not depend on an unmerged package.
-    """
-    found: set[str] = set()
-    for currency, number in _AMOUNT_RE.findall(text):
-        found.add(f"amount:{currency.upper()}{number.replace(',', '')}")
-
-    for year, month, day in _ISO_DATE_RE.findall(text):
-        found.add(f"date:{int(year):04d}-{int(month):02d}-{int(day):02d}")
-    for day, month, year in _DMY_DATE_RE.findall(text):
-        full_year = int(year)
-        if full_year < 100:
-            full_year += 2000
-        found.add(f"date:{full_year:04d}-{int(month):02d}-{int(day):02d}")
-
-    for rule, number in _RULE_RE.findall(text):
-        found.add(f"rule:{rule.upper()}{number}")
-
-    for article, clause in _CLAUSE_RE.findall(text):
-        found.add(f"clause:{article or clause}")
-
-    for code in _COUNTRY_CODE_RE.findall(text):
-        found.add(f"country:{code}")
-    for name in _COUNTRY_NAME_RE.findall(text):
-        found.add(f"country:{_COUNTRY_BY_NAME[name.lower()]}")
-    return found
 
 
 def _check_citation_support(unit: Unit, state: dict) -> CheckResult:
@@ -186,7 +133,15 @@ def _check_citation_support(unit: Unit, state: dict) -> CheckResult:
         if chunk is None:
             fabricated.append(key)
         else:
-            missing = _entities(claim.get("text") or "") - _entities(chunk.get("text") or "")
+            # Agent 3's extractor returns the matched source text, so ask the honest question:
+            # does that fact appear verbatim in the cited chunk? (The check stays independent of
+            # `cite_check`; only the extraction pattern set is shared.)
+            text = " ".join(str(chunk.get("text") or "").split())
+            missing = [
+                entity
+                for entity in extract_entities(str(claim.get("text") or ""))
+                if " ".join(entity.split()) not in text
+            ]
             if missing:
                 entity_gaps.append(
                     {
