@@ -122,9 +122,11 @@
 - **THEN** 系统 MUST 补跑 `parse` 并只写 `_candidates`
 - **AND** MUST NOT 写 `fields`
 
-#### Scenario: Agent 4 不可单独触发
+#### Scenario: Agent 4 通过 `audit` target 单独触发
 - **WHEN** 调用方请求只运行 `agent4`
-- **THEN** 系统 MUST 拒绝并返回 `NOT_STANDALONE`
+- **THEN** 系统 MUST 将其解析为已登记的 `audit` target
+- **AND** MUST 自动补跑 `parse → extract → normalize`，并在 `fields` 非空后执行审计
+- **AND** 未登记的目标仍 MUST 返回 `unknown_stage`，MUST NOT 静默跑完整流程
 
 #### Scenario: 未登记的目标
 - **WHEN** 调用方请求一个未在阶段表中登记的目标

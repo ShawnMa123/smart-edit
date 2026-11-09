@@ -2,9 +2,9 @@
 
 ## Purpose
 
-本 capability 定义**离线评测**的格式与口径。它与 Agent 4（`output-verification`）不是一回事：
+本 capability 定义**离线评测**的格式与口径。它与 Agent 4（`rule-audit`）不是一回事：
 
-| | 离线 Benchmark（本 capability） | 在线校验（`output-verification`） |
+| | 离线 Benchmark（本 capability） | 在线校验（`rule-audit` / Agent 4） |
 |---|---|---|
 | 在哪跑 | 开发机 | 运行路径上 |
 | 有无真值 | **有**（gold） | 无 |

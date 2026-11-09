@@ -250,9 +250,14 @@ no-template path is asserted to stay at exactly 51 units / 0.647 coverage.
   permissions (AUD-18/19), rule governance and the management API (AUD-20/§11), template *authoring*
   (a template editor / release workflow), async jobs, leases and fencing (AUD-21), retention (AUD-22),
   audit UI surfaces (AUD-23), incremental audits (AUD-24), and the `/audit/*` HTTP surface (§10).
-- Evidence checks that need other agents' outputs (citation support, conclusion conflict, coverage
-  declaration) report `not_applicable` with reason `requires_agent_regulatory_output` — they are never
-  silently skipped.
+- `citation_support` and `coverage_declaration` are implemented independently of Agent 3: claims are
+  checked against the run's `retrieved` chunks and key entities; coverage declarations are checked
+  against retrieval and the summary/notes. A missing Agent 3 output is `not_applicable`, never `pass`.
+- `conclusion_conflict` remains `not_applicable` with reason `requires_agent_verify_output`: Agent 2 does
+  not exist in this build, so the report MUST NOT claim "no conflict".
+- The gate is a command (`POST /runs/{thread_id}/gate`), not an audit-stage output. An audit alone leaves
+  `gate` null; a failed audit invalidates a previous decision. Human dispositions are appended through
+  `POST /runs/{thread_id}/findings/{finding_id}/disposition` and never edit the finding itself.
 
 ## Blocked tasks and what unblocks them
 
