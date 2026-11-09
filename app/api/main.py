@@ -16,9 +16,12 @@ from fastapi.responses import JSONResponse
 
 from app.api.envelope import to_envelope
 from app.api.errors import ApiFailure, IncompleteResult, error_body
+from app.audit.gate import GateError
+from app.audit.policy import OPERATIONS
 from app.llm import resolve_llm
+from app.nodes.gate import gate_node
 from app.runs import RunStore, UnknownRun
-from app.runtime import UnknownStage, execute_chain
+from app.runtime import UnknownStage, execute_chain, merge_update
 from app.standalone import plan_standalone
 from app.stages import AGENT_SPECS
 
@@ -40,6 +43,17 @@ def _read_plan_refusal(plan: dict) -> ApiFailure:
         plan.get("detail") or "prerequisites are not satisfied",
         {"missing": plan.get("missing") or []},
     )
+
+
+async def _read_object(request: Request) -> dict:
+    """Read one JSON object; a non-object body is a client error, never an empty request."""
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        raise ApiFailure(400, "INVALID_BODY", "request body must be a JSON object") from exc
+    if not isinstance(payload, dict):
+        raise ApiFailure(400, "INVALID_BODY", "request body must be a JSON object")
+    return payload
 
 
 async def _read_submission(request: Request) -> tuple[list[tuple[str, str, bytes]], str | None]:
@@ -174,6 +188,50 @@ def create_app(
                 raise ApiFailure(409, "unknown_stage", str(exc)) from exc
 
         return to_envelope(state)
+
+    @app.post("/runs/{thread_id}/gate")
+    async def ask_gate(thread_id: str, request: Request) -> dict:
+        """Ask one protected operation about the current candidate (design D8; gate is a command)."""
+        payload = await _read_object(request)
+        operation = payload.get("operation")
+        if not isinstance(operation, str) or operation not in OPERATIONS:
+            raise ApiFailure(
+                400,
+                "UNKNOWN_OPERATION",
+                "operation is missing or unknown",
+                {"known_operations": list(OPERATIONS)},
+            )
+
+        candidate_digest = payload.get("candidate_digest")
+        if candidate_digest is not None and not isinstance(candidate_digest, str):
+            raise ApiFailure(
+                400,
+                "INVALID_DIGEST",
+                "candidate_digest must be a string or null",
+                {"candidate_digest": candidate_digest},
+            )
+
+        store_: RunStore = app.state.store
+        store_.get(thread_id)
+        async with store_.lock(thread_id):
+            state = store_.get(thread_id)
+            try:
+                update = gate_node(state, operation, candidate_digest=candidate_digest)
+            except GateError as exc:  # pragma: no cover - pre-validated above; keeps the contract explicit
+                raise ApiFailure(
+                    400,
+                    "UNKNOWN_OPERATION",
+                    str(exc),
+                    {"known_operations": list(OPERATIONS)},
+                ) from exc
+            merge_update(state, update)
+
+        return {
+            "thread_id": thread_id,
+            "operation": operation,
+            "gate": state.get("gate"),
+            "verification": state.get("verification"),
+        }
 
     @app.get("/runs/{thread_id}")
     async def read_run(thread_id: str) -> dict:

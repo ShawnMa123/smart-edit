@@ -7,13 +7,12 @@ Four rules this node obeys, and nothing else:
 3. **A broken audit still returns a stage report** (`failed` + reason) instead of raising, so the run
    is not lost; it also clears `verification`, because a previous report must not be readable as if it
    were this run's audit.
-4. **`gate` is written only when the caller named an operation.** A missing `gate` means "nobody asked
-   the gate", never "allowed".
+4. **No gate decision.** The audit produces evidence; `gate` is a separate command (`app/nodes/gate.py`)
+   and only that command records a decision. A missing `gate` means "nobody asked", never "allowed".
 """
 
 from __future__ import annotations
 
-from app.audit.gate import evaluate_gate
 from app.audit.project import finding_draft, project_issue, to_verification
 from app.audit.runner import audit_state
 from app.audit.snapshot import snapshot_digest
@@ -30,7 +29,6 @@ def audit_node(
     *,
     schema=None,
     bundles=None,
-    operation: str | None = None,
     templates=None,
     template_reference: dict | None = None,
 ) -> dict:
@@ -96,22 +94,14 @@ def audit_node(
         "trail": _trail(state, report, digest, materialized["trail"]),
     }
 
-    if operation is not None:
-        update["gate"] = evaluate_gate(
-            report,
-            operation=operation,
-            candidate_digest=digest,
-            findings=findings,
-            dispositions=state.get("dispositions") or (),
-        )
     return update
 
 
 def _failed(state: dict, reason: str) -> dict:
     """The audit could not run: a stage report with a reason, no verification, no findings.
 
-    A previous gate decision is cleared as well: leaving an old `allowed` next to a failed audit is
-    exactly the "uncertainty answered as approval" failure this group exists to prevent.
+    A previous decision is invalidated (never written as a new one): leaving an old `allowed` next to
+    a failed audit is exactly the "uncertainty answered as approval" failure this group prevents.
     """
     return {
         "verification": None,

@@ -90,7 +90,7 @@ STAGE_TARGETS = {
         "agent4",
         ("parse", "extract", "normalize"),
         ("fields",),
-        ("verification", "gate", "findings"),
+        ("verification", "findings"),
         True,
         ("verification", "gate"),
     ),
