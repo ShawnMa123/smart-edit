@@ -79,8 +79,12 @@ def evaluate_export_gate(
     # 2. Unresolved blocking findings. A blocking finding is handled when the latest disposition
     # event for it is an explicit decision; `resolved=True` stays supported for older states.
     handled = {"accepted", "rejected", "needs_human_review"}
+    report_digest = ((state.get("verification") or {}).get("audit") or {}).get("snapshot_digest")
     latest: dict[str, str] = {}
     for event in state.get("dispositions") or []:
+        if report_digest and event.get("snapshot_digest") != report_digest:
+            # An old snapshot's decision cannot resolve a finding from this one.
+            continue
         finding_id = event.get("finding_id")
         if finding_id:
             latest[str(finding_id)] = str(event.get("disposition"))
