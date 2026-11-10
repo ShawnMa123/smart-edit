@@ -132,7 +132,21 @@ def clear_previous_outputs(state: dict, target: str) -> dict:
                 for finding in state.get("findings") or []
                 if finding.get("source") != "normalization"
             ]
-        update.update({"fields": {}, "extra_fields": {}, "business_type": None})
+        # Human-confirmed values are not this stage's conclusion to discard: a re-import must not
+        # silently overwrite them (document-import / 已确认字段不被导入覆盖).
+        confirmed = {
+            key: value
+            for key, value in (state.get("fields") or {}).items()
+            if isinstance(value, dict) and (value.get("confirmed") or value.get("edited_by_user"))
+        }
+        extra_confirmed = {
+            key: value
+            for key, value in (state.get("extra_fields") or {}).items()
+            if isinstance(value, dict) and (value.get("confirmed") or value.get("edited_by_user"))
+        }
+        update.update(
+            {"fields": confirmed, "extra_fields": extra_confirmed, "business_type": None}
+        )
     elif resolved == "extract":
         update["_candidates"] = []
     elif resolved == "agent2":

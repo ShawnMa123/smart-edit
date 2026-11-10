@@ -93,7 +93,10 @@ def test_clear_previous_outputs_only_touches_the_target():
         verification={"verdict": "pass"},
         gate={"verdict": "pass"},
         export={"version_no": 1},
-        fields={"a": {"value": "1"}},
+        fields={
+            "a": {"value": "1"},
+            "b": {"value": "human", "confirmed": True},
+        },
     )
 
     legal_clear = clear_previous_outputs(state, "agent3")
@@ -108,5 +111,5 @@ def test_clear_previous_outputs_only_touches_the_target():
     assert audit_clear["export"] is None
 
     normalize_clear = clear_previous_outputs(state, "normalize")
-    assert normalize_clear["fields"] == {}
+    assert normalize_clear["fields"] == {"b": {"value": "human", "confirmed": True}}
     assert [f["id"] for f in normalize_clear["findings"]] == ["B-001", "R-001"]
