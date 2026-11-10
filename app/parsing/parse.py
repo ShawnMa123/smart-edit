@@ -389,10 +389,10 @@ def parse_file(src: SourceFile) -> ParsedDoc:
         if not blocks and not errors:
             # No text layer: OCR it instead of dead-ending (task 2.2). A missing engine is reported.
             blocks, errors = _blocks_from_pdf_ocr(path, file_id)
-            if blocks:
-                # The text did not come from a PDF text layer; never present it as `pdf_text`.
-                doc["form"] = "image_ocr"  # type: ignore[typeddict-item]
-                form = "image_ocr"
+            # The text did not come from a PDF text layer; never present it as `pdf_text`, even
+            # when OCR recognised nothing (the empty reason must be the OCR one).
+            doc["form"] = "image_ocr"  # type: ignore[typeddict-item]
+            form = "image_ocr"
     elif form == "docx_text":
         blocks, errors = _blocks_from_docx(path, file_id)
     elif form == "image_ocr":
