@@ -20,6 +20,20 @@ from app.trail import record, record_many
 NORMALIZE_STAGE = "normalize"
 
 
+def _preserve_confirmed(previous: dict | None, upcoming: dict) -> dict:
+    """New extraction never silently overwrites a human-confirmed value.
+
+    Spec `document-import` / *已确认字段不被导入覆盖*: a confirmed (or human-edited) field survives a
+    re-import/re-normalize; the normalizer still reports its own values for everything else.
+    """
+    protected = {
+        key: value
+        for key, value in (previous or {}).items()
+        if isinstance(value, dict) and (value.get("confirmed") or value.get("edited_by_user"))
+    }
+    return {**upcoming, **protected}
+
+
 def _fields_config_unavailable(state: dict, reason: str) -> dict:
     """A config incident is not "the material did not say it": all three stages `failed`,
     and the whole run is `fail`."""
@@ -67,8 +81,8 @@ def normalize_node(state: dict, *, fields_yaml: dict[str, dict] | None = None) -
         # Nothing was read: do not turn every required field into a `missing` placeholder, which
         # would make "the file could not be parsed" look like "the field was checked and is absent".
         return {
-            "fields": {},
-            "extra_fields": {},
+            "fields": _preserve_confirmed(state.get("fields"), {}),
+            "extra_fields": _preserve_confirmed(state.get("extra_fields"), {}),
             "business_type": None,
             "_candidates": clear_candidates(),
             "stages": [
@@ -92,8 +106,8 @@ def normalize_node(state: dict, *, fields_yaml: dict[str, dict] | None = None) -
     materialized = materialize_findings(state, result.findings)
 
     return {
-        "fields": result.fields,
-        "extra_fields": result.extra_fields,
+        "fields": _preserve_confirmed(state.get("fields"), result.fields),
+        "extra_fields": _preserve_confirmed(state.get("extra_fields"), result.extra_fields),
         "business_type": result.business_type,
         "_candidates": clear_candidates(),
         "stages": [

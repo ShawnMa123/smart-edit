@@ -120,6 +120,49 @@ def test_normalize_clears_candidates(tmp_path, fields_yaml):
     assert len(update["_candidates"]) == 0
 
 
+def test_confirmed_fields_survive_a_second_normalization(tmp_path, fields_yaml):
+    """document-import / 已确认字段不被导入覆盖: human data wins over a fresh candidate."""
+    doc = {
+        "file_id": "F-1",
+        "full_text": "金额 USD 500K",
+        "blocks": [
+            {"file_id": "F-1", "page": 1, "bbox": None, "text": "金额 USD 500K", "kind": "paragraph"}
+        ],
+        "errors": [],
+    }
+    confirmed = {
+        "key": "guarantee_amount",
+        "value": "900000.00",
+        "status": "inferred",
+        "confirmed": True,
+        "edited_by_user": True,
+        "source": None,
+        "normalized_from": "USD 900K",
+        "label": None,
+        "doc_type": None,
+        "notes": [],
+    }
+    state = {
+        "docs": [doc],
+        "fields": {"guarantee_amount": confirmed},
+        "_candidates": [
+            {
+                "key": "guarantee_amount",
+                "raw_value": "USD 500K",
+                "span": "USD 500K",
+                "_source": {"file_id": "F-1", "page": 1, "bbox": None, "span": "USD 500K", "form_label": None},
+            }
+        ],
+        "findings": [],
+        "trail": [],
+        "stages": [],
+    }
+
+    update = normalize_node(state, fields_yaml=fields_yaml)
+
+    assert update["fields"]["guarantee_amount"] == confirmed
+
+
 def _source_stub() -> dict:
     return {"file_id": "F-1", "sha256": "abc"}
 
