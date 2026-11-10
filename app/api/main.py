@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.envelope import to_envelope
@@ -76,15 +77,30 @@ async def _read_object(request: Request) -> dict:
 
 
 async def _read_submission(request: Request) -> tuple[list[tuple[str, str, bytes]], str | None]:
-    """Accept JSON `{text}` or multipart (`files` + `text`); anything else is an empty submission."""
+    """Accept JSON `{text}` or multipart (`files` + `text`); malformed input is a 400.
+
+    `text` is a string by contract: coercing a mapping or a list would hand the pipeline a Python
+    repr and call it source text.
+    """
     content_type = request.headers.get("content-type", "")
     if content_type.startswith("application/json"):
-        payload = await request.json()
-        text = payload.get("text") if isinstance(payload, dict) else None
-        return [], (str(text) if text else None)
+        try:
+            payload = await request.json()
+        except ValueError as exc:
+            raise ApiFailure(400, "INVALID_BODY", "request body must be valid JSON") from exc
+        if not isinstance(payload, dict):
+            # A scalar/array body carries no `text`; the create endpoint reports EMPTY_SUBMISSION.
+            return [], None
+        text = payload.get("text")
+        if text is not None and not isinstance(text, str):
+            raise ApiFailure(400, "INVALID_BODY", "`text` must be a string")
+        return [], (text or None)
 
     if content_type.startswith(("multipart/form-data", "application/x-www-form-urlencoded")):
-        form = await request.form()
+        try:
+            form = await request.form()
+        except Exception as exc:  # malformed boundary / truncated body
+            raise ApiFailure(400, "INVALID_BODY", "malformed multipart body") from exc
         uploads: list[tuple[str, str, bytes]] = []
         for value in form.getlist("files"):
             read = getattr(value, "read", None)
@@ -94,10 +110,23 @@ async def _read_submission(request: Request) -> tuple[list[tuple[str, str, bytes
             mime = getattr(value, "content_type", None) or "application/octet-stream"
             uploads.append((name, mime, await read()))
         raw_text = form.get("text")
-        text = str(raw_text) if raw_text else None
-        return uploads, text
+        if raw_text is not None and not isinstance(raw_text, str):
+            raise ApiFailure(400, "INVALID_BODY", "`text` must be a string")
+        return uploads, (raw_text or None)
 
     return [], None
+
+
+def _next_file_id(state: dict, digest: str) -> str:
+    """`F-<digest8>` for the first upload; a suffix keeps identical re-uploads distinct."""
+    base = f"F-{digest[:8]}"
+    used = {str(item.get("file_id")) for item in state.get("files") or []}
+    candidate = base
+    counter = 2
+    while candidate in used:
+        candidate = f"{base}-{counter}"
+        counter += 1
+    return candidate
 
 
 def _control_body(state: dict, result: dict) -> dict:
@@ -149,6 +178,22 @@ def create_app(
     async def _incomplete(request: Request, exc: IncompleteResult) -> JSONResponse:  # noqa: ARG001
         return JSONResponse(status_code=500, content=error_body("INCOMPLETE_RESULT", str(exc)))
 
+    @app.exception_handler(RequestValidationError)
+    async def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:  # noqa: ARG001
+        """Transport validation uses the same `{code,message,detail?}` envelope as refusals."""
+        errors = [
+            {
+                "loc": [str(part) for part in error.get("loc", ())],
+                "msg": str(error.get("msg") or ""),
+                "type": str(error.get("type") or ""),
+            }
+            for error in exc.errors()
+        ]
+        return JSONResponse(
+            status_code=422,
+            content=error_body("INVALID_REQUEST", "request validation failed", {"errors": errors}),
+        )
+
     @app.post("/runs", status_code=201)
     async def create_run(request: Request, autostart: bool = False) -> JSONResponse:
         store_: RunStore = app.state.store
@@ -164,8 +209,8 @@ def create_app(
             path, digest = store_.store_upload(thread_id, filename, data)
             state["files"].append(
                 {
-                    "file_id": f"F-{digest[:8]}",
-                    "filename": path.name,
+                    "file_id": _next_file_id(state, digest),
+                    "filename": filename,
                     "mime": mime,
                     "path": str(path),
                     "sha256": digest,
@@ -177,8 +222,8 @@ def create_app(
             path, digest = store_.store_upload(thread_id, "pasted.txt", text.encode("utf-8"))
             state["files"].append(
                 {
-                    "file_id": f"F-{digest[:8]}",
-                    "filename": path.name,
+                    "file_id": _next_file_id(state, digest),
+                    "filename": "pasted.txt",
                     "mime": "text/plain",
                     "path": str(path),
                     "sha256": digest,

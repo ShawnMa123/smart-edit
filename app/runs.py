@@ -70,10 +70,22 @@ class RunStore:
         return self.runs_dir / thread_id
 
     def store_upload(self, thread_id: str, filename: str, data: bytes) -> tuple[Path, str]:
-        """Persist an upload under the run directory; returns `(path, sha256)`."""
+        """Persist an upload under the run directory; returns `(path, sha256)`.
+
+        Two uploads may share a filename (the browser sends `same.txt` twice). The second must not
+        overwrite the first: the stored name is made unique while the source filename stays intact
+        in the `SourceFile` record.
+        """
         safe_name = Path(filename or "upload.bin").name or "upload.bin"
-        target = self.workdir(thread_id) / safe_name
-        target.parent.mkdir(parents=True, exist_ok=True)
+        directory = self.workdir(thread_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / safe_name
+        if target.exists():
+            stem, suffix = target.stem, target.suffix
+            counter = 2
+            while target.exists():
+                target = directory / f"{stem}-{counter}{suffix}"
+                counter += 1
         target.write_bytes(data)
         return target, hashlib.sha256(data).hexdigest()
 

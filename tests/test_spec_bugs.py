@@ -585,10 +585,6 @@ def test_an_accepted_disposition_resolves_a_blocking_finding_for_export(monkeypa
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-API1 malformed JSON on POST /runs raises JSONDecodeError (500) instead of 400 INVALID_BODY",
-)
 def test_malformed_json_on_create_run_is_a_client_error(tmp_path):
     """console-api / refusals carry {code,message}; a malformed body is the client's error."""
     client = TestClient(
@@ -603,10 +599,6 @@ def test_malformed_json_on_create_run_is_a_client_error(tmp_path):
     assert response.json()["code"] == "INVALID_BODY"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-API2 two uploads with the same filename overwrite each other; both documents get the last bytes",
-)
 def test_two_uploads_with_the_same_filename_keep_both_contents(tmp_path):
     """document-import / multiple files: each file keeps its own bytes and fingerprint."""
     client = TestClient(create_app(store=None, llm=None, runs_dir=tmp_path / "runs"))
@@ -824,10 +816,6 @@ def test_all_files_failing_leaves_fields_empty_and_the_chain_not_done():
     assert all(report["status"] == "failed" for report in state["stages"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-API3 FastAPI validation/parse errors bypass the {code,message} error envelope",
-)
 def test_transport_validation_errors_use_the_error_envelope(tmp_path):
     """console-api / every refusal has {code,message,detail?}; 422/400 defaults are not that."""
     client = TestClient(create_app(store=None, llm=None, runs_dir=tmp_path / "runs"))
@@ -866,10 +854,6 @@ def test_disposition_rejects_non_string_identity_and_reason(kwargs):
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-API5 a non-string `text` is str()-coerced (a dict becomes a Python repr) instead of 400",
-)
 def test_a_non_string_text_submission_is_rejected(tmp_path):
     """console-api / create run: `text` is a string; coercing a mapping silently corrupts it."""
     client = TestClient(create_app(store=None, llm=None, runs_dir=tmp_path / "runs"))
@@ -941,10 +925,6 @@ def test_a_disposition_cannot_resolve_a_different_finding_with_a_reused_id():
     assert decision["decision"] == "blocked"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-API2b identical content re-uploaded gets the same file_id and the same path",
-)
 def test_identical_content_reupload_has_an_independent_file_id_and_path(tmp_path):
     """document-import / 同名重传: independent file_id/path, identical sha256."""
     client = TestClient(create_app(store=None, llm=None, runs_dir=tmp_path / "runs"))
