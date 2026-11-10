@@ -33,3 +33,5 @@ data/regulatory/index/*.db.tmp
 data/regulatory/index/*.db-wal
 data/regulatory/index/*.db-shm
 data/embedding-cache.db
+
+data/regulatory/index/*.db
