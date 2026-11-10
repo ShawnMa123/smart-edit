@@ -219,7 +219,7 @@ describe('plain-text regression (0.3)', () => {
   });
 });
 describe('spec regressions found by the audit test design', () => {
-  it.fails('BUG-F1 drops marks without inserting a space between adjacent runs', () => {
+  it('drops marks without inserting a space between adjacent runs', () => {
     // A DOCX/PDF run boundary (or a partial bold selection) produces two text nodes. Dropping the
     // mark must not change the characters: the audit projection must stay "USD500", not "USD 500".
     const splitRun = doc([

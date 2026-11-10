@@ -248,12 +248,23 @@ export function AuditPanel({
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [localError, setLocalError] = useState<string | null>(null);
 
+  const isStale =
+    state.phase === 'report' && buildAuditView(state.envelope, state.snapshot, currentDigest).stale;
+
   const askGate = () => {
+    if (isStale) {
+      setLocalError('Report is stale — re-audit the current snapshot before asking the gate.');
+      return;
+    }
     setLocalError(null);
     onAskGate?.(operation);
   };
 
   const dispose = (finding: FindingRow, disposition: 'accepted' | 'rejected') => {
+    if (isStale) {
+      setLocalError('Report is stale — re-audit the current snapshot before disposing a finding.');
+      return;
+    }
     const reason = (reasons[finding.id] ?? '').trim();
     if (disposition === 'rejected' && finding.severity === 'critical' && !reason) {
       setLocalError(`A reason is required to reject critical finding ${finding.id}.`);
@@ -397,7 +408,13 @@ export function AuditPanel({
             </option>
           ))}
         </select>
-        <button type="button" onClick={askGate} data-testid="gate-ask">
+        <button
+          type="button"
+          onClick={askGate}
+          disabled={view.stale}
+          title={view.stale ? 'Re-audit the current snapshot first' : undefined}
+          data-testid="gate-ask"
+        >
           Ask gate
         </button>
       </div>

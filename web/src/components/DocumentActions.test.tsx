@@ -58,7 +58,7 @@ describe('DocumentActions', () => {
   });
 });
 describe('spec regressions found by the audit test design', () => {
-  it.fails('BUG-F2 formatting is an implemented action, not an unavailable one', () => {
+  it('formatting is an implemented action, not an unavailable one', () => {
     expect(UNAVAILABLE_ACTIONS.some((action) => action.id === 'format')).toBe(false);
     render(<DocumentActions />);
     expect(screen.getByRole('button', { name: 'Formatting' })).toBeTruthy();

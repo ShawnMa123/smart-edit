@@ -8,7 +8,6 @@ interface UnavailableAction {
 
 /** Actions the reference prototype offers that this build cannot perform (task 6.4). */
 export const UNAVAILABLE_ACTIONS: UnavailableAction[] = [
-  { id: 'format', label: 'Formatting', reason: 'Rich-text formatting (ED-02) is not implemented in this build.' },
   { id: 'export', label: 'Export', reason: 'Export (ED-09) is not implemented in this build.' },
   { id: 'approve', label: 'Start approval', reason: 'The approval workflow (§10) is not implemented in this build.' },
 ];
@@ -66,6 +65,16 @@ export function DocumentActions({ onImport }: DocumentActionsProps) {
             {action.label} · not implemented
           </button>
         ))}
+        <button
+          type="button"
+          title="Focus the document formatting toolbar"
+          onClick={() => {
+            const editor = document.querySelector<HTMLElement>('.ProseMirror');
+            editor?.focus();
+          }}
+        >
+          Formatting
+        </button>
       </div>
       {message ? (
         <p className="notice notice--warn tiny" role="status">

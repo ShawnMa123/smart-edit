@@ -9,7 +9,7 @@
  * unavailable without `--localstorage-file`, which would otherwise make the store untestable.
  */
 
-import type { RichDocument } from './rich/richDocument';
+import { isRichDocument, type RichDocument } from './rich/richDocument';
 
 export interface VersionEntry {
   id: string;
@@ -71,6 +71,21 @@ export interface VersionStore {
   clear(documentId: string): void;
 }
 
+function isVersionEntry(value: unknown): value is VersionEntry {
+  if (typeof value !== 'object' || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.id === 'string' &&
+    typeof entry.label === 'string' &&
+    typeof entry.digest === 'string' &&
+    typeof entry.createdAt === 'string' &&
+    typeof entry.text === 'string' &&
+    typeof entry.chars === 'number' &&
+    Number.isFinite(entry.chars) &&
+    (entry.rich === undefined || isRichDocument(entry.rich))
+  );
+}
+
 export function createVersionStore(storage: Storage = defaultStorage()): VersionStore {
   const storageKey = (documentId: string): string => `smart-edit:versions:${documentId}`;
 
@@ -79,7 +94,10 @@ export function createVersionStore(storage: Storage = defaultStorage()): Version
       const raw = storage.getItem(storageKey(documentId));
       if (!raw) return [];
       const parsed: unknown = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as VersionEntry[]) : [];
+      if (!Array.isArray(parsed)) return [];
+      // Browser storage is user-editable and can be truncated by quota handling: one malformed row
+      // must not make the whole history (or the next capture) crash.
+      return parsed.filter(isVersionEntry);
     } catch {
       return [];
     }

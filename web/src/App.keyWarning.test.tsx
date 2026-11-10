@@ -20,7 +20,7 @@ const stubViewport = () => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('spec regression found by the audit test design', () => {
-  it.fails('BUG-F3 the wide layout renders panes without React key warnings', () => {
+  it('the wide layout renders panes without React key warnings', () => {
     stubViewport();
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {

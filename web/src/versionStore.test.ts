@@ -75,7 +75,7 @@ describe('version history', () => {
   });
 });
 describe('spec regressions found by the audit test design', () => {
-  it.fails('BUG-F4 corrupt entries in browser storage are ignored, not exposed', () => {
+  it('corrupt entries in browser storage are ignored, not exposed', () => {
     const storage = memoryStorage();
     storage.setItem('smart-edit:versions:doc-1', JSON.stringify([null, { id: 7 }]));
     const history = createVersionStore(storage);

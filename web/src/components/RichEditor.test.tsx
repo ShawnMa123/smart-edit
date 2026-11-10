@@ -445,7 +445,7 @@ describe('coverage additions from the spec test design', () => {
 });
 
 describe('spec gaps found by the audit test design', () => {
-  it.fails('BUG-F5 exposes insert-before/left and header toggle controls for tables', () => {
+  it('exposes insert-before/left and header toggle controls for tables', () => {
     render(<RichEditor document={doc('cell')} onChange={vi.fn()} />);
     for (const name of ['Insert row above', 'Insert column left', 'Toggle header row']) {
       expect(screen.getByRole('button', { name })).toBeTruthy();

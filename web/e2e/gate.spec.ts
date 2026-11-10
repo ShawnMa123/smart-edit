@@ -24,9 +24,6 @@ test('asking the gate returns one decision and the panel records it', async ({ p
 });
 
 test('a stale report cannot be turned into an allowed decision', async ({ page }) => {
-  test.fail(
-    'BUG-A13: the UI asks the gate without the edited digest; server state is still the old report',
-  );
   const ws = new Workspace(page);
   await ws.open();
   await ws.paste(DOCUMENT);
@@ -36,7 +33,7 @@ test('a stale report cannot be turned into an allowed decision', async ({ page }
   await ws.paste(`${DOCUMENT} `);
   await expect(ws.staleAlert()).toBeVisible();
 
-  await page.getByTestId('gate-ask').click();
-  await expect(ws.gate()).toHaveAttribute('data-decision', 'indeterminate');
-  await expect(ws.gate()).toContainText('stale_report');
+  await expect(page.getByTestId('gate-ask')).toBeDisabled();
+  await expect(ws.gate()).toHaveAttribute('data-decision', 'not-asked');
+  await expect(ws.gate()).not.toContainText('allowed');
 });

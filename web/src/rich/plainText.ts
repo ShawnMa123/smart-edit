@@ -27,11 +27,12 @@ import type {
 const textOf = (nodes: InlineNode[] | undefined): string => {
   let text = '';
   for (const node of nodes ?? []) {
+    const isGap = node.type !== 'text';
     const piece = node.type === 'text' ? (node.text ?? '') : textOf(node.content);
     if (!piece) continue;
-    // A filled blank is document text: keep one readable space at the text↔blank boundary. An empty
-    // gap contributes nothing, so an untouched import still projects exactly as before.
-    if (text && !/\s$/.test(text) && !/^\s/.test(piece)) text += ' ';
+    // A filled blank is document text: keep one readable space at the text↔blank boundary. Adjacent
+    // text runs are one sentence split only by marks, so joining them must not add a character.
+    if (isGap && text && !/\s$/.test(text) && !/^\s/.test(piece)) text += ' ';
     text += piece;
   }
   return text;

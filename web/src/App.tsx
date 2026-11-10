@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { Fragment, useEffect, useMemo, useReducer, useState } from 'react';
 
 import { ApiError } from './api/errors';
 import {
@@ -211,9 +211,13 @@ export function App() {
   const handleAskGate = async (operation: string) => {
     if (audit.phase !== 'report') return;
     const threadId = audit.envelope.thread_id;
+    // The report was produced for `audit.snapshot`; if the editor has moved on, say so to the
+    // server instead of asking it to approve the old text. The server still owns the digest it
+    // compares against, so a mismatch is `stale_report`, never an approval.
+    const editedDigest = audit.snapshot.digest !== currentDigest ? currentDigest : undefined;
     setAuditActionError(null);
     try {
-      await askGate(threadId, operation);
+      await askGate(threadId, operation, editedDigest);
       await refreshAudit(threadId);
     } catch (error) {
       setAuditActionError(error instanceof ApiError ? error.message : String(error));
@@ -228,11 +232,12 @@ export function App() {
   ) => {
     if (audit.phase !== 'report') return;
     const threadId = audit.envelope.thread_id;
+    const editedDigest = audit.snapshot.digest !== currentDigest ? currentDigest : undefined;
     setAuditActionError(null);
     try {
       await disposeFinding(threadId, findingId, disposition, reason);
       // The old decision is stale after a disposition; ask again for the operation the operator chose.
-      await askGate(threadId, operation);
+      await askGate(threadId, operation, editedDigest);
       await refreshAudit(threadId);
     } catch (error) {
       setAuditActionError(error instanceof ApiError ? error.message : String(error));
@@ -325,7 +330,15 @@ export function App() {
       ) : null}
 
       <div className="work-grid" data-narrow={narrow}>
-        {narrow ? panes[pane] : [panes.versions, panes.editor, panes.assistant]}
+        {narrow ? (
+          panes[pane]
+        ) : (
+          <>
+            <Fragment key="versions">{panes.versions}</Fragment>
+            <Fragment key="editor">{panes.editor}</Fragment>
+            <Fragment key="assistant">{panes.assistant}</Fragment>
+          </>
+        )}
       </div>
     </div>
   );
