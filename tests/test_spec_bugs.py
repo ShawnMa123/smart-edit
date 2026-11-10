@@ -160,10 +160,6 @@ def _candidate(key: str, raw: str, span: str, *, page=None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-N1 cross_page_span reports [1,2] for a span wholly inside a page-2 block",
-)
 def test_a_value_contained_in_one_late_page_block_is_extracted_not_cross_page():
     """agent-normalize / 跨页拼接必须降级: only a genuinely stitched span is cross-page."""
     doc = _blocks_doc(
@@ -182,10 +178,6 @@ def test_a_value_contained_in_one_late_page_block_is_extracted_not_cross_page():
     assert "merged_across_pages" not in field["notes"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-N2 extracted PDF fields can keep source.page=None when the value sits in a second block",
-)
 def test_an_extracted_pdf_value_always_has_a_page_even_when_its_block_is_not_the_only_match():
     """agent-normalize / 出处必须能跳回具体页: extracted + PDF must not keep page=None."""
     doc = _blocks_doc(
@@ -203,10 +195,6 @@ def test_an_extracted_pdf_value_always_has_a_page_even_when_its_block_is_not_the
     assert field["source"]["page"] == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-N3 approximate values ('约 USD 500K') are normalised into exact numbers",
-)
 def test_a_hedged_amount_is_inferred_not_a_confirmed_decimal():
     """agent-normalize / 模糊表述不得被确定化."""
     text = "金额：约 USD 500K"
@@ -222,10 +210,6 @@ def test_a_hedged_amount_is_inferred_not_a_confirmed_decimal():
     assert field["value"] != "500000.00"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-N4 business-type detection searches raw text, bypassing normalize_ws",
-)
 def test_full_width_guarantee_wording_is_detected_as_guarantee():
     """agent-contract / 定位基准唯一: typographically identical text must decide the same way."""
     decision = decide_business_type(
@@ -235,10 +219,6 @@ def test_full_width_guarantee_wording_is_detected_as_guarantee():
     assert decision.business_type == "guarantee"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-N5 Decimal('-Infinity'/'1e999') escapes _normalize_amount and crashes normalization",
-)
 @pytest.mark.parametrize("raw", ["-Infinity", "+Infinity", "1e999999999"])
 def test_a_non_finite_or_huge_amount_is_downgraded_not_allowed_to_crash(raw):
     """agent-normalize / 值规范化: a malformed number must become a Finding, never an exception."""
@@ -254,10 +234,6 @@ def test_a_non_finite_or_huge_amount_is_downgraded_not_allowed_to_crash(raw):
     assert any(note for note in field["notes"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-N6 Decimal('-NaN') is returned as a field value, and no downgrade note is recorded",
-)
 def test_nan_with_a_sign_is_not_a_document_value():
     """agent-normalize / 值规范化: NaN is never a field value, signed or not."""
     doc = _blocks_doc(_block("金额：-NaN", 1))
@@ -449,10 +425,6 @@ def test_a_downgrade_trail_records_the_new_support_state():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A1 bind_field ignores confirmed=true on an inferred field, so approval stays blocked",
-)
 def test_a_human_confirmed_inferred_value_passes_the_required_check():
     """rule-audit / Present but unconfirmed: confirmation must clear needs_input (design D7)."""
     schema = load_schema()
@@ -473,10 +445,6 @@ def test_a_human_confirmed_inferred_value_passes_the_required_check():
     assert result.status == PASS
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A2 NaN/Infinity/scientific amounts pass the type check and abort the whole audit",
-)
 @pytest.mark.parametrize("raw", ["NaN", "Infinity", "1e999999999"])
 def test_a_malformed_amount_becomes_a_unit_finding_not_an_audit_crash(raw):
     """rule-audit / Malformed numeric input: the unit reports invalid; the audit survives."""
@@ -494,10 +462,6 @@ def test_a_malformed_amount_becomes_a_unit_finding_not_an_audit_crash(raw):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A3 gate_node trusts a caller-supplied candidate_digest, so an edited run can be 'allowed'",
-)
 def test_the_gate_binds_the_server_snapshot_not_the_digest_the_caller_supplies():
     """rule-audit / The candidate is what gets checked: the server owns the digest."""
     state = _state()
@@ -513,10 +477,6 @@ def test_the_gate_binds_the_server_snapshot_not_the_digest_the_caller_supplies()
     assert state["gate"]["candidate_content_sha256"] == snapshot_digest(state)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A4 a failed audit clears verification/gate but leaves the previous findings in state",
-)
 def test_a_failed_audit_leaves_no_old_findings_next_to_the_failed_stage():
     """rule-audit / Coverage + orchestration / 没检查必须可区分."""
     state = _state()
@@ -532,10 +492,6 @@ def test_a_failed_audit_leaves_no_old_findings_next_to_the_failed_stage():
     assert state["findings"] == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A5 a successful re-audit leaves the previous gate decision on the run",
-)
 def test_a_new_audit_clears_the_previous_gate_decision():
     """rule-audit / The gate answers one candidate; a new audit invalidates the old answer."""
     state = _state()
@@ -550,10 +506,6 @@ def test_a_new_audit_clears_the_previous_gate_decision():
     assert state.get("gate") is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A6 re-auditing appends findings (reducer) instead of replacing the previous snapshot's rows",
-)
 def test_a_second_audit_does_not_accumulate_old_findings():
     """rule-audit / Every finding is bound to the snapshot it came from."""
     state = _state()
@@ -564,7 +516,7 @@ def test_a_second_audit_does_not_accumulate_old_findings():
     first = list(state["findings"])
     assert len(first) == 1
 
-    state["fields"]["guarantee_number"] = _field("guarantee_number", "BG-2026-00418")
+    state["fields"]["guarantee_number"] = _field("guarantee_number", "BG-2026-00417")
     state["docs"][0]["full_text"] += "\nedited"
     merge_update(state, audit_node(state))
 
@@ -572,10 +524,6 @@ def test_a_second_audit_does_not_accumulate_old_findings():
     assert state["findings"][0]["id"] == "B-001"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A7 summarise silently keeps the last result when a planned unit receives two results",
-)
 def test_duplicate_results_for_one_planned_check_are_refused():
     """rule-audit / Every planned check receives exactly one state."""
     unit = Unit("SCHEMA:x:required", "schema", field_id="x", required=True)
@@ -589,10 +537,6 @@ def test_duplicate_results_for_one_planned_check_are_refused():
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A8 a crashing schema/rule evaluator aborts the whole report instead of failing one unit",
-)
 def test_a_crashing_rule_unit_does_not_take_the_audit_down(monkeypatch):
     """rule-audit / One checker crashes: the unit is failed, the rest still run."""
 
@@ -606,10 +550,6 @@ def test_a_crashing_rule_unit_does_not_take_the_audit_down(monkeypatch):
     assert outcome["report"]["outcome"] != "no_findings"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A9 exporting the same run twice writes two versions, violating replay idempotency",
-)
 def test_exporting_the_same_snapshot_twice_does_not_write_a_second_version(tmp_path):
     """orchestration / 重复提交: no duplicate version on replay."""
     store = DocVersionStore(tmp_path)
@@ -626,10 +566,6 @@ def test_exporting_the_same_snapshot_twice_does_not_write_a_second_version(tmp_p
     assert len(list((tmp_path / "R-bug").glob("v*.json"))) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A10 an accepted disposition never resolves a blocking finding, so export cannot be unblocked",
-)
 def test_an_accepted_disposition_resolves_a_blocking_finding_for_export(monkeypatch):
     """rule-audit / disposition state + orchestration / 未处理项: handled means accepted."""
     def allowed(*args, **kwargs):
@@ -720,10 +656,6 @@ def test_two_uploads_with_the_same_filename_keep_both_contents(tmp_path):
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A11 any critical finding blocks approval, even semantic/advisory or for another operation",
-)
 @pytest.mark.parametrize(
     "finding",
     [
@@ -771,10 +703,6 @@ def test_severity_or_another_operation_never_blocks_by_itself(finding):
     assert decision["decision"] == "allowed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A3 (HTTP) replaying the last audit digest after editing still returns allowed",
-)
 def test_http_gate_rejects_a_replayed_old_candidate_digest(tmp_path):
     """rule-audit / The candidate is what gets checked: HTTP must not let a client re-point it."""
     from app.llm import resolve_llm
@@ -800,10 +728,6 @@ def test_http_gate_rejects_a_replayed_old_candidate_digest(tmp_path):
     assert answer["gate"]["decision"] != "allowed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A14 audit's citation_support passes a 'supported' claim that has no chunk_id",
-)
 def test_a_supported_claim_without_a_citation_is_a_finding():
     """rule-audit / citation_support: supported MUST carry a chunk id from this retrieval."""
     from app.audit.evidence import evaluate_evidence_unit
@@ -817,10 +741,6 @@ def test_a_supported_claim_without_a_citation_is_a_finding():
     assert result.status != "pass"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A15 coverage_declaration passes an empty coverage object when retrieval is non-empty",
-)
 def test_an_empty_coverage_declaration_is_not_a_pass():
     """rule-audit / coverage declaration: an empty block cannot mean 'fully covered'."""
     from app.audit.evidence import evaluate_evidence_unit
@@ -834,10 +754,6 @@ def test_an_empty_coverage_declaration_is_not_a_pass():
     assert result.status != "pass"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-O1 plan_standalone treats any earlier done report as done, ignoring a later failure",
-)
 def test_a_later_failed_stage_is_backfilled_even_if_it_succeeded_before():
     """orchestration / 阶段可独立触发 + latest-stage semantics: a later failure wins."""
     from app.standalone import plan_standalone
@@ -860,10 +776,6 @@ def test_a_later_failed_stage_is_backfilled_even_if_it_succeeded_before():
     assert "extract" in plan["backfill"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-N7 DOCX table-cell paragraphs are concatenated without a separator ('A' + 'B' -> 'AB')",
-)
 def test_docx_table_cell_keeps_paragraph_boundaries(tmp_path):
     """agent-normalize / 解析必须保留原文结构: paragraph boundaries are layout facts, not noise."""
     import zipfile
@@ -901,10 +813,6 @@ def test_docx_table_cell_keeps_paragraph_boundaries(tmp_path):
     assert "AlphaBeta" not in text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-R8 _minmax maps a single/equal candidate set to all-zero scores; InProcess then drops them",
-)
 @pytest.mark.parametrize("values", [[0.7], [0.7, 0.7]])
 def test_a_single_or_tied_candidate_keeps_a_positive_score(values):
     """regulatory-advice / 检索命中: a matched chunk must not disappear because it is the only hit."""
@@ -914,10 +822,6 @@ def test_a_single_or_tied_candidate_keeps_a_positive_score(values):
     assert any(score > 0 for score in normalised), normalised
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-O2 with a provider configured, a failed parse still reports extract/normalize done and writes placeholders",
-)
 def test_all_files_failing_leaves_fields_empty_and_the_chain_not_done():
     """agent-normalize / 全部文件失败: fields empty, stage failed, never 7 placeholders."""
     from app.llm import resolve_llm
@@ -969,10 +873,6 @@ def test_transport_validation_errors_use_the_error_envelope(tmp_path):
     assert "code" in bad_multipart.json() and "message" in bad_multipart.json()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-API4 non-string actor/reason raises AttributeError instead of the uniform refusal",
-)
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -1006,10 +906,6 @@ def test_a_non_string_text_submission_is_rejected(tmp_path):
     assert response.status_code == 400
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A16 save_draft is indeterminate on a stale report, although it is not a content gate",
-)
 def test_saving_a_draft_is_not_blocked_by_a_stale_audit_report():
     """rule-audit / Draft saving is not a content gate: identity/locking only."""
     from app.audit.gate import evaluate_gate
@@ -1030,10 +926,6 @@ def test_saving_a_draft_is_not_blocked_by_a_stale_audit_report():
     assert decision["decision"] == "allowed"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-A17 reset/repair clears findings but keeps dispositions; reused B-001 inherits an old 'accepted'",
-)
 def test_a_disposition_cannot_resolve_a_different_finding_with_a_reused_id():
     """rule-audit / disposition is bound to a finding; ids must not be reused across snapshots."""
     from app.audit.gate import evaluate_gate
@@ -1098,10 +990,6 @@ def test_identical_content_reupload_has_an_independent_file_id_and_path(tmp_path
     assert body["files"][0]["sha256"] == body["files"][1]["sha256"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-I1 a scanned PDF OCR'd into text keeps form=pdf_text; the spec requires image_ocr",
-)
 def test_a_scanned_pdf_that_went_through_ocr_is_labelled_image_ocr(tmp_path, monkeypatch):
     """document-import / OCR 的文本来源: OCR text MUST NOT appear as pdf_text."""
     fitz = pytest.importorskip("pymupdf")
@@ -1128,10 +1016,6 @@ def test_a_scanned_pdf_that_went_through_ocr_is_labelled_image_ocr(tmp_path, mon
     assert doc["form"] == "image_ocr"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-N8 nested table rows are walked repeatedly, duplicating their text in blocks/full_text",
-)
 def test_a_nested_docx_table_is_not_walked_twice(tmp_path):
     """document-import / DOCX 解析只取文本: blocks follow document order, without duplicates."""
     import zipfile

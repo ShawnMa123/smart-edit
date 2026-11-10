@@ -31,12 +31,23 @@ def _finding_label(finding: dict) -> str:
     return f"{rule_ref.get('rule_id', 'rule')}@{rule_ref.get('version', '?')}"
 
 
-def _latest_dispositions(events: Iterable[dict]) -> dict[str, str]:
+def _latest_dispositions(
+    events: Iterable[dict], snapshot_digest: str | None = None
+) -> dict[str, str]:
+    """Latest disposition per finding, bound to the report's snapshot.
+
+    A finding id is only unique inside one snapshot. When the report names its digest, an event
+    recorded for a different snapshot cannot resolve this finding — otherwise a reset + re-audit
+    that reuses `B-001` would inherit an old `accepted`.
+    """
     latest: dict[str, str] = {}
     for event in events:
         finding_id = event.get("finding_id")
-        if finding_id:
-            latest[str(finding_id)] = str(event.get("disposition"))
+        if not finding_id:
+            continue
+        if snapshot_digest and event.get("snapshot_digest") != snapshot_digest:
+            continue
+        latest[str(finding_id)] = str(event.get("disposition"))
     return latest
 
 
@@ -49,6 +60,7 @@ def evaluate_gate(
     dispositions: Sequence[dict] = (),
     now: datetime | None = None,
     template_digest: str | None = None,
+    client_digest: str | None = None,
 ) -> dict:
     """Decide one operation from an audit report, its findings and the disposition history."""
     policy = policy_for(operation)
@@ -73,6 +85,18 @@ def evaluate_gate(
         decision["decision"] = verdict
         decision["reason_codes"] = reasons
         return decision
+
+    if not policy.content_gate:
+        # Save draft is identity/locking only: staleness and findings are content judgements. A
+        # stale report must not stop a user from keeping their work.
+        reasons.append("draft_not_gated")
+        return settle(ALLOWED)
+
+    if client_digest is not None and client_digest != candidate_digest:
+        # The caller says it decided on a different snapshot. The answer is about the server's
+        # candidate, and that report does not describe it: never echo the caller's digest.
+        reasons.append("stale_report")
+        return settle(INDETERMINATE)
 
     if not report:
         reasons.append("no_audit_report")
@@ -106,10 +130,6 @@ def evaluate_gate(
     ]
     decision["authorized_finding_ids"] = [_finding_label(finding) for finding in hard_blocks]
 
-    if not policy.content_gate:
-        reasons.append("draft_not_gated")
-        return settle(ALLOWED)
-
     counts = report.get("counts") or {}
     # An `allowed` answer must state what it is allowing: how much was assessed, how many gaps stay open,
     # and which advisories the reviewer is accepting.
@@ -141,11 +161,16 @@ def evaluate_gate(
         reasons.append("gaps_listed")
 
     if policy.block_on_unresolved_critical:
-        latest = _latest_dispositions(dispositions)
+        latest = _latest_dispositions(dispositions, report.get("snapshot_digest"))
+        # Severity alone is not blocking: the finding must be deterministic and target *this*
+        # operation. A semantic finding can never hard-block (contract 4.2), and an advisory about
+        # `handoff` must not stop `start_approval`.
         unresolved = [
             finding
             for finding in findings
             if finding.get("severity") == "critical"
+            and (finding.get("method") or "deterministic") == "deterministic"
+            and operation in (finding.get("target_operations") or ())
             and latest.get(_finding_label(finding)) not in _RESOLVED_DISPOSITIONS
         ]
         if unresolved:
@@ -183,6 +208,7 @@ def evaluate(
     dispositions: Sequence[dict] = (),
     now: datetime | None = None,
     template_digest: str | None = None,
+    client_digest: str | None = None,
 ) -> dict:
     """Gate convenience used by the node layer.
 
@@ -205,6 +231,7 @@ def evaluate(
         dispositions=dispositions,
         now=now,
         template_digest=template_digest,
+        client_digest=client_digest,
     )
 
 

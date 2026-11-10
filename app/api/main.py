@@ -305,6 +305,7 @@ def create_app(
                 )
 
             try:
+                report = (state.get("verification") or {}).get("audit") or {}
                 events = append_event(
                     state.get("dispositions") or [],
                     finding_id=finding_id,
@@ -312,6 +313,7 @@ def create_app(
                     actor=actor if isinstance(actor, str) else "",
                     severity=finding.get("severity"),
                     reason=reason if isinstance(reason, str) else None,
+                    snapshot_digest=report.get("snapshot_digest"),
                 )
             except DispositionError as exc:
                 raise ApiFailure(

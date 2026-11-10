@@ -166,7 +166,7 @@ def test_gate_binds_the_candidate_digest(api):
 
     assert stale["gate"]["decision"] == "indeterminate"
     assert stale["gate"]["reason_codes"] == ["stale_report"]
-    assert stale["gate"]["candidate_content_sha256"] == "a-different-candidate"
+    assert stale["gate"]["candidate_content_sha256"] == current
     assert fresh["gate"]["decision"] == "allowed"
     assert fresh["gate"]["candidate_content_sha256"] == current
 

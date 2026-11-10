@@ -34,14 +34,23 @@ def append_event(
     severity: str | None = None,
     reason: str | None = None,
     at: datetime | None = None,
+    snapshot_digest: str | None = None,
 ) -> list[dict]:
-    """Return a new event list with one appended event. Earlier events are never modified."""
-    if disposition not in DISPOSITIONS:
-        raise DispositionError(f"unknown disposition {disposition!r}; expected one of {DISPOSITIONS}")
-    if not finding_id:
+    """Return a new event list with one appended event. Earlier events are never modified.
+
+    `snapshot_digest` binds the decision to the audit snapshot whose finding it handled; a new
+    audit that reuses an id cannot inherit it.
+    """
+    if not isinstance(finding_id, str) or not finding_id.strip():
         raise DispositionError("finding_id is required")
-    if not (actor or "").strip():
+    if not isinstance(disposition, str) or disposition not in DISPOSITIONS:
+        raise DispositionError(f"unknown disposition {disposition!r}; expected one of {DISPOSITIONS}")
+    if not isinstance(actor, str) or not actor.strip():
         raise DispositionError("actor is required")
+    if reason is not None and not isinstance(reason, str):
+        raise DispositionError("reason must be a string")
+    if snapshot_digest is not None and not isinstance(snapshot_digest, str):
+        raise DispositionError("snapshot_digest must be a string")
     if disposition == REJECTED and severity == "critical" and not (reason or "").strip():
         raise DispositionError(
             "rejecting a critical finding requires a reason", code="REASON_REQUIRED"
@@ -54,6 +63,8 @@ def append_event(
         "actor": actor,
         "at": (at or datetime.now(timezone.utc)).isoformat(),
     }
+    if snapshot_digest:
+        event["snapshot_digest"] = snapshot_digest
     return [*events, event]
 
 

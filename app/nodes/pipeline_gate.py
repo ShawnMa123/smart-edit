@@ -76,11 +76,21 @@ def evaluate_export_gate(
     elif verification.get("verdict") == "fail":
         add("VERIFICATION_FAIL", {"checks": len(verification.get("checks") or [])})
 
-    # 2. Unresolved blocking findings.
+    # 2. Unresolved blocking findings. A blocking finding is handled when the latest disposition
+    # event for it is an explicit decision; `resolved=True` stays supported for older states.
+    handled = {"accepted", "rejected", "needs_human_review"}
+    latest: dict[str, str] = {}
+    for event in state.get("dispositions") or []:
+        finding_id = event.get("finding_id")
+        if finding_id:
+            latest[str(finding_id)] = str(event.get("disposition"))
     unresolved = [
         finding.get("id")
         for finding in state.get("findings") or []
-        if isinstance(finding, dict) and finding.get("blocking") and not finding.get("resolved")
+        if isinstance(finding, dict)
+        and finding.get("blocking")
+        and not finding.get("resolved")
+        and latest.get(str(finding.get("id"))) not in handled
     ]
     if unresolved:
         add("BLOCKING_UNRESOLVED", {"finding_ids": unresolved})

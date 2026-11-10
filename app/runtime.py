@@ -15,6 +15,11 @@ Design: `openspec/changes/frontend-console/design.md` D1-D2.
 
 from __future__ import annotations
 
+try:
+    from langgraph.types import Overwrite
+except ImportError:  # pragma: no cover - older langgraph layout
+    from langgraph.graph.message import Overwrite  # type: ignore[no-redef]
+
 from app.config import FieldsConfigError, load_fields_config
 from app.nodes.audit import audit_node
 from app.nodes.extract import extract_node
@@ -43,7 +48,9 @@ class UnknownStage(ValueError):
 def merge_update(state: dict, update: dict) -> dict:
     """Apply one node's partial update to `state`, honouring the reducer keys."""
     for key, value in update.items():
-        if key in REDUCER_KEYS:
+        if isinstance(value, Overwrite):
+            state[key] = value.value
+        elif key in REDUCER_KEYS:
             state[key] = (state.get(key) or []) + list(value)
         else:
             state[key] = value

@@ -52,19 +52,54 @@ class DocVersionStore:
         with self._lock:
             directory = self._dir(doc_id)
             directory.mkdir(parents=True, exist_ok=True)
-            version = self.next_version(doc_id)
-            record = {**payload, "version_no": version}
-            encoded = json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True)
-            target = directory / f"v{version}.json"
-            with open(target, "x", encoding="utf-8", newline="\n") as handle:
-                handle.write(encoded + "\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-            return {
-                "version_no": version,
-                "path": str(target),
-                "sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
-            }
+            return self._write_locked(directory, payload)
+
+    def append_unique(self, doc_id: str, payload: dict, *, snapshot_id: str) -> dict:
+        """Append unless `snapshot_id` was already exported; replay returns the first version.
+
+        Exports are keyed by the audited snapshot, not by the request: submitting the same snapshot
+        twice must not create a second immutable version.
+        """
+        with self._lock:
+            directory = self._dir(doc_id)
+            directory.mkdir(parents=True, exist_ok=True)
+            existing = self._find_snapshot_locked(directory, snapshot_id)
+            if existing is not None:
+                return existing
+            return self._write_locked(directory, payload)
+
+    def _find_snapshot_locked(self, directory: Path, snapshot_id: str) -> dict | None:
+        for path in sorted(directory.glob("v*.json")):
+            _, _, tail = path.stem.partition("v")
+            if not tail.isdigit():
+                continue
+            encoded = path.read_text(encoding="utf-8")
+            try:
+                record = json.loads(encoded)
+            except json.JSONDecodeError:  # a corrupt file is not an idempotency hit
+                continue
+            if record.get("snapshot_id") == snapshot_id:
+                return {
+                    "version_no": int(tail),
+                    "path": str(path),
+                    "sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+                }
+        return None
+
+    def _write_locked(self, directory: Path, payload: dict) -> dict:
+        version = self.next_version(directory.name)
+        record = {**payload, "version_no": version}
+        encoded = json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True)
+        target = directory / f"v{version}.json"
+        with open(target, "x", encoding="utf-8", newline="\n") as handle:
+            handle.write(encoded + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        return {
+            "version_no": version,
+            "path": str(target),
+            "sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+        }
 
     def write_version(self, doc_id: str, payload: dict) -> dict:
         """Contract name for `append`; the version is generated, never accepted."""

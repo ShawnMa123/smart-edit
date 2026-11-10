@@ -123,10 +123,15 @@ def _check_citation_support(unit: Unit, state: dict) -> CheckResult:
     fabricated: list[str] = []
     entity_gaps: list[dict] = []
     inconsistent: list[str] = []
+    uncited: list[str] = []
 
     for claim in claims:
         chunk_id = claim.get("chunk_id")
         if not chunk_id:
+            if claim.get("support") == "supported":
+                # "Supported" names a source from this retrieval; without a chunk id it is an
+                # unverifiable claim dressed as evidence.
+                uncited.append(str(claim.get("text") or "<claim>")[:200])
             continue
         key = str(chunk_id)
         chunk = chunks.get(key)
@@ -153,11 +158,14 @@ def _check_citation_support(unit: Unit, state: dict) -> CheckResult:
         if claim.get("support") == "insufficient":
             inconsistent.append(key)
 
-    if fabricated or entity_gaps:
+    if fabricated or entity_gaps or uncited:
         detail = {
             "chunk_ids": fabricated,
             "entity_gaps": entity_gaps,
-            "evidence": (fabricated or [gap["chunk_id"] for gap in entity_gaps])[0],
+            "uncited_claims": uncited,
+            "evidence": (
+                fabricated or uncited or [gap["chunk_id"] for gap in entity_gaps]
+            )[0],
         }
         return CheckResult(
             unit.check_id,
@@ -203,6 +211,21 @@ def _check_coverage_declaration(unit: Unit, state: dict) -> CheckResult:
 
     coverage = legal.get("coverage") or {}
     retrieved = state.get("retrieved") or []
+    if not coverage:
+        # An empty object declares nothing. With retrieval present it cannot be read as
+        # "fully covered"; without retrieval the no-retrieval check below already fires.
+        detail = {"coverage": {}, "retrieved": len(retrieved), "evidence": "coverage_undeclared"}
+        return CheckResult(
+            unit.check_id,
+            FINDING,
+            finding=_finding(
+                unit,
+                "Coverage is not declared for this answer",
+                "warn",
+                "advisory",
+                detail,
+            ),
+        )
     unavailable = coverage.get("unavailable") is True
     summary = str(legal.get("summary") or "").lower()
 

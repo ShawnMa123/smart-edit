@@ -141,14 +141,21 @@ def test_resolved_critical_finding_allows_approval_and_latest_event_wins():
     allowed = _gate(
         report,
         findings=[finding],
-        dispositions=[{"finding_id": "N-001", "disposition": "rejected", "reason": "checked with ops"}],
+        dispositions=[
+            {
+                "finding_id": "N-001",
+                "disposition": "rejected",
+                "reason": "checked with ops",
+                "snapshot_digest": DIGEST,
+            }
+        ],
     )
     reopened = _gate(
         report,
         findings=[finding],
         dispositions=[
-            {"finding_id": "N-001", "disposition": "rejected"},
-            {"finding_id": "N-001", "disposition": "open"},
+            {"finding_id": "N-001", "disposition": "rejected", "snapshot_digest": DIGEST},
+            {"finding_id": "N-001", "disposition": "open", "snapshot_digest": DIGEST},
         ],
     )
 

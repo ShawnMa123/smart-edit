@@ -73,7 +73,7 @@ def test_a_clean_document_audits_into_one_done_stage_report():
     assert report["status"] == "done"
     assert report["reason"] is None
     assert report["model_calls"] == 0
-    assert report["produced"] == len(update["findings"]) == 0
+    assert report["produced"] == len(update["findings"].value) == 0
 
 
 def test_the_verification_slot_carries_the_report_baseline():
@@ -104,7 +104,7 @@ def test_trail_entries_use_contract_ops_and_unique_ids():
     assert trail[0]["op"] == "pass"
     assert trail[0]["detail"]["snapshot_digest"] == snapshot_digest(state)
     assert trail[0]["detail"]["model_calls"] == 0
-    assert [entry["op"] for entry in trail[1:]] == ["emit"] * len(update["findings"])
+    assert [entry["op"] for entry in trail[1:]] == ["emit"] * len(update["findings"].value)
     assert {entry["agent"] for entry in trail} == {AUDIT_AGENT}
     assert trail[1]["id"] == "agent4.audit#002"
 
@@ -124,11 +124,11 @@ def test_a_failing_audit_returns_a_stage_report_instead_of_raising():
 
 def test_an_audit_never_writes_a_gate_decision():
     """6.3 / 5.2 The audit is evidence; only the gate command decides."""
-    assert "gate" not in audit_node(_state())
+    assert audit_node(_state())["gate"] is None
 
     state = _state()
     state["fields"].pop("guarantee_amount")
-    assert "gate" not in audit_node(state)
+    assert audit_node(state)["gate"] is None
 
 
 def test_the_gate_command_stores_one_decision_bound_to_the_snapshot():

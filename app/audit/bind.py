@@ -55,7 +55,10 @@ def bind_field(field_id: str, field_value: dict | None) -> AuditValue:
         state = CONFIRMED if source else VIOLATION
         return AuditValue(field_id=field_id, state=state, value=value, source=source, notes=notes)
     if status == "inferred":
-        return AuditValue(field_id=field_id, state=UNCONFIRMED, value=value, source=source, notes=notes)
+        # Design D7: a human confirmation converts an inferred value into a usable one. Without this
+        # branch HITL can never clear `needs_input`, and approval loops forever.
+        state = CONFIRMED if field_value.get("confirmed") is True else UNCONFIRMED
+        return AuditValue(field_id=field_id, state=state, value=value, source=source, notes=notes)
 
     # Unknown status: never guess that it is fine.
     return AuditValue(field_id=field_id, state=VIOLATION, value=value, source=source, notes=notes)

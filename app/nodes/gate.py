@@ -13,12 +13,18 @@ from app.audit.snapshot import snapshot_digest
 def gate_node(
     state: dict, operation: str, *, candidate_digest: str | None = None
 ) -> dict:
-    """Return `{"gate": decision}` for `operation`; unknown operations raise `GateError`."""
-    digest = candidate_digest or snapshot_digest(state)
+    """Return `{"gate": decision}` for `operation`; unknown operations raise `GateError`.
+
+    The server owns the candidate digest. A caller-supplied digest is only an assertion that the
+    report it saw is current: it can never replace the hash of the state being decided. If it
+    differs, the audit report is stale and the gate answers `indeterminate`.
+    """
+    digest = snapshot_digest(state)
     decision = evaluate(
         state,
         operation,
         digest,
         dispositions=state.get("dispositions") or (),
+        client_digest=candidate_digest,
     )
     return store_decision(state, decision)

@@ -199,7 +199,7 @@ def test_export_refuses_a_blocked_gate_and_writes_version_on_pass(tmp_path):
     first = export_node(passing, versions=store)
     second = export_node(passing, versions=store)
     assert first["export"]["version_no"] == 1
-    assert second["export"]["version_no"] == 2
+    assert second["export"]["version_no"] == 1, "replaying the same snapshot is idempotent"
     assert first["export"]["doc_id"] == "R-1"
     assert first["export"]["snapshot_id"] == "digest"
-    assert store.latest("R-1")["version_no"] == 2
+    assert store.latest("R-1")["version_no"] == 1

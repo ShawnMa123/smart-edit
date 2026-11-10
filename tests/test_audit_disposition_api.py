@@ -192,7 +192,7 @@ def test_latest_disposition_changes_the_gate_answer(api):
             "category": "evidence",
             "severity": "critical",
             "gate_type": "advisory",
-            "target_operations": [],
+            "target_operations": ["start_approval"],
             "method": "deterministic",
             "field_id": None,
             "evidence": None,

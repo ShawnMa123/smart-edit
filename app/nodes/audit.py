@@ -13,6 +13,11 @@ Four rules this node obeys, and nothing else:
 
 from __future__ import annotations
 
+try:
+    from langgraph.types import Overwrite
+except ImportError:  # pragma: no cover - older langgraph layout
+    from langgraph.graph.message import Overwrite  # type: ignore[no-redef]
+
 from app.audit.project import finding_draft, project_issue, to_verification
 from app.audit.runner import audit_state
 from app.audit.snapshot import snapshot_digest
@@ -41,7 +46,10 @@ def audit_node(
     digest = snapshot_digest(state)
     try:
         outcome = audit_state(
-            state,
+            # Business findings belong to the snapshot that produced them; this audit is about to
+            # replace them. Feeding the previous snapshot's rows back in makes the anchor check
+            # flag its own predecessor (e.g. a field that has since been removed).
+            {**state, "findings": _non_business_findings(state)},
             snapshot_digest=digest,
             schema=schema,
             bundles=bundles,
@@ -62,7 +70,11 @@ def audit_node(
             drafts.append(draft)
             check_ids.append(result.check_id)
 
-    materialized = materialize_findings(state, drafts, agent=AUDIT_AGENT, stage=AUDIT_STAGE)
+    # Numbering restarts for this snapshot: an id must never be inherited from a previous audit
+    # (a stale disposition bound to B-001 would otherwise resolve a different finding).
+    materialized = materialize_findings(
+        {**state, "findings": []}, drafts, agent=AUDIT_AGENT, stage=AUDIT_STAGE
+    )
     id_by_check = {
         check_id: finding["id"]
         for check_id, finding in zip(check_ids, materialized["findings"])
@@ -81,7 +93,10 @@ def audit_node(
 
     update = {
         "verification": verification,
-        "findings": materialized["findings"],
+        # Findings are bound to the snapshot they came from: replace, never append. An old gate
+        # decision is invalidated by writing `None` — a new audit has not been approved.
+        "findings": Overwrite(materialized["findings"]),
+        "gate": None,
         "stages": [
             stage_report(
                 AUDIT_STAGE,
@@ -97,6 +112,15 @@ def audit_node(
     return update
 
 
+def _non_business_findings(state: dict) -> list[dict]:
+    """Findings that this audit does not replace (normalization / regulatory)."""
+    return [
+        finding
+        for finding in state.get("findings") or []
+        if isinstance(finding, dict) and finding.get("source") != "business"
+    ]
+
+
 def _failed(state: dict, reason: str) -> dict:
     """The audit could not run: a stage report with a reason, no verification, no findings.
 
@@ -106,6 +130,7 @@ def _failed(state: dict, reason: str) -> dict:
     return {
         "verification": None,
         "gate": None,
+        "findings": Overwrite([]),
         "stages": [
             stage_report(
                 AUDIT_STAGE, status="failed", reason=reason, model_calls=0, agent=AUDIT_AGENT

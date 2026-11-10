@@ -50,6 +50,11 @@ def summarise(
         raise AuditReportError("check plan is empty; nothing was audited")
 
     by_id = {result.check_id: result for result in results}
+    if len(by_id) != len(results):
+        duplicates = sorted(
+            {result.check_id for result in results if sum(1 for r in results if r.check_id == result.check_id) > 1}
+        )
+        raise AuditReportError(f"duplicate results for planned checks: {duplicates}")
     unknown_ids = sorted(set(by_id) - {unit.check_id for unit in units})
     if unknown_ids:
         raise AuditReportError(f"results for unplanned checks: {unknown_ids}")
