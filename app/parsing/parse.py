@@ -135,17 +135,40 @@ def _blocks_from_docx(path: str, file_id: str) -> tuple[list[ParsedBlock], list[
             if text.strip():
                 blocks.append(_positional_block(file_id, text, kind="paragraph"))
         elif child.tag == f"{_W}tbl":
-            for row in child.iter(f"{_W}tr"):
-                for cell in row.iter(f"{_W}tc"):
-                    text = _docx_text(cell)
-                    if text.strip():
-                        blocks.append(_positional_block(file_id, text, kind="table_cell"))
+            _table_blocks(child, file_id, blocks)
     return blocks, []
 
 
+def _children(element, tag: str) -> list:
+    """Direct children only: `cell.iter()` would descend into a nested table and duplicate it."""
+    return [child for child in list(element) if child.tag == tag]
+
+
+def _paragraph_text(paragraph) -> str:
+    return "".join(node.text or "" for node in paragraph.iter(f"{_W}t"))
+
+
+def _table_blocks(table, file_id: str, blocks: list[ParsedBlock]) -> None:
+    """Emit direct cells in document order, then recurse into each cell's nested table once."""
+    for row in _children(table, f"{_W}tr"):
+        for cell in _children(row, f"{_W}tc"):
+            text = _docx_text(cell)
+            if text.strip():
+                blocks.append(_positional_block(file_id, text, kind="table_cell"))
+            for nested in _children(cell, f"{_W}tbl"):
+                _table_blocks(nested, file_id, blocks)
+
+
 def _docx_text(element) -> str:
-    """Concatenate the text runs of one OOXML element (never evaluates anything)."""
-    return "".join(node.text or "" for node in element.iter(f"{_W}t"))
+    """Text of one OOXML element, preserving paragraph boundaries as raw newlines.
+
+    Concatenating every `w:t` descends into nested tables and glues `Alpha` + `Beta` into
+    `AlphaBeta`; paragraph boundaries are a layout fact the normalizer relies on.
+    """
+    if element.tag == f"{_W}p":
+        return _paragraph_text(element)
+    paragraphs = _children(element, f"{_W}p")
+    return "\n".join(_paragraph_text(paragraph) for paragraph in paragraphs)
 
 
 def _positional_block(file_id: str, text: str, *, kind: str) -> ParsedBlock:
@@ -366,6 +389,10 @@ def parse_file(src: SourceFile) -> ParsedDoc:
         if not blocks and not errors:
             # No text layer: OCR it instead of dead-ending (task 2.2). A missing engine is reported.
             blocks, errors = _blocks_from_pdf_ocr(path, file_id)
+            if blocks:
+                # The text did not come from a PDF text layer; never present it as `pdf_text`.
+                doc["form"] = "image_ocr"  # type: ignore[typeddict-item]
+                form = "image_ocr"
     elif form == "docx_text":
         blocks, errors = _blocks_from_docx(path, file_id)
     elif form == "image_ocr":

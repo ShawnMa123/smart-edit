@@ -185,7 +185,7 @@ def test_scanned_pdf_falls_back_to_ocr_with_real_page_numbers(tmp_path, monkeypa
 
     doc = parse_file(_source(path, "F-1"))
 
-    assert doc["form"] == "pdf_text", "the file is still a PDF; OCR is how its text was obtained"
+    assert doc["form"] == "image_ocr", "OCR text must not be presented as a PDF text layer"
     assert doc["errors"] == []
     assert [block["page"] for block in doc["blocks"]] == [1, 2]
     assert doc["full_text"].count("AMOUNT: USD 500,000.00") == 2

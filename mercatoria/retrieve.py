@@ -28,7 +28,9 @@ def _minmax(values: list[float]) -> list[float]:
         return []
     lo, hi = min(values), max(values)
     if hi <= lo:
-        return [0.0 for _ in values]
+        # A single candidate, or all candidates tied: relative normalisation is undefined. Returning
+        # zero discards real matches, so keep the signal that a match exists at all.
+        return [1.0 if hi > 0 else 0.0 for _ in values]
     return [(v - lo) / (hi - lo) for v in values]
 
 

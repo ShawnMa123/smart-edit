@@ -55,11 +55,12 @@ def plan_standalone(target: str, state: dict, *, input_mode: str = "raw") -> dic
             "missing": [],
         }
 
-    done = {
-        report.get("stage")
-        for report in state.get("stages") or []
-        if report.get("status") == "done"
-    }
+    # `stages` is append-only history; the *latest* report for a stage decides whether it is done.
+    # Treating any earlier `done` as permanent would skip a stage that later failed.
+    latest: dict[str, str | None] = {}
+    for report in state.get("stages") or []:
+        latest[str(report.get("stage"))] = report.get("status")
+    done = {stage for stage, status in latest.items() if status == "done"}
 
     required_stages = _target_stages(resolved, spec, input_mode)
 

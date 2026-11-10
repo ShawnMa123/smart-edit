@@ -60,6 +60,29 @@ def extract_node(
             ),
         }
 
+    if all(doc.get("errors") for doc in docs):
+        # `errors` is per-file; if every file failed, there is no text to extract from. Reporting
+        # `done` with zero candidates would let the next stage write missing-field placeholders and
+        # make a broken import look like a successful check.
+        return {
+            "_candidates": [],
+            "stages": [
+                stage_report(
+                    EXTRACT_STAGE,
+                    status="failed",
+                    reason="all files failed to parse; nothing to extract",
+                    model_calls=0,
+                )
+            ],
+            **record(
+                state,
+                agent=SHARED_STAGE_OWNER,
+                stage=EXTRACT_STAGE,
+                op="pass",
+                detail={"reason": "all files failed to parse, nothing extracted"},
+            ),
+        }
+
     result = extract(docs, list(field_keys or []), llm=llm, model=model)
     provider = getattr(llm, "provider", None)
     if result.failed_batches:

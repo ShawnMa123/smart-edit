@@ -63,6 +63,31 @@ def normalize_node(state: dict, *, fields_yaml: dict[str, dict] | None = None) -
             ),
         }
 
+    if all(doc.get("errors") for doc in docs):
+        # Nothing was read: do not turn every required field into a `missing` placeholder, which
+        # would make "the file could not be parsed" look like "the field was checked and is absent".
+        return {
+            "fields": {},
+            "extra_fields": {},
+            "business_type": None,
+            "_candidates": clear_candidates(),
+            "stages": [
+                stage_report(
+                    NORMALIZE_STAGE,
+                    status="failed",
+                    reason="all files failed to parse; nothing to normalize",
+                    model_calls=0,
+                )
+            ],
+            **record(
+                state,
+                agent=SHARED_STAGE_OWNER,
+                stage=NORMALIZE_STAGE,
+                op="pass",
+                detail={"reason": "all files failed to parse, nothing normalized"},
+            ),
+        }
+
     result = build_fields(state.get("_candidates") or [], docs, fields_yaml=fields_yaml)
     materialized = materialize_findings(state, result.findings)
 

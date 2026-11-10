@@ -1,0 +1,22 @@
+# Local test container for the backend suite.
+#
+# Build:
+#   docker build -f Dockerfile.test -t smart-edit-test .
+# Run (repo mounted, so edits are picked up without a rebuild):
+#   docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /workspace
+
+COPY pyproject.toml ./
+COPY app ./app
+COPY mercatoria ./mercatoria
+RUN pip install -e ".[dev]"
+
+COPY tests ./tests
+
+CMD ["pytest", "-q"]

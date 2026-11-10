@@ -1,0 +1,11 @@
+.git
+.venv
+venv
+web
+data/regulatory/index
+data/regulatory/embedding-cache.db
+runs
+docs
+__pycache__
+*.pyc
+.pytest_cache

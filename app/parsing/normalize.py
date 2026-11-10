@@ -113,6 +113,7 @@ DOWNGRADING_NOTES = frozenset(
     {
         "date_ambiguous",
         "amount_not_numeric",
+        "amount_approximate",
         "currency_not_iso4217",
         "country_not_iso3166",
         "not_numeric",
@@ -125,8 +126,12 @@ DOWNGRADING_NOTES = frozenset(
 
 def classify(value: str | None, locatable: bool, notes: list[str]) -> str:
     """Three-way classification. **Only these three branches**; any special case needs a spec change first."""
-    if value is None or value == "":
+    if value is None:
         return "missing"
+    if value == "":
+        # A normalizer that refused a token (NaN, overflow) leaves no value but records why. That is
+        # an unconfirmed candidate for a human, not "the field is absent" and not a clean pass.
+        return "inferred" if notes else "missing"
     if locatable and not (DOWNGRADING_NOTES & set(notes)):
         return "extracted"
     return "inferred"
@@ -175,11 +180,18 @@ def cross_page_span(doc: dict, span: str) -> list[int] | None:
     cross-page span; inside a single block, or not found at all, returns `None`.
     Cross-page stitching changes the layout fact, so it must be downgraded to `inferred` for
     human confirmation (design §7.2 rule 5).
+
+    A span wholly contained in one block is **not** cross-page even when an earlier accumulator
+    also contains it: the value sits on the page its own block declares. Checking single blocks
+    first keeps a page-2 value from being labelled `[1, 2]`.
     """
     needle = normalize_ws(span)
     if not needle:
         return None
     blocks = doc.get("blocks") or []
+    for block in blocks:
+        if needle in normalize_ws(block.get("text") or ""):
+            return None
     for start in range(len(blocks)):
         acc = ""
         pages: list[int] = []
@@ -197,6 +209,23 @@ def cross_page_span(doc: dict, span: str) -> list[int] | None:
     return None
 
 
+def locate_block(doc: dict | None, span: str) -> tuple[int | None, list[float] | None]:
+    """`(page, bbox)` of the first block whose text contains `span`; `(None, None)` otherwise."""
+    needle = normalize_ws(span)
+    if not doc or not needle:
+        return None, None
+    for block in doc.get("blocks") or []:
+        if needle in normalize_ws(block.get("text") or ""):
+            return block.get("page"), block.get("bbox")
+    return None, None
+
+
+MAX_AMOUNT_EXPONENT = 30  # 10^30 is far beyond any trade document; larger means malformed input
+_APPROXIMATE = re.compile(
+    r"(?i)\b(?:approx(?:imately)?|about|around|circa|roughly)\b|约|大约|左右|上下|~|≈|〜"
+)
+
+
 def _normalize_amount(raw: str, fdef: dict, notes: list[str]) -> str:
     """Amount -> `Decimal` with 2 decimals, dropping thousands separators and currency prefixes
     (design §7.3).
@@ -204,8 +233,15 @@ def _normalize_amount(raw: str, fdef: dict, notes: list[str]) -> str:
     `Decimal` is mandatory, `float` is not allowed: `0.1+0.2` would show up as
     `0.30000000000000004` at the gate and in the UI, and that number appearing in front of a
     customer costs far more than writing one extra `Decimal`.
+
+    A hedged amount ("约 USD 500K") is **not** turned into an exact number: approximation is a
+    source fact, and the reviewer must confirm the exact value. Non-finite / absurd exponents are
+    refused the same way instead of crashing the stage.
     """
     text = normalize_ws(raw)
+    if _APPROXIMATE.search(text):
+        notes.append("amount_approximate")
+        return raw.strip()
     body = _CURRENCY_PREFIX.sub("", text)
     # Thousands separators can be `,` or a space (both show up in PDFs)
     body = re.sub(r"[,\s]", "", body)
@@ -217,12 +253,19 @@ def _normalize_amount(raw: str, fdef: dict, notes: list[str]) -> str:
         body = body[: hit.start()].strip()
     try:
         amount = Decimal(body) * multiplier
-    except (InvalidOperation, ValueError):
+        if not amount.is_finite() or abs(amount.adjusted()) > MAX_AMOUNT_EXPONENT:
+            raise InvalidOperation
+    except (InvalidOperation, ValueError, ArithmeticError):
         notes.append("amount_not_numeric")
-        return raw.strip()
+        return ""
     precision = int(fdef.get("precision", 2) or 2) if fdef else 2
     quantum = Decimal(1).scaleb(-precision)
-    return f"{amount.quantize(quantum, rounding=ROUND_HALF_UP):f}"
+    try:
+        rounded = amount.quantize(quantum, rounding=ROUND_HALF_UP)
+    except (InvalidOperation, OverflowError):
+        notes.append("amount_not_numeric")
+        return ""
+    return f"{rounded:f}"
 
 
 def _normalize_currency(raw: str, notes: list[str]) -> str:
@@ -388,6 +431,12 @@ def _build_field(
 
     doc = docs_by_file.get(src.get("file_id", ""))
     page = src.get("page")
+    if doc and (page is None or src.get("bbox") is None):
+        found_page, found_bbox = locate_block(doc, span)
+        if page is None:
+            page = found_page
+        if src.get("bbox") is None:
+            src["bbox"] = found_bbox
     page_ref = str(page) if page is not None else "-"
     pages = cross_page_span(doc, span) if doc else None
     if pages:
@@ -408,7 +457,7 @@ def _build_field(
     if locatable:
         source = {
             "file_id": src.get("file_id", ""),
-            "page": src.get("page"),
+            "page": page,
             "bbox": src.get("bbox"),
             "span": span,
             "form_label": src.get("form_label"),
@@ -595,19 +644,20 @@ class BusinessTypeDecision:
 def _find_keyword(docs: list[dict], keywords: tuple[str, ...]) -> tuple[str, str] | None:
     """Return `(evidence <= 80 chars, file_id)`.
 
-    Keyword matching uses `re.IGNORECASE` and leaves `normalize_ws` untouched (that is the
-    location benchmark and MUST NOT fold case). `normalize_ws` is used only to squeeze the
-    evidence fragment onto one line for display.
+    The search runs on `normalize_ws(full_text)`, the single location benchmark, so full-width or
+    compatibility text decides exactly like its half-width form. `re.IGNORECASE` still applies: a
+    keyword is a vocabulary match, not a provenance lookup. Evidence is sliced from the normalised
+    text so the offsets stay consistent with what was searched.
     """
     for doc in docs:
-        text = doc.get("full_text") or ""
+        text = normalize_ws(doc.get("full_text") or "")
         for keyword in keywords:
             hit = re.search(re.escape(keyword), text, re.IGNORECASE)
             if not hit:
                 continue
             start = max(0, hit.start() - 20)
             end = min(len(text), hit.end() + 20)
-            return normalize_ws(text[start:end]), doc.get("file_id")
+            return text[start:end], doc.get("file_id")
     return None
 
 
