@@ -76,7 +76,10 @@ class RunStore:
         overwrite the first: the stored name is made unique while the source filename stays intact
         in the `SourceFile` record.
         """
-        safe_name = Path(filename or "upload.bin").name or "upload.bin"
+        # Treat both separator conventions as path separators: a Windows-style `..\evil.txt`
+        # must not survive on POSIX, where `Path.name` would keep the backslash.
+        raw_name = (filename or "upload.bin").replace("\\", "/")
+        safe_name = raw_name.rsplit("/", 1)[-1].replace("\x00", "") or "upload.bin"
         directory = self.workdir(thread_id)
         directory.mkdir(parents=True, exist_ok=True)
         target = directory / safe_name

@@ -602,6 +602,12 @@ def test_an_upload_filename_cannot_escape_the_run_directory(tmp_path):
     assert stored.name == "evil.txt"
     assert stored.parent == Path(tmp_path / "runs" / body["thread_id"])
 
+    windows_style = client.post(
+        "/runs", files=[("files", ("..\\evil.txt", b"hello", "text/plain"))]
+    )
+    assert windows_style.status_code == 201
+    assert Path(windows_style.json()["files"][0]["path"]).name == "evil.txt"
+
 
 def test_an_unsupported_upload_is_reported_per_file_not_as_a_server_error(tmp_path):
     """document-import / per-file failure: errors stay in documents[], never a 500."""
