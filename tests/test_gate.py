@@ -98,6 +98,34 @@ def test_unresolved_blocking_finding_blocks(monkeypatch):
     assert "BLOCKING_UNRESOLVED" in decision["reason_codes"]
 
 
+def test_disposition_from_another_snapshot_cannot_unblock_export(monkeypatch):
+    """A reused finding id must not inherit an old snapshot's acceptance."""
+    _allowed(monkeypatch)
+    decision = evaluate_export_gate(
+        _state(
+            findings=[
+                {"id": "B-001", "blocking": True, "resolved": False, "severity": "critical"}
+            ],
+            dispositions=[
+                {
+                    "finding_id": "B-001",
+                    "disposition": "accepted",
+                    "actor": "alice",
+                    "snapshot_digest": "old-digest",
+                }
+            ],
+            verification={
+                "checks": [],
+                "verdict": "pass",
+                "credibility": {},
+                "score": None,
+                "audit": {"snapshot_digest": "new-digest"},
+            },
+        )
+    )
+    assert "BLOCKING_UNRESOLVED" in decision["reason_codes"]
+
+
 def test_unconfirmed_inferred_field_blocks(monkeypatch):
     _allowed(monkeypatch)
     decision = evaluate_export_gate(
