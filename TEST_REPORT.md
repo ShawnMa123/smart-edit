@@ -9,7 +9,7 @@
 
 | 套件 | 命令 | 结果 |
 |---|---|---|
-| 后端全量 | `docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q` | **649 passed, 1 skipped** |
+| 后端全量 | `docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q` | **653 passed, 1 skipped** |
 | 前端类型 | `npm run typecheck`（node:22 容器，仓库挂载） | **通过** |
 | 前端单元/组件 | `npm run test -- --run`（同上） | **178 passed, 12 skipped** |
 | 浏览器 E2E | Playwright（需本机 Chrome；本轮未重复执行） | 上轮 17 passed；A13 已改为断言 stale 时禁用 gate |
