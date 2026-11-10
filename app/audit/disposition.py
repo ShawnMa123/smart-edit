@@ -68,12 +68,19 @@ def append_event(
     return [*events, event]
 
 
-def latest(events: list[dict], finding_id: str) -> str | None:
-    """Latest disposition for a finding, or None when it was never handled."""
+def latest(events: list[dict], finding_id: str, snapshot_digest: str | None = None) -> str | None:
+    """Latest disposition for a finding, or None when it was never handled.
+
+    With `snapshot_digest`, only events bound to that snapshot count; a reused finding id from an
+    older audit must not read as handled.
+    """
     current = None
     for event in events:
-        if event.get("finding_id") == finding_id:
-            current = event.get("disposition")
+        if event.get("finding_id") != finding_id:
+            continue
+        if snapshot_digest and event.get("snapshot_digest") != snapshot_digest:
+            continue
+        current = event.get("disposition")
     return current
 
 

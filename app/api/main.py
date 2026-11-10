@@ -389,7 +389,7 @@ def create_app(
             "thread_id": thread_id,
             "finding_id": finding_id,
             "events": events,
-            "latest": latest(events, finding_id),
+            "latest": latest(events, finding_id, report.get("snapshot_digest")),
         }
 
     @app.post("/runs/{thread_id}/run")
