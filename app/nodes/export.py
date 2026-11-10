@@ -51,7 +51,12 @@ def export_node(state: dict, *, versions: DocVersionStore | None = None) -> dict
         "gate": gate,
         "exported_at": datetime.now(timezone.utc).isoformat(),
     }
-    version = store.append_unique(run_id, payload, snapshot_id=snapshot_id)
+    version = store.append_unique(
+        run_id,
+        payload,
+        snapshot_id=snapshot_id,
+        policy_revision=gate.get("policy_revision"),
+    )
     return {
         "export": {**payload, **version},
         "stages": [

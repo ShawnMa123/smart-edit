@@ -203,3 +203,22 @@ def test_export_refuses_a_blocked_gate_and_writes_version_on_pass(tmp_path):
     assert first["export"]["doc_id"] == "R-1"
     assert first["export"]["snapshot_id"] == "digest"
     assert store.latest("R-1")["version_no"] == 1
+
+
+def test_export_policy_change_writes_a_new_version(tmp_path):
+    """The idempotency key includes the gate policy revision, not just the snapshot."""
+    store = DocVersionStore(tmp_path)
+    base = {
+        "run_id": "R-2",
+        "business_type": "guarantee",
+        "fields": {"a": {"value": "1"}},
+        "verification": {"verdict": "pass"},
+        "gate": {"verdict": "pass", "candidate_content_sha256": "digest", "policy_revision": "r1"},
+    }
+    first = export_node(base, versions=store)
+    second = export_node(
+        {**base, "gate": {**base["gate"], "policy_revision": "r2"}}, versions=store
+    )
+
+    assert first["export"]["version_no"] == 1
+    assert second["export"]["version_no"] == 2

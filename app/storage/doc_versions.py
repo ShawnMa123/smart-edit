@@ -54,21 +54,31 @@ class DocVersionStore:
             directory.mkdir(parents=True, exist_ok=True)
             return self._write_locked(directory, payload)
 
-    def append_unique(self, doc_id: str, payload: dict, *, snapshot_id: str) -> dict:
-        """Append unless `snapshot_id` was already exported; replay returns the first version.
+    def append_unique(
+        self,
+        doc_id: str,
+        payload: dict,
+        *,
+        snapshot_id: str,
+        policy_revision: str | None = None,
+    ) -> dict:
+        """Append unless this snapshot+policy was already exported; replay returns the first version.
 
-        Exports are keyed by the audited snapshot, not by the request: submitting the same snapshot
-        twice must not create a second immutable version.
+        Exports are keyed by the audited snapshot and the gate policy that allowed it, not by the
+        request: submitting the same candidate twice must not create a second immutable version,
+        while a policy change legitimately produces a new one.
         """
         with self._lock:
             directory = self._dir(doc_id)
             directory.mkdir(parents=True, exist_ok=True)
-            existing = self._find_snapshot_locked(directory, snapshot_id)
+            existing = self._find_snapshot_locked(directory, snapshot_id, policy_revision)
             if existing is not None:
                 return existing
             return self._write_locked(directory, payload)
 
-    def _find_snapshot_locked(self, directory: Path, snapshot_id: str) -> dict | None:
+    def _find_snapshot_locked(
+        self, directory: Path, snapshot_id: str, policy_revision: str | None
+    ) -> dict | None:
         for path in sorted(directory.glob("v*.json")):
             _, _, tail = path.stem.partition("v")
             if not tail.isdigit():
@@ -78,12 +88,16 @@ class DocVersionStore:
                 record = json.loads(encoded)
             except json.JSONDecodeError:  # a corrupt file is not an idempotency hit
                 continue
-            if record.get("snapshot_id") == snapshot_id:
-                return {
-                    "version_no": int(tail),
-                    "path": str(path),
-                    "sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
-                }
+            if record.get("snapshot_id") != snapshot_id:
+                continue
+            recorded_revision = (record.get("gate") or {}).get("policy_revision")
+            if recorded_revision != policy_revision:
+                continue
+            return {
+                "version_no": int(tail),
+                "path": str(path),
+                "sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+            }
         return None
 
     def _write_locked(self, directory: Path, payload: dict) -> dict:
