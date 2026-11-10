@@ -91,7 +91,7 @@ E2E 默认起 `uvicorn :8000`（fixture）、`:8010`（无 provider）与 Vite `
 | 计划守恒/重复 result/崩溃隔离/确认字段/NaN/旧报告/旧 gate/旧 finding | `BUG-A1…A10` | ✅ |
 | stale 报告上的 save_draft、ID 重用 disposition、citation/coverage evidence | `BUG-A14…A17` | ✅ |
 | 所有文件失败后 extract/normalize 仍 done、latest failed 未回填 | `BUG-O1/O2` | ✅ |
-| 模板变更 staleness | 仅直接 `evaluate_gate` 单测；生产调用链未传 `template_digest` | ⚠️ 覆盖缺口（见报告） |
+| 模板变更 staleness | `test_gate_detects_a_template_edited_after_the_audit`（gate_node 读取当前发布包摘要） | ✅ |
 
 ### 3.4 HTTP / 上传 / 前端
 

@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from app.audit.gate import evaluate as evaluate_operation
 from app.audit.policy import ALLOWED, FORMAL_EXPORT
 from app.audit.snapshot import snapshot_digest
+from app.nodes.gate import current_template_digest
 from app.stages import latest_stage, stage_report
 from app.state import StageReport
 
@@ -135,6 +136,9 @@ def evaluate_export_gate(
             operation,
             digest,
             dispositions=state.get("dispositions") or (),
+            template_digest=current_template_digest(
+                ((state.get("verification") or {}).get("audit") or {})
+            ),
         )
     except Exception as exc:  # an exception is uncertainty, never a pass
         decision = {

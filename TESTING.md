@@ -53,7 +53,7 @@ docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q
 本轮基线：
 
 ```text
-654 passed, 1 skipped
+655 passed, 1 skipped
 ```
 
 - `1 skipped` = `tests/test_live_llm_optional.py`，只在显式开启时调用真实模型。

@@ -9,7 +9,7 @@
 
 | 套件 | 命令 | 结果 |
 |---|---|---|
-| 后端全量 | `docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q` | **654 passed, 1 skipped** |
+| 后端全量 | `docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q` | **655 passed, 1 skipped** |
 | 前端类型 | `npm run typecheck`（node:22 容器，仓库挂载） | **通过** |
 | 前端单元/组件 | `npm run test -- --run`（同上） | **178 passed, 12 skipped** |
 | 浏览器 E2E | `docker run ... smart-edit-e2e npx playwright test` | **17 passed**（desktop/honesty/narrow，无 expected fail） |
@@ -80,15 +80,13 @@
 
 ## 3. 剩余覆盖缺口（非缺陷）
 
-1. **模板变更 staleness 的生产链路**：gate 仍只比较文档 digest；模板 digest 参数尚未由 HTTP
-   层传入。模板被编辑但报告未变时，当前只能靠重新审计发现。
-2. **Finding 的 disposition state**：仍以 append-only `dispositions` 事件表达，`findings[]`
+1. **Finding 的 disposition state**：仍以 append-only `dispositions` 事件表达，`findings[]`
    本身不含 disposition 字段；读取时派生。
-3. **Agent 2**：`requirements.yaml`、字段语义校验、`not_found`/`missing` 双判未纳入矩阵；
+2. **Agent 2**：`requirements.yaml`、字段语义校验、`not_found`/`missing` 双判未纳入矩阵；
    `agent2` 阶段完成后需要重跑导出/审批链路。
-4. **OCR 质量**：只覆盖“无文本层/引擎缺失”，未做真实扫描件识别质量评测。
-5. **多进程并发**：RunStore 的每 run 锁覆盖单进程并发；未做多 worker SQLite 竞争压测。
-6. **浏览器 E2E**：已在 Playwright 容器中跑完 17 条；本机 Chrome 路径未重复验证。
+3. **OCR 质量**：只覆盖“无文本层/引擎缺失”，未做真实扫描件识别质量评测。
+4. **多进程并发**：RunStore 的每 run 锁覆盖单进程并发；未做多 worker SQLite 竞争压测。
+5. **浏览器 E2E**：已在 Playwright 容器中跑完 17 条；本机 Chrome 路径未重复验证。
 
 ## 4. 复现与回归
 
