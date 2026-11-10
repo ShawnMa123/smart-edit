@@ -252,7 +252,7 @@ web/e2e/
   audit.spec.ts              # fixture 审计 happy path
   errors.spec.ts             # 空提交 / 未实现 tab
   honesty.spec.ts            # 无 provider 的诚实路径
-  gate.spec.ts               # gate 决策 + stale gate（test.fail）
+  gate.spec.ts               # gate 决策 + stale 时禁用 gate
   legal.spec.ts              # 无审计直接跑 Agent 3
   rich-editor.spec.ts        # TipTap 格式/表格/查找替换/审计入参
   accessibility.spec.ts      # 键盘/焦点/状态文字
