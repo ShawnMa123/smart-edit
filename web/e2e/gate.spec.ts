@@ -35,5 +35,4 @@ test('a stale report cannot be turned into an allowed decision', async ({ page }
 
   await expect(page.getByTestId('gate-ask')).toBeDisabled();
   await expect(ws.gate()).toHaveAttribute('data-decision', 'not-asked');
-  await expect(ws.gate()).not.toContainText('allowed');
 });

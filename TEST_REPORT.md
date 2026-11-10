@@ -9,15 +9,15 @@
 
 | 套件 | 命令 | 结果 |
 |---|---|---|
-| 后端全量 | `docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q` | **653 passed, 1 skipped** |
+| 后端全量 | `docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q` | **654 passed, 1 skipped** |
 | 前端类型 | `npm run typecheck`（node:22 容器，仓库挂载） | **通过** |
 | 前端单元/组件 | `npm run test -- --run`（同上） | **178 passed, 12 skipped** |
-| 浏览器 E2E | Playwright（需本机 Chrome；本轮未重复执行） | 上轮 17 passed；A13 已改为断言 stale 时禁用 gate |
+| 浏览器 E2E | `docker run ... smart-edit-e2e npx playwright test` | **17 passed**（desktop/honesty/narrow，无 expected fail） |
 
 说明：
 
 - 后端测试只在本地 Docker 容器 `smart-edit-test` 中执行，不依赖宿主 `.venv`。
-  `Dockerfile.test` 与 `.dockerignore` 已入库，镜像构建命令见 `TESTING.md`。
+  `Dockerfile.test` / `Dockerfile.e2e` 与 `.dockerignore` 已入库，镜像构建命令见 `TESTING.md`。
 - `1 skipped` = `tests/test_live_llm_optional.py`（默认不调用真实模型）。
 - **49 个缺陷全部修复**，`tests/test_spec_bugs.py` 已从 strict `xfail` 转为普通回归测试；
   前端 `it.fails` / E2E `test.fail` 标记已全部移除。
@@ -88,7 +88,7 @@
    `agent2` 阶段完成后需要重跑导出/审批链路。
 4. **OCR 质量**：只覆盖“无文本层/引擎缺失”，未做真实扫描件识别质量评测。
 5. **多进程并发**：RunStore 的每 run 锁覆盖单进程并发；未做多 worker SQLite 竞争压测。
-6. **浏览器 E2E**：本轮改动以 vitest 组件测试验证；E2E 需要本机 Chrome，未在容器中重复执行。
+6. **浏览器 E2E**：已在 Playwright 容器中跑完 17 条；本机 Chrome 路径未重复验证。
 
 ## 4. 复现与回归
 

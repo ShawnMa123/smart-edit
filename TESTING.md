@@ -53,7 +53,7 @@ docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q
 本轮基线：
 
 ```text
-653 passed, 1 skipped
+654 passed, 1 skipped
 ```
 
 - `1 skipped` = `tests/test_live_llm_optional.py`，只在显式开启时调用真实模型。
@@ -120,13 +120,26 @@ npm --prefix web run test
 
 ```bash
 npm --prefix web run test -- src/components/RichEditor.test.tsx
-npm --prefix web run test -- -t "BUG-A13"
+npm --prefix web run test -- -t "stale"
 ```
 
 ### 2.4 浏览器 E2E
 
+本机（需要 Chrome 或 `playwright install chromium`）：
+
 ```bash
 npm --prefix web run e2e
+```
+
+容器（Playwright 镜像已带 Chromium 与 Node，`Dockerfile.e2e` 补 Python 3.11）：
+
+```bash
+docker build -f Dockerfile.e2e -t smart-edit-e2e .
+docker run --rm -v "$PWD:/workspace" -v smart-edit-web-node:/workspace/web/node_modules \
+  -w /workspace/web smart-edit-e2e npm ci
+docker run --rm --ipc=host -v "$PWD:/workspace" \
+  -v smart-edit-web-node:/workspace/web/node_modules \
+  -w /workspace/web smart-edit-e2e npx playwright test
 ```
 
 默认会**自动启动**四个进程：
@@ -181,8 +194,8 @@ npx playwright show-report                  # CI 下生成 html
 npx playwright show-trace test-results/<...>/trace.zip
 ```
 
-E2E 里的 `test.fail('BUG-A13 ...')` 表示该条**预期失败**；如果它变绿，Playwright 会让整套变红，
-提示你删除 `test.fail`。
+E2E 全部为普通断言；stale 报告下 `Ask gate` 必须禁用，编辑后重放旧 digest 必须得到
+`stale_report`。
 
 ### 2.5 真实模型冒烟（可选）
 

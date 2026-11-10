@@ -1,0 +1,35 @@
+# Browser end-to-end test container (Playwright + backend deps).
+#
+# The Playwright image ships Chromium and Node; this adds the Python runtime the E2E config
+# starts itself (fixture backend :8000, no-provider backend :8010, two vite servers).
+#
+# Build once:
+#   docker build -f Dockerfile.e2e -t smart-edit-e2e .
+# Prepare the web deps in a named volume (the host `node_modules` is platform-specific):
+#   docker run --rm -v "$PWD:/workspace" -v smart-edit-web-node:/workspace/web/node_modules \
+#     -w /workspace/web smart-edit-e2e npm ci
+# Run:
+#   docker run --rm --ipc=host -v "$PWD:/workspace" \
+#     -v smart-edit-web-node:/workspace/web/node_modules \
+#     -w /workspace/web smart-edit-e2e npx playwright test
+FROM mcr.microsoft.com/playwright:v1.65.0-jammy
+
+# The repository requires Python >= 3.11; deadsnakes adds it to the Ubuntu-based Playwright image.
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends python3.11 python3.11-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3.11 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venv/bin/pip install --no-cache-dir \
+        "langgraph==1.2.*" langgraph-checkpoint-sqlite fastapi uvicorn python-multipart \
+        "pydantic>=2" "pymupdf>=1.24,<2" PyYAML "numpy>=1.26" "pytest>=7" httpx
+
+ENV PYTHON=/opt/venv/bin/python \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /workspace
