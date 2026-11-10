@@ -113,8 +113,16 @@ npm --prefix web run typecheck
 npm --prefix web run test
 ```
 
-本轮基线：`178 passed, 12 skipped`。其中 6 条是 `it.fails`（预期失败），对应
-`BUG-F1/F2/F3/F4/F5/A13`；它们“通过”表示缺陷仍存在。
+本轮基线：`178 passed, 12 skipped`。12 条 skipped 是在 Vitest 中跳过的 Playwright 专用用例
+（由 `VITE_E2E=1` 控制）；没有预期失败标记，F1–F5 与 A13 都是普通回归断言。
+
+容器内执行（宿主 `node_modules` 的平台二进制不通用，用命名卷）：
+
+```bash
+docker run --rm -v "$PWD:/workspace" -v smart-edit-web-node:/workspace/web/node_modules \
+  -w /workspace/web node:22-bookworm-slim sh -c \
+  "npm ci && npm run typecheck && npm run test -- --run"
+```
 
 只跑一个文件/一条：
 
