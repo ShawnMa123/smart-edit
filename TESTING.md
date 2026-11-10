@@ -1,10 +1,10 @@
 # 本地测试与调试指南
 
-> 面向第一次跑这个仓库的人：如何装依赖、跑哪几层测试、端口冲突怎么办、看到 `xfail` / `it.fails`
-> 怎么判断是缺陷还是测试坏了。规格矩阵与缺陷清单见：
+> 面向第一次跑这个仓库的人：如何装依赖、跑哪几层测试、端口冲突怎么办、失败时怎么判断是缺陷还是
+> 测试坏了。规格矩阵与缺陷记录见：
 >
 > - `TEST_DESIGN.md`：spec → 测试覆盖矩阵、用例设计
-> - `TEST_REPORT.md`：本轮执行结果、49 个已登记缺陷与修复建议
+> - `TEST_REPORT.md`：本轮执行结果、49 个缺陷的修复记录
 
 当前范围：**Agent 1（normalize）/ Agent 3（regulatory）/ Agent 4（audit）+ 编排 + 前端**。
 Agent 2（`agent-verify`）尚未完成，本指南不评价其内部行为；`agent2` 只在导出闸门的阶段名中出现。
@@ -19,7 +19,7 @@ Agent 2（`agent-verify`）尚未完成，本指南不评价其内部行为；`a
 | Node | 22+；前端依赖在 `web/node_modules` |
 | 浏览器 | 本机 Google Chrome；或 `npx playwright install chromium` |
 | OCR（可选） | Tesseract + `chi_sim/eng` 语言包；没有时扫描件会报 `ocr_engine_missing`，不会假成功 |
-| Docker | 不必须；本机 venv/Node 能跑完整套件 |
+| Docker | 推荐：后端测试在 `smart-edit-test` 容器内执行；本机 venv 仍可用于调试 |
 
 Windows 与 POSIX 的 Python 路径不同，测试代码已处理：
 
@@ -43,45 +43,45 @@ npx --prefix web playwright install chromium   # 或用本机 Chrome
 
 ## 2. 跑测试
 
-### 2.1 后端全量
+### 2.1 后端全量（Docker）
 
 ```bash
-# Windows
-.venv/Scripts/python.exe -m pytest -q
-
-# POSIX
-.venv/bin/python -m pytest -q
+docker build -f Dockerfile.test -t smart-edit-test .
+docker run --rm -v "$PWD:/workspace" smart-edit-test pytest -q
 ```
 
 本轮基线：
 
 ```text
-600 passed, 1 skipped, 49 xfailed
+649 passed, 1 skipped
 ```
 
 - `1 skipped` = `tests/test_live_llm_optional.py`，只在显式开启时调用真实模型。
-- `49 xfailed` = 已确认的规格缺陷（严格 xfail）。**不是测试坏了**，详见 `TEST_REPORT.md`。
+- 49 个曾以 strict `xfail` 固定的规格缺陷已全部修复；`tests/test_spec_bugs.py` 现在是普通回归
+  测试，行为回退会直接失败。记录见 `TEST_REPORT.md`。
 
-只跑新加的设计/缺陷测试：
-
-```bash
-.venv/Scripts/python.exe -m pytest tests/test_spec_coverage.py tests/test_spec_bugs.py -q
-```
-
-看某个缺陷“修好没有”：
+只跑设计/回归测试：
 
 ```bash
-# 让 xfail 失效，真实执行并打印失败原因
-.venv/Scripts/python.exe -m pytest tests/test_spec_bugs.py --runxfail -q
-
-# 只跑一条
-.venv/Scripts/python.exe -m pytest \
-  "tests/test_spec_bugs.py::test_the_gate_binds_the_server_snapshot_not_the_digest_the_caller_supplies" \
-  --runxfail -v
+docker run --rm -v "$PWD:/workspace" smart-edit-test \
+  pytest tests/test_spec_coverage.py tests/test_spec_bugs.py -q
 ```
 
-`xfail(strict=True)` 的含义：缺陷仍存在 → `xfailed`（套件绿）；缺陷被修好 → `XPASS(strict)`（套件红），
-提示你删掉 marker 并把该条转成普通回归测试。
+只跑一个缺陷簇：
+
+```bash
+docker run --rm -v "$PWD:/workspace" smart-edit-test \
+  pytest tests/test_spec_bugs.py -q -k "gate or export or citation"
+```
+
+本机调试仍可直接用 venv：
+
+```bash
+# Windows
+.venv/Scripts/python.exe -m pytest -q
+# POSIX
+.venv/bin/python -m pytest -q
+```
 
 ### 2.2 后端单层/单文件
 
@@ -211,9 +211,8 @@ Provider 漂移/限流属于外部因素，不纳入 CI。
 | E2E `Process from config.webServer ...` | 端口冲突或 Python 路径错；用第 2.4 节端口变量，或设 `PYTHON` |
 | `ocr_engine_missing` | 未装 Tesseract；安装 `tesseract` + `tessdata` 语言包，或只跑不依赖 OCR 的用例 |
 | 审计显示 `33 of 51` | fixture + 干净样本的正常值；不是固定契约，断言看计划/计数 |
-| `xfailed` | 已登记缺陷，套件按预期绿；看 `TEST_REPORT.md` |
-| `XPASS(strict)` | 缺陷已修，删 `xfail` marker，转普通测试 |
-| 浏览器告警 `unique "key" prop` | 已知 `BUG-F3`，见 `TEST_REPORT.md` |
+| `test_spec_bugs.py` 失败 | 该条是已修复缺陷的回归测试；对照 `TEST_REPORT.md` 的同 ID 修复说明 |
+| 浏览器告警 `unique "key" prop` | 已修复（F3）；若再次出现，检查宽屏 pane 的 key |
 
 ---
 
@@ -221,11 +220,11 @@ Provider 漂移/限流属于外部因素，不纳入 CI。
 
 1. **先看 spec**：`openspec/changes/<change>/specs/<capability>/spec.md`，一条 Scenario 至少一个行为断言。
 2. **不要把实现细节写死**：断言 `code` / `status` / `counts` / `snapshot_digest`，不要断言整段文案。
-3. **正向用例**放 `tests/test_spec_coverage.py`；**已确认缺陷**放 `tests/test_spec_bugs.py`，用
-   `@pytest.mark.xfail(strict=True, reason="BUG-...")`，并写清期望行为。
-4. 前端同理：普通断言直接写；已知缺陷用 Vitest `it.fails` / Playwright `test.fail`。
+3. **正向用例**放 `tests/test_spec_coverage.py`；**已修复缺陷的回归**放 `tests/test_spec_bugs.py`，
+   写清原缺陷 ID 与期望行为。行为回退必须直接失败，不加 `xfail`。
+4. 前端同理：缺陷回归写普通断言，不再用 Vitest `it.fails` / Playwright `test.fail`。
 5. 涉及 Agent 2 的用例先不加；等 `agent-verify` 冻结后另起矩阵。
-6. 新增/修复缺陷后同步 `TEST_REPORT.md` 的表格与 `TEST_DESIGN.md` 的矩阵；删掉所有对应 marker。
+6. 新增/修复缺陷后同步 `TEST_REPORT.md` 的修复表与 `TEST_DESIGN.md` 的矩阵。
 
 ---
 
@@ -234,7 +233,7 @@ Provider 漂移/限流属于外部因素，不纳入 CI。
 ```text
 tests/
   test_spec_coverage.py      # 46 条正向规格断言
-  test_spec_bugs.py          # 49 个严格 xfail 复现
+  test_spec_bugs.py          # 49 个已修复缺陷的回归测试
   test_live_llm_optional.py  # 默认为 skip 的真实模型冒烟
 web/e2e/
   audit.spec.ts              # fixture 审计 happy path

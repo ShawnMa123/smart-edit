@@ -93,9 +93,10 @@ def audit_node(
 
     update = {
         "verification": verification,
-        # Findings are bound to the snapshot they came from: replace, never append. An old gate
-        # decision is invalidated by writing `None` — a new audit has not been approved.
-        "findings": Overwrite(materialized["findings"]),
+        # Findings are bound to the snapshot they came from: replace the audit's own rows, never
+        # append. Normalization/regulatory findings belong to other producers and stay. An old
+        # gate decision is invalidated by writing `None` — a new audit has not been approved.
+        "findings": Overwrite(_non_business_findings(state) + materialized["findings"]),
         "gate": None,
         "stages": [
             stage_report(
@@ -130,7 +131,7 @@ def _failed(state: dict, reason: str) -> dict:
     return {
         "verification": None,
         "gate": None,
-        "findings": Overwrite([]),
+        "findings": Overwrite(_non_business_findings(state)),
         "stages": [
             stage_report(
                 AUDIT_STAGE, status="failed", reason=reason, model_calls=0, agent=AUDIT_AGENT

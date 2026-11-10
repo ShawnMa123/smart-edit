@@ -131,6 +131,19 @@ def test_an_audit_never_writes_a_gate_decision():
     assert audit_node(state)["gate"] is None
 
 
+def test_an_audit_replaces_its_own_rows_and_keeps_other_producers():
+    """Only audit findings are bound to the audit snapshot; regulatory/normalization rows stay."""
+    state = _state()
+    regulatory = {"id": "R-001", "source": "regulatory", "severity": "warn", "field_keys": []}
+    state["findings"] = [regulatory]
+
+    merge_update(state, audit_node(state))
+    assert [finding["id"] for finding in state["findings"]].count("R-001") == 1
+
+    merge_update(state, audit_node(state, bundles=[]))  # deterministic failure
+    assert [finding["id"] for finding in state["findings"]] == ["R-001"]
+
+
 def test_the_gate_command_stores_one_decision_bound_to_the_snapshot():
     """6.3 An audit alone approves nothing; asking for an operation stores one decision."""
     state = _state()

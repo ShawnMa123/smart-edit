@@ -1,8 +1,9 @@
-"""Executable reproductions of confirmed spec violations.
+"""Executable regressions for spec violations found by the audit test design.
 
-Every test here asserts the behaviour the OpenSpec text requires. They are marked strict `xfail` so
-the suite stays green while the defect is open, and becomes red the moment someone fixes it without
-removing the marker. Each test names the spec scenario and the observed implementation.
+Every test here asserts the behaviour the OpenSpec text requires. They were written as strict
+`xfail` reproductions; each defect has since been fixed, so they now run as ordinary regression
+tests and fail loudly if the behaviour comes back. Each test names the spec scenario and the
+original observed implementation.
 
 Run just these with:
 

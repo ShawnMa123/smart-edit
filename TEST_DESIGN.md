@@ -2,7 +2,7 @@
 
 > 范围：`openspec/` 中已冻结/已实现的规格；**跳过 Agent 2（`agent-verify`）**，因为该 change 尚未完成。
 > 目标：把每条可判定规格落成可执行断言（前端 + 后端 + HTTP + 浏览器），并把当前实现与规格不一致处
-> 以可复现测试固定下来，供修复时直接“摘掉 xfail 即变红”。
+> 以可复现测试固定下来；缺陷修复后转为普通回归测试。
 
 ## 1. 规格来源与边界
 
@@ -55,10 +55,10 @@ E2E 默认起 `uvicorn :8000`（fixture）、`:8010`（无 provider）与 Vite `
 | 抽取 schema 违规重试一次 → `partial` | `test_extract_retries_once_then_reports_a_partial_stage` | ✅ |
 | 候选 `label` 保留；`source.page` 回填 | `test_a_candidate_label_is_preserved...`、`test_a_single_block_pdf_field_keeps_the_extracted_page` | ✅ |
 | 业务类型 evidence/reason 留痕 | `test_business_type_decision_always_writes_one_receipt...` | ✅ |
-| DOCX 表格单元格段落边界 | `BUG-N7` | ❌（xfail） |
-| 扫描 PDF 的 OCR 来源标记 | `BUG-I1` | ❌（xfail，当前仍标 pdf_text） |
-| 嵌套 DOCX 表格不重复读取 | `BUG-N8` | ❌（xfail） |
-| 跨页误判、同页多块 page=null、模糊金额、全角业务类型、非有限金额 | `test_spec_bugs` 中 `BUG-N1…N6` | ❌（xfail，见报告） |
+| DOCX 表格单元格段落边界 | `BUG-N7` | ✅ |
+| 扫描 PDF 的 OCR 来源标记 | `BUG-I1` | ✅ |
+| 嵌套 DOCX 表格不重复读取 | `BUG-N8` | ✅ |
+| 跨页误判、同页多块 page=null、模糊金额、全角业务类型、非有限金额 | `test_spec_bugs` 中 `BUG-N1…N6` | ✅ |
 
 ### 3.2 Agent 3 / 法规
 
@@ -70,17 +70,17 @@ E2E 默认起 `uvicorn :8000`（fixture）、`:8010`（无 provider）与 Vite `
 | 不支持法域 → note + escalate + REG-JURISDICTION | `test_an_unsupported_jurisdiction_is_named_and_escalates` | ✅ |
 | 有命中但无 claim → escalate + note | `test_retrieval_without_claims_requires_a_human_and_says_so` | ✅ |
 | 每条 Finding 带“不替代正式筛查”声明 | `test_every_regulatory_finding_carries_the_screening_disclaimer` | ✅ |
-| raw 命中 mock 名单 | `BUG-R1` | ❌（xfail） |
-| raw Finding evidence 指向正文 | `BUG-R2` | ❌（xfail） |
-| LLM summary/claim 禁止法律定性 | `BUG-R3` | ❌（xfail） |
-| 干净结果也需筛查声明 | `BUG-R4` | ❌（xfail） |
-| cite_check 大小写/全角/留痕 after | `BUG-R5/R6/R7` | ❌（xfail） |
+| raw 命中 mock 名单 | `BUG-R1` | ✅ |
+| raw Finding evidence 指向正文 | `BUG-R2` | ✅ |
+| LLM summary/claim 禁止法律定性 | `BUG-R3` | ✅ |
+| 干净结果也需筛查声明 | `BUG-R4` | ✅ |
+| cite_check 大小写/全角/留痕 after | `BUG-R5/R6/R7` | ✅ |
 
 ### 3.3 Agent 4 / 审计 + 编排
 
 | 规格点 | 新增/代表测试 | 结果 |
 |---|---|---|
-| 语义 hard_block 不阻断、其他操作 hard_block 不阻断 | 原 `test_audit_gate` 覆盖“语义不阻断”；新增 `BUG-A11` 固定“任意 critical 仍阻断”的反例 | ⚠️ |
+| 语义 hard_block 不阻断、其他操作 hard_block 不阻断 | `test_severity_or_another_operation_never_blocks_by_itself` | ✅ |
 | 确定性 hard_block 对目标操作阻断 | `test_a_deterministic_hard_block_for_this_operation_blocks` | ✅ |
 | `mark_stale` 派生视图、不修改原报告 | `test_mark_stale_returns_a_copy_and_is_idempotent` | ✅ |
 | verdict 失败优先 / unable 一律 fail | `test_verdict_fail_wins_and_unable_always_fails` | ✅ |
@@ -88,9 +88,9 @@ E2E 默认起 `uvicorn :8000`（fixture）、`:8010`（无 provider）与 Vite `
 | 全部 not_applicable → unable + `no_applicable_checks` | `test_everything_not_applicable_is_unable_and_never_pass` | ✅ |
 | 导出文件字段齐全、version_no 不接受调用方值 | `test_the_export_file_has_every_required_key_and_ignores_a_caller_version` | ✅ |
 | 拦截时不导出、stage=skipped | `test_a_blocked_gate_writes_no_export_and_marks_the_stage_skipped` | ✅ |
-| 计划守恒/重复 result/崩溃隔离/确认字段/NaN/旧报告/旧 gate/旧 finding | `BUG-A1…A10` | ❌（xfail） |
-| stale 报告上的 save_draft、ID 重用 disposition、citation/coverage evidence | `BUG-A14…A17` | ❌（xfail） |
-| 所有文件失败后 extract/normalize 仍 done、latest failed 未回填 | `BUG-O1/O2` | ❌（xfail） |
+| 计划守恒/重复 result/崩溃隔离/确认字段/NaN/旧报告/旧 gate/旧 finding | `BUG-A1…A10` | ✅ |
+| stale 报告上的 save_draft、ID 重用 disposition、citation/coverage evidence | `BUG-A14…A17` | ✅ |
+| 所有文件失败后 extract/normalize 仍 done、latest failed 未回填 | `BUG-O1/O2` | ✅ |
 | 模板变更 staleness | 仅直接 `evaluate_gate` 单测；生产调用链未传 `template_digest` | ⚠️ 覆盖缺口（见报告） |
 
 ### 3.4 HTTP / 上传 / 前端
@@ -103,24 +103,24 @@ E2E 默认起 `uvicorn :8000`（fixture）、`:8010`（无 provider）与 Vite `
 | 不支持 MIME / >20MiB 逐文件错误 | `test_an_unsupported_upload_is_reported_per_file...`、`test_an_oversized_upload_is_refused_by_the_parser...` | ✅ |
 | events 键存在、空列表 | `test_events_endpoint_is_oldest_first_and_empty_before_a_graph_run` | ✅ |
 | 相同文本创建两个独立 run | `test_two_runs_are_independent_even_when_created_from_identical_text` | ✅ |
-| 创建 run 的畸形 JSON → 400 | `BUG-API1` | ❌（xfail，当前 500） |
-| 传输层 422/400 也必须用错误封套 | `BUG-API3` | ❌（xfail） |
-| disposition actor/reason 类型校验 | `BUG-API4` | ❌（xfail） |
-| 非字符串 text 拒绝而非强转 | `BUG-API5` | ❌（xfail） |
-| 同名文件不互相覆盖 | `BUG-API2` | ❌（xfail，当前后者覆盖前者） |
-| rich 投影插入空格 | `BUG-F1`（Vitest `it.fails`） | ❌ |
-| Formatting 仍标“未实现” | `BUG-F2` | ❌ |
-| 宽屏 pane 数组缺 React key | `BUG-F3`（独立文件避免 warning 去重） | ❌ |
-| 损坏 localStorage 条目 | `BUG-F4` | ❌ |
-| 表格 before/left 与表头切换 | `BUG-F5`（Vitest `it.fails`） | ❌ |
-| 真实浏览器：三栏/窄屏、格式化、表格、查找替换、审计、gate、版本、键盘 | `web/e2e/*.spec.ts` | ✅（stale gate 1 条 expected fail） |
+| 创建 run 的畸形 JSON → 400 | `BUG-API1` | ✅ |
+| 传输层 422/400 也必须用错误封套 | `BUG-API3` | ✅ |
+| disposition actor/reason 类型校验 | `BUG-API4` | ✅ |
+| 非字符串 text 拒绝而非强转 | `BUG-API5` | ✅ |
+| 同名文件不互相覆盖 | `BUG-API2` | ✅ |
+| rich 投影插入空格 | `BUG-F1`（Vitest `it.fails`） | ✅ |
+| Formatting 仍标“未实现” | `BUG-F2` | ✅ |
+| 宽屏 pane 数组缺 React key | `BUG-F3`（独立文件避免 warning 去重） | ✅ |
+| 损坏 localStorage 条目 | `BUG-F4` | ✅ |
+| 表格 before/left 与表头切换 | `BUG-F5`（Vitest `it.fails`） | ✅ |
+| 真实浏览器：三栏/窄屏、格式化、表格、查找替换、审计、gate、版本、键盘 | `web/e2e/*.spec.ts` | ✅ |
 
 ## 4. 新增用例目录
 
 | 文件 | 数量 | 用途 |
 |---|---|---|
 | `tests/test_spec_coverage.py` | 46 | 正向规格断言（应保持全绿） |
-| `tests/test_spec_bugs.py` | 49（参数化后 49 个 xfail 节点） | 已确认规格违背的严格 xfail 复现 |
+| `tests/test_spec_bugs.py` | 49（参数化后 49 个节点） | 已修复缺陷的普通回归测试 |
 | `web/src/App.keyWarning.test.tsx` | 1 | 独立文件抓 React key warning |
 | `web/src/rich/plainText.test.ts` | +1 | 相邻 run 投影 |
 | `web/src/components/RichEditor.test.tsx` | +4 | H1/H3、表格六向操作、字面查找、空文档 |
@@ -135,8 +135,8 @@ E2E 默认起 `uvicorn :8000`（fixture）、`:8010`（无 provider）与 Vite `
 
 ## 5. 判定标准
 
-- 正向测试全绿；`xfail(strict=True)` / Vitest `it.fails` / Playwright `test.fail` 只用于已登记缺陷。
-- 修复缺陷时删除对应 marker；测试若 XPASS 即视为“缺陷已修复，需更新规格/报告”。
+- 正向测试与缺陷回归全部为普通测试，必须全绿；不再使用 `xfail` / `it.fails` / `test.fail`。
+- 修复缺陷时同步删除对应 marker，并把复现转成回归测试；行为回退必须直接失败。
 - Agent2 完成后，另起 `agent-verify` 规格矩阵；本设计中的 `agent2` 仅作为阶段名出现。
 
 ## 6. 真实模型冒烟（可选，非回归）
