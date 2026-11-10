@@ -9,6 +9,8 @@ Hard boundaries (docs/agent3-regulatory-handoff.md §3):
 
 from __future__ import annotations
 
+import re
+
 from app.findings import materialize_findings
 from app.regulatory.answer import Answerer, resolve_answerer
 from app.regulatory.cite_check import cite_check
@@ -34,6 +36,7 @@ STAGE = "agent3"
 _MOCK_SANCTIONS = ("SANCTIONED DEMO LTD", "DEMO SANCTIONED BANK")
 _MOCK_SANCTION_COUNTRIES = ("XX", "ZZ")
 _MOCK_LABEL = "演示名单（非真实名单，仅演示）"
+_DISCLAIMER = "本结果不构成法律意见，也不替代正式制裁与出口管制筛查。"
 
 
 def _field(fields: dict, key: str) -> str | None:
@@ -62,14 +65,20 @@ def _mock_hits(state: dict) -> list[str]:
         _field(fields, key)
         for key in ("applicant", "beneficiary", "counterparty", "applicant_country", "beneficiary_country")
     ]
-    text = "\n".join(value for value in values if value)
+    parts = [value for value in values if value]
+    # Raw mode has no reliable field table: the body itself is the input, so it must be screened
+    # too. Missing a name because it only appears in the text is the unsafe direction.
+    body = _full_text(state)
+    if body:
+        parts.append(body)
+    text = "\n".join(parts)
     hits: list[str] = []
     lowered = text.casefold()
     for name in _MOCK_SANCTIONS:
         if name.casefold() in lowered:
             hits.append(name)
     for code in _MOCK_SANCTION_COUNTRIES:
-        if code in text.split():
+        if re.search(rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])", text):
             hits.append(code)
     return hits
 
@@ -200,9 +209,13 @@ def _structural_drafts(
     filters: dict,
     corpus: dict,
     mock_hits: list[str],
+    body: str = "",
 ) -> list[dict]:
     coverage = legal["coverage"]
     summary = legal["summary"]
+    # Evidence must point at the source, never at generated prose. The body fragment is the only
+    # traceable evidence in raw mode; the summary is a fallback for runs with no document text.
+    evidence = (body.strip()[:200] or summary)
     drafts: list[dict] = []
 
     if coverage.get("unavailable"):
@@ -211,7 +224,7 @@ def _structural_drafts(
                 rule_id="REG-COVERAGE",
                 severity="warn",
                 message="法规建议未覆盖：本次检索未返回可引用条文，需人工复核",
-                evidence=summary,
+                evidence=evidence,
             )
         )
     if coverage.get("business_type_uncertain"):
@@ -220,7 +233,7 @@ def _structural_drafts(
                 rule_id="REG-BUSINESS-TYPE",
                 severity="warn",
                 message="业务类型无法确定，规则适用范围未确认",
-                evidence=summary,
+                evidence=evidence,
             )
         )
     if not filters.get("as_of"):
@@ -229,7 +242,7 @@ def _structural_drafts(
                 rule_id="REG-TRANSACTION-DATE",
                 severity="warn",
                 message="未能确定交易日期，按当前有效版本适用",
-                evidence=summary,
+                evidence=evidence,
             )
         )
     supported = {str(value) for value in (corpus.get("jurisdictions") or [])}
@@ -240,7 +253,7 @@ def _structural_drafts(
                 rule_id="REG-JURISDICTION",
                 severity="warn",
                 message=f"本次语料不覆盖 {jurisdiction} 法域，相关规则未检索",
-                evidence=summary,
+                evidence=evidence,
             )
         )
     for hit in mock_hits:
@@ -359,8 +372,16 @@ def regulatory_node(
         or any(claim.get("support") == "insufficient" for claim in claims)
     )
     legal["escalate_to_human"] = escalate
+    if _DISCLAIMER not in str(legal.get("summary") or ""):
+        legal["summary"] = f"{str(legal.get('summary') or '').strip()} {_DISCLAIMER}".strip()
 
-    drafts = _structural_drafts(legal=legal, filters=filters, corpus=corpus, mock_hits=mock_hits)
+    drafts = _structural_drafts(
+        legal=legal,
+        filters=filters,
+        corpus=corpus,
+        mock_hits=mock_hits,
+        body=_full_text(state),
+    )
 
     receipt = record(
         state,

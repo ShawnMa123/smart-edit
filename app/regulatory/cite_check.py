@@ -13,21 +13,17 @@ Rules, in order (docs/agent3-regulatory-handoff.md §6.6):
 
 from __future__ import annotations
 
-import re
-
+from app.parsing.normalize import normalize_ws
 from app.regulatory.entities import extract_entities
 
 
-def _normalize_ws(value: str) -> str:
-    return re.sub(r"\s+", " ", value or "").strip()
-
-
-def _compact(value: str) -> str:
-    return re.sub(r"\s+", "", value or "").casefold()
-
-
 def _contains(haystack: str, needle: str) -> bool:
-    return needle.casefold() in haystack.casefold() or _compact(needle) in _compact(haystack)
+    """Verbatim containment under the one layer-wide benchmark (`normalize_ws`).
+
+    No case folding and no space compaction: a paraphrase that differs only in case or spacing is
+    not a quotation. Full-width text still matches because `normalize_ws` applies NFKC.
+    """
+    return bool(needle) and needle in haystack
 
 
 def _trail(claim: dict, reason: str, *, ref: str | None, detail: dict | None = None) -> dict:
@@ -58,6 +54,8 @@ def cite_check(claims: list[dict], retrieved: list[dict]) -> tuple[list[dict], l
         support = current.get("support")
 
         if chunk_id is not None and str(chunk_id) not in chunks:
+            current["chunk_id"] = None
+            current["support"] = "insufficient"
             trail.append(
                 _trail(
                     current,
@@ -66,12 +64,11 @@ def cite_check(claims: list[dict], retrieved: list[dict]) -> tuple[list[dict], l
                     detail={"chunk_id": str(chunk_id)},
                 )
             )
-            current["chunk_id"] = None
-            current["support"] = "insufficient"
             chunk_id = None
             support = "insufficient"
 
         if support == "insufficient" and chunk_id is not None:
+            current["chunk_id"] = None
             trail.append(
                 _trail(
                     current,
@@ -80,14 +77,14 @@ def cite_check(claims: list[dict], retrieved: list[dict]) -> tuple[list[dict], l
                     detail={"chunk_id": str(chunk_id)},
                 )
             )
-            current["chunk_id"] = None
             chunk_id = None
 
         if chunk_id is not None:
             chunk = chunks[str(chunk_id)]
-            text = _normalize_ws(str(chunk.get("text") or ""))
-            claim_text = _normalize_ws(str(current.get("text") or ""))
+            text = normalize_ws(str(chunk.get("text") or ""))
+            claim_text = normalize_ws(str(current.get("text") or ""))
             if claim_text and not _contains(text, claim_text):
+                current["support"] = "insufficient"
                 trail.append(
                     _trail(
                         current,
@@ -99,13 +96,13 @@ def cite_check(claims: list[dict], retrieved: list[dict]) -> tuple[list[dict], l
                         },
                     )
                 )
-                current["support"] = "insufficient"
             missing = [
                 entity
                 for entity in extract_entities(str(current.get("text") or ""))
-                if not _contains(text, entity)
+                if not _contains(text, normalize_ws(entity))
             ]
             if missing:
+                current["support"] = "insufficient"
                 trail.append(
                     _trail(
                         current,
@@ -118,7 +115,6 @@ def cite_check(claims: list[dict], retrieved: list[dict]) -> tuple[list[dict], l
                         },
                     )
                 )
-                current["support"] = "insufficient"
                 # Keep the citation: the reader needs to see which source was claimed.
 
         out.append(current)

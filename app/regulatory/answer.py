@@ -23,6 +23,16 @@ from app.regulatory.query import build_query, infer_business_type
 Mode = Literal["enriched", "raw"]
 
 _FORBIDDEN = ("未发现问题", "无适用规则", "合法合规")
+# Order matters: "不合规" contains "合规"; replace the longer verdicts first.
+_CONCLUSION_REPLACEMENTS = (
+    ("未发现问题", "未覆盖"),
+    ("无适用规则", "未覆盖"),
+    ("合法合规", "需人工复核"),
+    ("不合规", "需人工复核"),
+    ("合规", "需人工复核"),
+    ("不可做", "需人工复核"),
+    ("可做", "需人工复核"),
+)
 _STANDARD_MARKERS = ("URDG", "UCP", "ISP", "WTO", "CISG", "INCOTERMS", "GATT", "TBT", "SPS", "TFA")
 _CJK = re.compile(r"[\u4e00-\u9fff]+")
 _WORD = re.compile(r"[A-Za-z0-9]{2,}")
@@ -250,10 +260,15 @@ class OpenAIChat:
 
 
 def _sanitize_summary(summary: str) -> str:
-    value = summary.strip()
-    for phrase in _FORBIDDEN:
-        value = value.replace(phrase, "未覆盖")
-    return value
+    return _sanitize_text(summary)
+
+
+def _sanitize_text(value: str) -> str:
+    """Remove legal conclusions from model output (spec: point out issues, never decide)."""
+    cleaned = value.strip()
+    for phrase, replacement in _CONCLUSION_REPLACEMENTS:
+        cleaned = cleaned.replace(phrase, replacement)
+    return cleaned
 
 
 def _parse_json_object(text: str) -> dict:
@@ -363,7 +378,7 @@ class LLMAnswerer:
         for item in payload.get("claims") or []:
             if not isinstance(item, dict):
                 continue
-            text = str(item.get("text") or "").strip()
+            text = _sanitize_text(str(item.get("text") or ""))
             if not text:
                 continue
             cid = item.get("chunk_id")

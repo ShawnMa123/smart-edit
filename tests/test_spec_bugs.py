@@ -291,10 +291,6 @@ def _reg_state(text: str) -> dict:
     return {"docs": [doc], "findings": [], "trail": [], "stages": []}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-R1 raw mode never scans document text for the mock screening list",
-)
 def test_a_mock_sanctions_hit_in_the_body_is_critical_and_non_blocking_in_raw_mode():
     """regulatory-advice / 疑似命中筛查名单: the body is the only input in raw mode."""
     state = _reg_state("交易对手：SANCTIONED DEMO LTD\n保函编号 BG-2026-0001")
@@ -306,10 +302,6 @@ def test_a_mock_sanctions_hit_in_the_body_is_critical_and_non_blocking_in_raw_mo
     assert hits[0]["blocking"] is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-R2 raw structural findings cite the generated summary, not a body fragment",
-)
 def test_raw_findings_evidence_is_a_body_fragment():
     """regulatory-advice / raw 模式无字段锚点: evidence must point at the source text."""
     text = "航空器租赁安排，交付地点为境外。"
@@ -323,10 +315,6 @@ def test_raw_findings_evidence_is_a_body_fragment():
             assert finding["evidence"] in text, (finding["rule_id"], finding["evidence"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-R3 forbidden legal conclusions survive in the LLM summary and claim text",
-)
 def test_llm_legal_conclusions_are_removed_from_summary_and_claims():
     """regulatory-advice / 不替代正式筛查 + 指出问题但不定性."""
 
@@ -351,10 +339,6 @@ def test_llm_legal_conclusions_are_removed_from_summary_and_claims():
         assert forbidden not in rendered
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-R4 a clean regulatory answer carries no 'does not replace formal screening' notice",
-)
 def test_a_clean_run_still_disclaims_formal_screening():
     """regulatory-advice / 不替代正式筛查: the notice belongs to the result, not only to findings."""
     state = _reg_state("保函编号 BG-2026-0001，金额 USD 500,000.00，适用 URDG 758。")
@@ -374,10 +358,6 @@ def test_a_clean_run_still_disclaims_formal_screening():
     assert "不替代正式制裁与出口管制筛查" in legal["summary"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-R5 cite_check case-folds and compacts, so a paraphrase differing only in case is 'supported'",
-)
 def test_a_case_changed_claim_is_not_a_verbatim_fragment():
     """regulatory-advice / 有依据的结论: supported means verbatim (normalize_ws does not case-fold)."""
     chunk = {**copy.deepcopy(CHUNK), "text": "ARTICLE 5: ABC TRADING"}
@@ -389,10 +369,6 @@ def test_a_case_changed_claim_is_not_a_verbatim_fragment():
     assert claims[0]["support"] == "insufficient"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-R6 cite_check uses a private whitespace-only normalizer, not the shared normalize_ws",
-)
 def test_a_full_width_claim_is_matched_by_the_shared_benchmark():
     """agent-contract / 归一化基准全层唯一: full-width text points at the same source text."""
     chunk = {**copy.deepcopy(CHUNK), "text": "ARTICLE 5: ABC TRADING"}
@@ -404,10 +380,6 @@ def test_a_full_width_claim_is_matched_by_the_shared_benchmark():
     assert claims[0]["support"] == "supported"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-R7 cite_check trail writes after='supported' even when the claim was downgraded",
-)
 def test_a_downgrade_trail_records_the_new_support_state():
     """regulatory-advice / 校验失败降级不删除: the trail must show what the claim became."""
     chunk = {**copy.deepcopy(CHUNK), "text": "article text"}
