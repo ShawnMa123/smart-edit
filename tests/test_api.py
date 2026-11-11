@@ -28,6 +28,8 @@ ENVELOPE_KEYS = (
     "trail",
     "_candidates",
     "documents",
+    "legal",
+    "retrieved",
     "verification",
     "gate",
     "supported_stages",
@@ -59,7 +61,7 @@ def test_envelope_carries_every_required_key(api):
     for key in ENVELOPE_KEYS:
         assert key in body, f"envelope is missing {key}"
     assert body["supported_stages"] == sorted(STAGE_TARGETS)
-    assert body["supported_stages"] == ["audit", "extract", "normalize", "parse"]
+    assert body["supported_stages"] == ["agent3", "audit", "extract", "normalize", "parse"]
 
 
 def test_envelope_refuses_to_omit_stages():

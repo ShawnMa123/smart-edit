@@ -167,10 +167,11 @@ Agent 1 SHALL 向 Agent 3 交付与原文逐字一致的文档。
 
 Agent 2 与 Agent 4 SHALL 以互不重叠的依据影响闸门判定。
 
-#### Scenario: 阻断项来自 Finding
+#### Scenario: 阻断项来自审计的 `gate_type`
 - **WHEN** 闸门判定是否存在未处理的阻断项
-- **THEN** MUST 只读 `findings` 中 `blocking=true` 且 `resolved=false` 的条目
-- **AND** MUST NOT 依据 `FieldValue.status` 单独判定阻断
+- **THEN** MUST 只读 `verification.audit["findings"]` 中 `gate_type="hard_block"` 且 `method="deterministic"` 的条目
+- **AND** MUST NOT 由 `severity` 推导阻断，也 MUST NOT 依据 `FieldValue.status` 单独判定阻断
+- **NOTE** 本场景由 `agent-audit` 决策 D8 取代旧的 `Finding.blocking` 依据；契约 `Finding` 不携带 `gate_type`
 
 #### Scenario: 抑制发布来自 verification
 - **WHEN** 闸门判定证据链是否成立
@@ -211,9 +212,10 @@ Agent 2 与 Agent 4 SHALL 以互不重叠的依据影响闸门判定。
 - **AND** `raw` 模式只需 `files`，由系统自动补跑 `parse`
 
 #### Scenario: Agent 4 的前置
-- **WHEN** 触发 Agent 4
-- **THEN** 必需至少一个其他 Agent 的 `StageReport(status="done")`
-- **AND** 无任何上游产出时 MUST 拒绝执行
+- **WHEN** 触发 Agent 4（或其 `audit` target）
+- **THEN** MUST 自动补跑 `parse → extract → normalize`，并必需 `fields` 非空
+- **AND** 审计只读 `docs` / `fields` / `extra_fields` / `legal` / `retrieved` / `trail`，不要求 Agent 2 或 `merge` 存在
+- **AND** 前置阶段未实现时 MUST 拒绝执行，MUST NOT 静默跳过
 
 #### Scenario: 拒绝格式统一
 - **WHEN** 前置不满足

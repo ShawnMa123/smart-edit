@@ -10,8 +10,22 @@ import { defineConfig, devices } from '@playwright/test';
  * The second vite (5174) exists because `app/api/main.py` ships **no** CORS middleware: the browser can
  * only reach 8010 through a dev proxy, so `VITE_PROXY_TARGET` (vite.config.ts) points it there.
  */
-const PY = '.venv/bin/uvicorn';
+/**
+ * `python -m uvicorn` works on both layouts (`.venv/bin/` on POSIX, `.venv/Scripts/` on Windows),
+ * and `PYTHON` still lets CI point at an interpreter outside the checkout.
+ */
+const PY = process.env.PYTHON ?? (process.platform === 'win32'
+  ? '.venv\\Scripts\\python.exe'
+  : '.venv/bin/python');
 const FIXTURE = 'fixture:fixtures/llm/extract_sample.json';
+/**
+ * Local ports are overridable so an occupied 8000 (RAGFlow, another demo, ...) does not force a
+ * hand-written config. The defaults match the docs and CI.
+ */
+const API_PORT = process.env.SMART_EDIT_E2E_API_PORT ?? '8000';
+const HONEST_API_PORT = process.env.SMART_EDIT_E2E_HONEST_API_PORT ?? '8010';
+const WEB_PORT = process.env.SMART_EDIT_E2E_WEB_PORT ?? '5173';
+const HONEST_WEB_PORT = process.env.SMART_EDIT_E2E_HONEST_WEB_PORT ?? '5174';
 /** `useViewport.ts` switches to one-pane + tabs at ≤1365px, so the desktop project must be wider. */
 const DESKTOP = { width: 1440, height: 900 };
 const baseEnv = process.env as Record<string, string>;
@@ -45,49 +59,50 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
-      use: { ...devices['Desktop Chrome'], ...browser, baseURL: 'http://127.0.0.1:5173', viewport: DESKTOP },
+      use: { ...devices['Desktop Chrome'], ...browser, baseURL: `http://localhost:${WEB_PORT}`, viewport: DESKTOP },
       testIgnore: /(honesty|narrow)\.spec\.ts/,
     },
     {
       name: 'honesty',
-      use: { ...devices['Desktop Chrome'], ...browser, baseURL: 'http://127.0.0.1:5174', viewport: DESKTOP },
+      use: { ...devices['Desktop Chrome'], ...browser, baseURL: `http://localhost:${HONEST_WEB_PORT}`, viewport: DESKTOP },
       testMatch: /honesty\.spec\.ts/,
     },
     {
       name: 'narrow',
       // Pixel 7 (412×915) is chromium-based, so `PW_CHANNEL=chrome` works; iPhone 13 is webkit.
-      use: { ...devices['Pixel 7'], ...browser, baseURL: 'http://127.0.0.1:5173' },
+      use: { ...devices['Pixel 7'], ...browser, baseURL: `http://localhost:${WEB_PORT}` },
       testMatch: /narrow\.spec\.ts/,
     },
   ],
 
   webServer: [
     {
-      command: `${PY} app.api.main:app --port 8000 --log-level warning`,
+      command: `${PY} -m uvicorn app.api.main:app --port ${API_PORT} --log-level warning`,
       cwd: '..',
       env: { ...baseEnv, SMART_EDIT_LLM: FIXTURE },
-      url: 'http://127.0.0.1:8000/openapi.json', // FastAPI docs are on by default → 200 when ready
+      url: `http://127.0.0.1:${API_PORT}/openapi.json`, // FastAPI docs are on by default → 200 when ready
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
     {
-      command: `${PY} app.api.main:app --port 8010 --log-level warning`,
+      command: `${PY} -m uvicorn app.api.main:app --port ${HONEST_API_PORT} --log-level warning`,
       cwd: '..',
       env: { ...baseEnv, SMART_EDIT_LLM: '' }, // explicit "no provider configured"
-      url: 'http://127.0.0.1:8010/openapi.json',
+      url: `http://127.0.0.1:${HONEST_API_PORT}/openapi.json`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
     {
-      command: 'npm run dev -- --port 5173 --strictPort',
-      url: 'http://127.0.0.1:5173',
+      command: `npm run dev -- --port ${WEB_PORT} --strictPort`,
+      env: { ...baseEnv, VITE_PROXY_TARGET: `http://127.0.0.1:${API_PORT}` },
+      url: `http://localhost:${WEB_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
     {
-      command: 'npm run dev -- --port 5174 --strictPort',
-      env: { ...baseEnv, VITE_PROXY_TARGET: 'http://127.0.0.1:8010' },
-      url: 'http://127.0.0.1:5174',
+      command: `npm run dev -- --port ${HONEST_WEB_PORT} --strictPort`,
+      env: { ...baseEnv, VITE_PROXY_TARGET: `http://127.0.0.1:${HONEST_API_PORT}` },
+      url: `http://localhost:${HONEST_WEB_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

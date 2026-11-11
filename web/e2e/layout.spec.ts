@@ -10,7 +10,7 @@ test('three panes are visible together and no pane tabs are rendered', async ({ 
 
   await expect(page.locator('section[aria-label="Document editor"]')).toBeVisible();
   await expect(page.locator('aside[aria-label="AI assistant"]')).toBeVisible();
-  await expect(page.locator('[data-testid="editor-text"]')).toBeVisible();
+  await expect(page.locator('[data-testid="editor-rich"] .ProseMirror')).toBeVisible();
 
   await expect(page.getByRole('tablist', { name: 'Workspace panes' })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'AI assistant' })).toHaveCount(0);

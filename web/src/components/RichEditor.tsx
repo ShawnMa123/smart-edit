@@ -47,9 +47,12 @@ export const TOOLS: Tool[] = [
 export const TABLE_TOOLS: Tool[] = [
   { label: '⊞', title: 'Insert table', run: (e) => e.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run() },
   { label: '+R', title: 'Insert row below', run: (e) => e.chain().focus().addRowAfter().run() },
+  { label: '+R↑', title: 'Insert row above', run: (e) => e.chain().focus().addRowBefore().run() },
   { label: '−R', title: 'Delete row', run: (e) => e.chain().focus().deleteRow().run() },
   { label: '+C', title: 'Insert column right', run: (e) => e.chain().focus().addColumnAfter().run() },
+  { label: '+C←', title: 'Insert column left', run: (e) => e.chain().focus().addColumnBefore().run() },
   { label: '−C', title: 'Delete column', run: (e) => e.chain().focus().deleteColumn().run() },
+  { label: 'H', title: 'Toggle header row', run: (e) => e.chain().focus().toggleHeaderRow().run() },
 ];
 
 function FallbackEditor({ document, onChange, reason }: RichEditorProps & { reason: string }) {

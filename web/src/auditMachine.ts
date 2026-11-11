@@ -23,6 +23,8 @@ export type AuditState =
 export type AuditEvent =
   | { type: 'start'; snapshot: Snapshot; at: number }
   | { type: 'succeed'; envelope: RunEnvelope; at: number }
+  /** Gate/disposition refreshed the run without re-auditing; the bound snapshot stays the same. */
+  | { type: 'refresh'; envelope: RunEnvelope; at: number }
   | { type: 'fail'; failure: AuditFailure; at: number }
   | { type: 'reset' };
 
@@ -36,6 +38,10 @@ export function auditReducer(state: AuditState, event: AuditEvent): AuditState {
       // Keeping the snapshot (not the current text) is what makes the report staleness-checkable.
       if (state.phase !== 'running') return state;
       return { phase: 'report', envelope: event.envelope, snapshot: state.snapshot, completedAt: event.at };
+    case 'refresh':
+      // Only a rendered report can be refreshed: its snapshot and completion time already exist.
+      if (state.phase !== 'report') return state;
+      return { ...state, envelope: event.envelope };
     case 'fail':
       if (state.phase !== 'running') return state;
       return {

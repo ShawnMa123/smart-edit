@@ -18,13 +18,13 @@ const renderPanel = () =>
   );
 
 describe('AssistantPanel', () => {
-  it('offers the audit tab and marks the others unimplemented', () => {
+  it('offers the implemented tabs and marks the others unimplemented', () => {
     renderPanel();
 
     expect(screen.getByRole('tab', { name: 'Rule audit' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: /Knowledge Q&A · not implemented/ })).toBeTruthy();
     expect(screen.getByRole('tab', { name: /Automation · not implemented/ })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Legal advice · not implemented/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Legal advice' })).toBeTruthy();
   });
 
   it('renders the audit panel by default', () => {
@@ -48,10 +48,43 @@ describe('AssistantPanel', () => {
   it('returns to the audit panel from an unimplemented tab', async () => {
     renderPanel();
 
-    await userEvent.click(screen.getByRole('tab', { name: /Legal advice · not implemented/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Knowledge Q&A · not implemented/ }));
     await userEvent.click(screen.getByRole('tab', { name: 'Rule audit' }));
 
     expect(screen.getByRole('button', { name: /Run spec audit/i })).toBeTruthy();
+  });
+
+  it('renders the legal panel with no verdict when no check has run', async () => {
+    renderPanel();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Legal advice' }));
+
+    expect(screen.getByTestId('legal-panel')).toBeTruthy();
+    expect(screen.getByText(/No legal check has run on this run/i)).toBeTruthy();
+    expect(screen.getByText(/Not a legal opinion/i)).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: /Run legal check/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('enables the legal trigger when a document is available', async () => {
+    const onRunLegal = vi.fn();
+    render(
+      <AssistantPanel
+        state={initialAuditState}
+        currentDigest="digest-1"
+        onRun={vi.fn()}
+        onStopWaiting={vi.fn()}
+        legalState={{ phase: 'idle' }}
+        canRunLegal
+        onRunLegal={onRunLegal}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Legal advice' }));
+    await userEvent.click(screen.getByRole('button', { name: /Run legal check/i }));
+
+    expect(onRunLegal).toHaveBeenCalledTimes(1);
   });
 
   it('states that the assistant does not approve', () => {

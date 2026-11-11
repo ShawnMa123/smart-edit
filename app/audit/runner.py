@@ -24,11 +24,23 @@ from app.rules.bundles import bundle_versions, find_conflicts, load_bundles, val
 from app.rules.engine import evaluate_rule, evaluate_schema_check
 from app.rules.schema import SchemaBundle, load_schema
 from app.rules.templates import compile_expectations, load_templates, merge_schema
-from app.rules.types import ENGINE_VERSION, FINDING, UNABLE_TO_ASSESS, CheckResult
+from app.rules.types import ENGINE_VERSION, FAILED, FINDING, UNABLE_TO_ASSESS, CheckResult
 
 
 class AuditRunError(RuntimeError):
     """The audit cannot be produced at all (no schema, no bundle, unusable plan)."""
+
+
+def _guarded(unit, evaluate) -> CheckResult:
+    """One crashing evaluator must fail its own unit, not abort the whole audit."""
+    try:
+        return evaluate()
+    except Exception as exc:  # noqa: BLE001 - deliberately isolates third-party/rule failures
+        return CheckResult(
+            unit.check_id,
+            FAILED,
+            reason_code=f"checker_crashed: {type(exc).__name__}",
+        )
 
 
 def audit_state(
@@ -96,11 +108,24 @@ def audit_state(
 
     results: list[CheckResult] = []
     for unit in units_by_family(units, "schema"):
-        field = schema.fields[unit.field_id]
-        bound = values.get(unit.field_id) or AuditValue(unit.field_id, ABSENT)
-        results.append(evaluate_schema_check(unit, field, bound, schema.version))
+        results.append(
+            _guarded(
+                unit,
+                lambda unit=unit: evaluate_schema_check(
+                    unit,
+                    schema.fields[unit.field_id],
+                    values.get(unit.field_id) or AuditValue(unit.field_id, ABSENT),
+                    schema.version,
+                ),
+            )
+        )
     for unit in units_by_family(units, "rule"):
-        results.append(evaluate_rule(rules[unit.check_id], values, context))
+        results.append(
+            _guarded(
+                unit,
+                lambda unit=unit: evaluate_rule(rules[unit.check_id], values, context),
+            )
+        )
     results.extend(evaluate_evidence(units_by_family(units, "evidence"), state))
     results.extend(
         _evaluate_template_units(
@@ -212,8 +237,19 @@ def _evaluate_template_units(
                 )
             )
             continue
-        rule = template_rules[(unit.rule_ref or {}).get("rule_id")]
-        evaluated = evaluate_rule(rule, values, context)
+        rule = template_rules.get((unit.rule_ref or {}).get("rule_id"))
+        if rule is None:
+            results.append(
+                CheckResult(unit.check_id, FAILED, reason_code="missing_template_rule")
+            )
+            continue
+        evaluated = _guarded(
+            unit, lambda rule=rule, unit=unit: evaluate_rule(rule, values, context)
+        )
+        if evaluated.status == FAILED:
+            # `_guarded` reports the crash itself; nothing else can be attributed to this unit.
+            results.append(evaluated)
+            continue
         # `evaluate_rule` names its result after the rule; the plan unit has the finer id, so the
         # coverage accounting stays keyed to what was planned.
         results.append(
@@ -225,5 +261,9 @@ def _evaluate_template_units(
                 detail=evaluated.detail,
             )
         )
-    results.extend(evaluate_clauses(text_units, template, state))
+    try:
+        results.extend(evaluate_clauses(text_units, template, state))
+    except Exception as exc:  # noqa: BLE001 - one broken clause unit must not lose the report
+        reason = f"checker_crashed: {type(exc).__name__}"
+        results.extend(CheckResult(unit.check_id, FAILED, reason_code=reason) for unit in text_units)
     return results

@@ -26,3 +26,17 @@ runs/
 # IDE
 /.idea/
 /.vscode/
+
+# Agent 3 local retrieval: generated artifacts (corpus/index are source; cache is rebuildable)
+data/regulatory/embedding-cache.db
+data/regulatory/index/*.db.tmp
+data/regulatory/index/*.db-wal
+data/regulatory/index/*.db-shm
+data/embedding-cache.db
+
+data/regulatory/index/*.db
+
+# Raw regulatory corpus is fetched/generated separately; keep only its README in Git.
+data/regulatory/corpus/*
+!data/regulatory/corpus/README.md
+!data/regulatory/corpus/fetch_*.py

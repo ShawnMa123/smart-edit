@@ -48,9 +48,17 @@ def _field_type(context: dict | None, field_id: str) -> str | None:
     return getattr(field, "value_type", None)
 
 
+def _parse_amount(raw: str) -> Decimal:
+    """A document amount must be finite and within the trade range."""
+    value = Decimal(raw)
+    if not value.is_finite() or abs(value.adjusted()) > 30:
+        raise ValueError("amount is not finite")
+    return value
+
+
 # Field values live as normalized strings; comparison needs the declared type, never an implicit cast.
 _TYPED_COERCERS = {
-    "amount": Decimal,
+    "amount": _parse_amount,
     "integer": int,
     "date": date.fromisoformat,
     "currency": str,
@@ -297,7 +305,7 @@ _SCHEMA_RULES = {
 }
 
 _TYPED_PARSERS = {
-    "amount": lambda raw: Decimal(raw),
+    "amount": _parse_amount,
     "integer": lambda raw: int(raw),
     "date": lambda raw: date.fromisoformat(raw),
     "string": lambda raw: raw,

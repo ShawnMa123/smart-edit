@@ -1,0 +1,82 @@
+{
+  "_readme": "Acceptance carrier for seam (B + D) -> gate: findings + verification + stages. The gate must collect every blocking reason, not short-circuit, and must never read verification.score. Assertions live in assert.py.",
+  "run_id": "seam-bd-to-gate",
+  "files": [{"file_id": "F-1", "filename": "guarantee.pdf", "mime": "application/pdf", "path": "fixtures/guarantee.pdf", "sha256": "1a2b3c4d"}],
+  "business_type": "guarantee",
+  "fields": {
+    "guarantee_number": {
+      "key": "guarantee_number",
+      "value": "BG-2026-0001",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": null, "span": "BG-2026-0001", "form_label": null},
+      "normalized_from": "BG-2026-0001",
+      "label": "保函编号",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "expiry_date": {
+      "key": "expiry_date",
+      "value": "2027-03-12",
+      "status": "inferred",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": null,
+      "normalized_from": "12/03/27",
+      "label": "到期日",
+      "doc_type": "application_form",
+      "notes": ["date_ambiguous"]
+    }
+  },
+  "findings": [
+    {"id": "B-001", "source": "business", "kind": "invalid_value", "rule_id": "guarantee_number-pattern", "severity": "critical", "blocking": true, "resolved": false, "resolution": null, "field_keys": ["guarantee_number"], "message": "保函编号格式不符", "evidence": "BG-2026-0001", "citation": null, "suggestion": null},
+    {"id": "R-001", "source": "regulatory", "kind": "regulatory_risk", "rule_id": "REG-URDG", "severity": "warn", "blocking": false, "resolved": false, "resolution": null, "field_keys": [], "message": "适用规则需人工确认", "evidence": "URDG 758", "citation": "c1", "suggestion": "人工复核"}
+  ],
+  "legal": {
+    "input_mode": "enriched",
+    "applicable_rules": [],
+    "claims": [],
+    "coverage": {"jurisdictions": [], "standards": [], "unavailable": true, "business_type_uncertain": false, "notes": ["index_missing"]},
+    "escalate_to_human": true,
+    "summary": "法规建议未覆盖：检索失败，需人工复核。"
+  },
+  "retrieved": [],
+  "verification": {
+    "checks": [
+      {"checker": "guarantee_number-pattern", "level": "fail", "finding_ids": ["B-001"], "detail": "format mismatch", "location": "guarantee_number", "check_id": "RULE:guarantee_number-pattern@1", "method": "deterministic", "gate_type": "hard_block", "target_operations": ["formal_export"]}
+    ],
+    "verdict": "fail",
+    "credibility": {"assessed": 2, "planned": 2, "ratio": 1.0, "formula": "assessed / planned"},
+    "score": 0.02,
+    "audit": {
+      "planned": 2,
+      "counts": {"pass": 1, "finding": 1},
+      "coverage": {"planned": 2, "assessed": 2, "ratio": 1.0},
+      "completion": "complete",
+      "outcome": "findings_present",
+      "freshness": "fresh",
+      "freshness_reasons": [],
+      "reasons": [],
+      "snapshot_digest": "digest",
+      "schema_version": "1",
+      "bundle_versions": {"guarantee": "1"},
+      "engine_version": "test",
+      "findings": [
+        {"id": "B-001", "rule_ref": {"rule_id": "guarantee_number-pattern", "version": "1"}, "category": "field", "severity": "critical", "gate_type": "hard_block", "target_operations": ["formal_export"], "method": "deterministic", "field_id": "guarantee_number", "evidence": "BG-2026-0001", "message": "format mismatch"}
+      ]
+    }
+  },
+  "stages": [
+    {"stage": "ingest", "agent": "agent1", "status": "done", "reason": null, "produced": 1, "model_calls": 0},
+    {"stage": "parse", "agent": "agent1", "status": "done", "reason": null, "produced": 1, "model_calls": 0},
+    {"stage": "extract", "agent": "agent1", "status": "done", "reason": null, "produced": 2, "model_calls": 1},
+    {"stage": "normalize", "agent": "agent1", "status": "done", "reason": null, "produced": 2, "model_calls": 0},
+    {"stage": "agent2", "agent": "agent2", "status": "done", "reason": null, "produced": 1, "model_calls": 0},
+    {"stage": "agent3", "agent": "agent3", "status": "failed", "reason": "retrieval_unavailable", "produced": 0, "model_calls": 0},
+    {"stage": "audit", "agent": "agent4", "status": "done", "reason": null, "produced": 2, "model_calls": 0}
+  ],
+  "trail": [
+    {"id": "agent1.normalize#001", "agent": "agent1", "stage": "normalize", "op": "pass", "before": "见索即付独立保函", "after": "guarantee", "ref": "F-1", "model": null, "prompt_hash": null, "detail": {"business_type": "guarantee", "reason": "explicit_independence_clause"}}
+  ]
+}

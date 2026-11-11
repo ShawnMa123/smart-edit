@@ -20,9 +20,9 @@ EVIDENCE_CHECKS = (
     ("trail_overreach", "operations that rewrite or drop source text"),
     ("provenance", "extracted values must be locatable in their own file"),
     ("finding_anchor", "findings must point at real fields"),
-    ("citation_support", "requires agent-regulatory output"),
-    ("conclusion_conflict", "requires agent-verify + agent-regulatory output"),
-    ("coverage_declaration", "requires agent-regulatory output"),
+    ("citation_support", "claim chunk ids and entities must exist in retrieved evidence"),
+    ("conclusion_conflict", "requires agent-verify output"),
+    ("coverage_declaration", "coverage declarations must match retrieval"),
 )
 
 

@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { Fragment, useEffect, useMemo, useReducer, useState } from 'react';
 
 import { ApiError } from './api/errors';
-import { createRun, createRunWithFiles, triggerStage } from './api/client';
+import {
+  askGate,
+  createRun,
+  createRunWithFiles,
+  disposeFinding,
+  getRun,
+  triggerStage,
+} from './api/client';
 import type { ImportedDocument } from './api/types';
 import { auditReducer, initialAuditState } from './auditMachine';
 import { fieldChecksRan } from './auditView';
@@ -11,6 +18,7 @@ import { createSnapshot, digestText } from './snapshot';
 import { versionStore, type VersionEntry } from './versionStore';
 import { AssistantPanel } from './components/AssistantPanel';
 import { DocumentActions } from './components/DocumentActions';
+import type { LegalState } from './components/LegalPanel';
 import { ImportReport, initialImportState, type ImportState } from './components/ImportReport';
 import { RichEditor } from './components/RichEditor';
 import { VersionPanel } from './components/VersionPanel';
@@ -31,6 +39,9 @@ export function App() {
   const [currentDigest, setCurrentDigest] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [audit, dispatch] = useReducer(auditReducer, initialAuditState);
+  const [legalState, setLegalState] = useState<LegalState>({ phase: 'idle' });
+  const [legalRun, setLegalRun] = useState<{ threadId: string; digest: string } | null>(null);
+  const [auditActionError, setAuditActionError] = useState<string | null>(null);
   /** Which published template to audit against; empty means "rule bundle only" (design D18). */
   const [templateId, setTemplateId] = useState('');
   /** File-import round: what was uploaded and how it went (`document-import` D10). */
@@ -134,6 +145,8 @@ export function App() {
 
   const handleRunAudit = async () => {
     const snapshot = await createSnapshot(text, currentVersionId);
+    setLegalState({ phase: 'idle' });
+    setAuditActionError(null);
     dispatch({ type: 'start', snapshot, at: Date.now() });
     try {
       const created = await createRun(snapshot.text);
@@ -155,9 +168,88 @@ export function App() {
     }
   };
 
+  /**
+   * Reuse the audit's run when it still matches the editor; otherwise create a fresh run from the
+   * current document. The legal check is therefore usable without running the audit first, and a
+   * stale audit can never make it inspect old text.
+   */
+  const handleRunLegal = async () => {
+    if (!text.trim()) return;
+    setLegalState({ phase: 'running' });
+    try {
+      let threadId: string;
+      let digest: string;
+      if (legalRun && legalRun.digest === currentDigest) {
+        threadId = legalRun.threadId;
+        digest = legalRun.digest;
+      } else if (audit.phase === 'report' && audit.snapshot.digest === currentDigest) {
+        threadId = audit.envelope.thread_id;
+        digest = currentDigest;
+      } else {
+        const snapshot = await createSnapshot(text, currentVersionId);
+        const created = await createRun(snapshot.text);
+        threadId = created.thread_id;
+        digest = snapshot.digest;
+      }
+      setLegalRun({ threadId, digest });
+      const report = await triggerStage(threadId, 'agent3');
+      setLegalState({ phase: 'report', envelope: report });
+    } catch (error) {
+      const failure =
+        error instanceof ApiError
+          ? { code: error.code, message: error.message }
+          : { code: 'NETWORK', message: String(error) };
+      setLegalState({ phase: 'failed', failure });
+    }
+  };
+
+  const refreshAudit = async (threadId: string) => {
+    const refreshed = await getRun(threadId);
+    dispatch({ type: 'refresh', envelope: refreshed, at: Date.now() });
+  };
+
+  const handleAskGate = async (operation: string) => {
+    if (audit.phase !== 'report') return;
+    const threadId = audit.envelope.thread_id;
+    // The report was produced for `audit.snapshot`; if the editor has moved on, say so to the
+    // server instead of asking it to approve the old text. The server still owns the digest it
+    // compares against, so a mismatch is `stale_report`, never an approval.
+    const editedDigest = audit.snapshot.digest !== currentDigest ? currentDigest : undefined;
+    setAuditActionError(null);
+    try {
+      await askGate(threadId, operation, editedDigest);
+      await refreshAudit(threadId);
+    } catch (error) {
+      setAuditActionError(error instanceof ApiError ? error.message : String(error));
+    }
+  };
+
+  const handleDispose = async (
+    findingId: string,
+    disposition: string,
+    reason: string | undefined,
+    operation: string,
+  ) => {
+    if (audit.phase !== 'report') return;
+    const threadId = audit.envelope.thread_id;
+    const editedDigest = audit.snapshot.digest !== currentDigest ? currentDigest : undefined;
+    setAuditActionError(null);
+    try {
+      await disposeFinding(threadId, findingId, disposition, reason);
+      // The old decision is stale after a disposition; ask again for the operation the operator chose.
+      await askGate(threadId, operation, editedDigest);
+      await refreshAudit(threadId);
+    } catch (error) {
+      setAuditActionError(error instanceof ApiError ? error.message : String(error));
+    }
+  };
+
   // "Stop waiting" only drops this client's interest: the reducer ignores the late response, so a
   // run that finishes afterwards can never be rendered as if it were still current.
-  const handleStopWaiting = () => dispatch({ type: 'reset' });
+  const handleStopWaiting = () => {
+    setAuditActionError(null);
+    dispatch({ type: 'reset' });
+  };
 
   const panes: Record<PaneId, JSX.Element> = {
     versions: (
@@ -181,6 +273,15 @@ export function App() {
         templateId={templateId}
         onTemplateChange={setTemplateId}
         now={now}
+        legalState={legalState}
+        onRunLegal={() => void handleRunLegal()}
+        canRunLegal={text.trim().length > 0}
+        legalHint="Type or import a document first."
+        onAskGate={(operation) => void handleAskGate(operation)}
+        onDispose={(findingId, disposition, reason, operation) =>
+          void handleDispose(findingId, disposition, reason, operation)
+        }
+        actionError={auditActionError}
       />
     ),
   };
@@ -229,7 +330,15 @@ export function App() {
       ) : null}
 
       <div className="work-grid" data-narrow={narrow}>
-        {narrow ? panes[pane] : [panes.versions, panes.editor, panes.assistant]}
+        {narrow ? (
+          panes[pane]
+        ) : (
+          <>
+            <Fragment key="versions">{panes.versions}</Fragment>
+            <Fragment key="editor">{panes.editor}</Fragment>
+            <Fragment key="assistant">{panes.assistant}</Fragment>
+          </>
+        )}
       </div>
     </div>
   );

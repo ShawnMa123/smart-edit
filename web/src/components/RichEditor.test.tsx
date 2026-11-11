@@ -379,3 +379,76 @@ describe('fallback (2.4)', () => {
     expect(richToPlainText(latest)).toContain('DEMAND GUARANTEE!');
   });
 });
+describe('coverage additions from the spec test design', () => {
+  it('supports all three heading levels and paragraph restoration', () => {
+    const editor = headless(doc('Title'));
+    for (const [level, marker] of [
+      [1, '# '],
+      [2, '## '],
+      [3, '### '],
+    ] as const) {
+      editor.chain().focus().toggleHeading({ level }).run();
+      expect(richToPlainText(toRichDocument(editor.getJSON())).trimEnd()).toBe(`${marker}Title`);
+    }
+    editor.chain().focus().setParagraph().run();
+    expect(richToPlainText(toRichDocument(editor.getJSON())).trimEnd()).toBe('Title');
+    editor.destroy();
+  });
+
+  it('inserts and deletes rows and columns before and after the current cell', () => {
+    const editor = headless(doc('cell'));
+    editor.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run();
+
+    const counts = () => {
+      let rows = 0;
+      let cells = 0;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'tableRow') rows += 1;
+        if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') cells += 1;
+        return true;
+      });
+      return { rows, cells };
+    };
+
+    expect(counts()).toEqual({ rows: 2, cells: 4 });
+    editor.chain().focus().addRowBefore().run();
+    expect(counts().rows).toBe(3);
+    editor.chain().focus().addRowAfter().run();
+    expect(counts().rows).toBe(4);
+    editor.chain().focus().deleteRow().run();
+    expect(counts().rows).toBe(3);
+    editor.chain().focus().addColumnBefore().run();
+    expect(counts().cells).toBe(9);
+    editor.chain().focus().addColumnAfter().run();
+    expect(counts().cells).toBe(12);
+    editor.chain().focus().deleteColumn().run();
+    expect(counts().cells).toBe(9);
+    editor.chain().focus().toggleHeaderRow().run();
+    editor.destroy();
+  });
+
+  it('treats regex metacharacters as literal search text', () => {
+    const editor = headless(doc('a.*b (x) [y] aZZb'));
+    editor.commands.setSearchTerm('a.*b');
+    const storage = (editor.storage as { findAndReplace?: { results?: unknown[] } }).findAndReplace;
+    expect(storage?.results?.length).toBe(1);
+    editor.commands.setReplaceTerm('LITERAL');
+    editor.commands.replaceAll();
+    expect(richToPlainText(toRichDocument(editor.getJSON()))).toBe('LITERAL (x) [y] aZZb');
+    editor.destroy();
+  });
+
+  it('projects an empty document to the empty string', () => {
+    expect(richToPlainText({ type: 'doc', content: [] })).toBe('');
+    expect(richToPlainText({ type: 'doc', content: [{ type: 'pageBreak' }] })).toBe('');
+  });
+});
+
+describe('spec gaps found by the audit test design', () => {
+  it('exposes insert-before/left and header toggle controls for tables', () => {
+    render(<RichEditor document={doc('cell')} onChange={vi.fn()} />);
+    for (const name of ['Insert row above', 'Insert column left', 'Toggle header row']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+  });
+});

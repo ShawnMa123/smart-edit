@@ -16,13 +16,14 @@ dependencies = [
     "pydantic>=2",
     "pymupdf>=1.24,<2",  # 2.x pulls in pymupdf-layout/onnxruntime, unused by the POC (see agent-normalize/design.md §15)
     "PyYAML",
+    "numpy>=1.26",  # vendored mercatoria retrieval index
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "httpx"]  # httpx: fastapi.testclient
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["app*", "mercatoria*"]
 
 [tool.setuptools.package-data]
 app = ["configs/*.yaml"]

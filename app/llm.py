@@ -61,5 +61,5 @@ def _fixture_llm(path: Path):
         return candidates
 
     # The label travels with the callable so `extract_node` can say where candidates came from.
-    _replay.provider = f"{FIXTURE_PREFIX}{path}"  # type: ignore[attr-defined]
+    _replay.provider = f"{FIXTURE_PREFIX}{path.as_posix()}"  # type: ignore[attr-defined]
     return _replay

@@ -74,6 +74,15 @@ STAGE_TARGETS = {
         True,
         ("fields", "extra_fields", "business_type"),
     ),
+    # Agent 3's triggerable target: raw mode only needs `parse`; the node decides enriched inside
+    # (normalize done + fields + business_type). It never requires `fields` up front.
+    "agent3": AgentSpec(
+        "agent3",
+        ("parse",),
+        ("files",),
+        ("findings", "legal", "retrieved", "stages", "trail"),
+        True,
+    ),
     # Agent 4's only triggerable target (task 6.2). It declares the **whole** shared layer, not just
     # `normalize`: `execute_chain` runs the plan as written and does not expand it transitively, so
     # requiring only `normalize` would run it without `docs` and fail by design.
@@ -81,7 +90,7 @@ STAGE_TARGETS = {
         "agent4",
         ("parse", "extract", "normalize"),
         ("fields",),
-        ("verification", "gate", "findings"),
+        ("verification", "findings"),
         True,
         ("verification", "gate"),
     ),
@@ -93,6 +102,7 @@ ENRICHED_CHAIN = ("parse", "extract", "normalize")
 # refused — registration, never a guess (design D5 of `frontend-console`).
 AGENT_TARGETS = {
     "agent1": "normalize",
+    "agent3": "agent3",
     "agent4": "audit",
 }
 
@@ -135,6 +145,34 @@ def latest_stage(stages: list[dict], stage: str) -> dict | None:
     return None
 
 
+def stage_is_done(stages: list[dict], stage: str) -> bool:
+    """True when the **last** report for `stage` is `done` (a later failure wins)."""
+    report = latest_stage(stages, stage)
+    return bool(report) and report.get("status") == "done"
+
+
+def stages_done(stages: list[dict], names: tuple[str, ...]) -> bool:
+    """True only when every named stage's latest report is `done`."""
+    return all(stage_is_done(stages, name) for name in names)
+
+
+def resolve_input_mode(state: dict) -> str:
+    """`enriched` only after `normalize` finished; never infer from `legal` being absent.
+
+    Agent 3's raw mode is not "legal is missing" — a failed legal call also leaves `legal=None`.
+    The stage report is the only evidence that normalization actually ran.
+    """
+    normalized = latest_stage(state.get("stages") or [], "normalize")
+    if (
+        normalized
+        and normalized.get("status") == "done"
+        and state.get("fields")
+        and state.get("business_type")
+    ):
+        return "enriched"
+    return "raw"
+
+
 def require(state: dict, *keys: str) -> dict | None:
     """Prerequisite check. Returns `None` when satisfied, else a structured refusal.
 
@@ -144,3 +182,13 @@ def require(state: dict, *keys: str) -> dict | None:
     if missing:
         return {"refused": True, "missing": missing}
     return None
+
+
+def refusal(missing: list[str], *, agent: str, reason: str) -> dict:
+    """The contract's uniform refusal shape (agent-contract spec: *拒绝格式统一*)."""
+    return {
+        "refused": True,
+        "missing": list(missing),
+        "agent": agent,
+        "reason": reason,
+    }

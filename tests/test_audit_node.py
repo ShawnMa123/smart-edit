@@ -13,6 +13,7 @@ from app.audit.gate import evaluate as gate_for_state
 from app.audit.policy import BLOCKED, START_APPROVAL
 from app.audit.snapshot import snapshot_digest
 from app.nodes.audit import AUDIT_AGENT, AUDIT_STAGE, audit_node
+from app.nodes.gate import gate_node
 from app.runtime import execute_chain, merge_update
 from app.standalone import plan_standalone
 from app.state import OVERREACH_OPS, STAGE_STATUS, TRAIL_OPS
@@ -72,7 +73,7 @@ def test_a_clean_document_audits_into_one_done_stage_report():
     assert report["status"] == "done"
     assert report["reason"] is None
     assert report["model_calls"] == 0
-    assert report["produced"] == len(update["findings"]) == 0
+    assert report["produced"] == len(update["findings"].value) == 0
 
 
 def test_the_verification_slot_carries_the_report_baseline():
@@ -103,7 +104,7 @@ def test_trail_entries_use_contract_ops_and_unique_ids():
     assert trail[0]["op"] == "pass"
     assert trail[0]["detail"]["snapshot_digest"] == snapshot_digest(state)
     assert trail[0]["detail"]["model_calls"] == 0
-    assert [entry["op"] for entry in trail[1:]] == ["emit"] * len(update["findings"])
+    assert [entry["op"] for entry in trail[1:]] == ["emit"] * len(update["findings"].value)
     assert {entry["agent"] for entry in trail} == {AUDIT_AGENT}
     assert trail[1]["id"] == "agent4.audit#002"
 
@@ -121,19 +122,44 @@ def test_a_failing_audit_returns_a_stage_report_instead_of_raising():
     assert update["trail"][0]["detail"]["audited"] is False
 
 
-def test_the_gate_is_written_only_when_an_operation_is_asked():
-    """6.3 An audit alone approves nothing; asking for an operation stores one decision."""
-    clean = audit_node(_state())
-    assert "gate" not in clean
+def test_an_audit_never_writes_a_gate_decision():
+    """6.3 / 5.2 The audit is evidence; only the gate command decides."""
+    assert audit_node(_state())["gate"] is None
 
     state = _state()
     state["fields"].pop("guarantee_amount")
-    decided = audit_node(state, operation=START_APPROVAL)
+    assert audit_node(state)["gate"] is None
 
-    assert decided["gate"]["operation"] == START_APPROVAL
-    assert decided["gate"]["decision"] == BLOCKED
-    assert "hard_block" in decided["gate"]["reason_codes"]
-    assert decided["gate"]["candidate_content_sha256"] == snapshot_digest(state)
+
+def test_an_audit_replaces_its_own_rows_and_keeps_other_producers():
+    """Only audit findings are bound to the audit snapshot; regulatory/normalization rows stay."""
+    state = _state()
+    regulatory = {"id": "R-001", "source": "regulatory", "severity": "warn", "field_keys": []}
+    state["findings"] = [regulatory]
+
+    merge_update(state, audit_node(state))
+    assert [finding["id"] for finding in state["findings"]].count("R-001") == 1
+
+    merge_update(state, audit_node(state, bundles=[]))  # deterministic failure
+    assert [finding["id"] for finding in state["findings"]] == ["R-001"]
+
+
+def test_the_gate_command_stores_one_decision_bound_to_the_snapshot():
+    """6.3 An audit alone approves nothing; asking for an operation stores one decision."""
+    state = _state()
+    state["fields"].pop("guarantee_amount")
+    merge_update(state, audit_node(state))
+
+    update = gate_node(state, START_APPROVAL)
+
+    assert set(update) == {"gate"}, "the gate writes nothing but its decision"
+    assert update["gate"]["operation"] == START_APPROVAL
+    assert update["gate"]["decision"] == BLOCKED
+    assert "hard_block" in update["gate"]["reason_codes"]
+    assert update["gate"]["candidate_content_sha256"] == snapshot_digest(state)
+
+    merge_update(state, update)
+    assert state["gate"] == update["gate"]
 
 
 def test_the_stored_report_is_what_the_gate_reads():

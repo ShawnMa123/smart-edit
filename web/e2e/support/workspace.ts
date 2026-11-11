@@ -32,8 +32,12 @@ export class Workspace {
     await expect(this.textarea).toBeVisible();
   }
 
+  /**
+   * The editor became TipTap in `rich-text-editor`; the old `editor-text` textarea no longer exists.
+   * `.ProseMirror` is the contenteditable that owns the document text.
+   */
   get textarea() {
-    return this.page.locator('[data-testid="editor-text"]');
+    return this.page.locator('[data-testid="editor-rich"] .ProseMirror');
   }
 
   async paste(text: string): Promise<void> {

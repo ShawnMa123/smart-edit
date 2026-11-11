@@ -141,14 +141,21 @@ def test_resolved_critical_finding_allows_approval_and_latest_event_wins():
     allowed = _gate(
         report,
         findings=[finding],
-        dispositions=[{"finding_id": "N-001", "disposition": "rejected", "reason": "checked with ops"}],
+        dispositions=[
+            {
+                "finding_id": "N-001",
+                "disposition": "rejected",
+                "reason": "checked with ops",
+                "snapshot_digest": DIGEST,
+            }
+        ],
     )
     reopened = _gate(
         report,
         findings=[finding],
         dispositions=[
-            {"finding_id": "N-001", "disposition": "rejected"},
-            {"finding_id": "N-001", "disposition": "open"},
+            {"finding_id": "N-001", "disposition": "rejected", "snapshot_digest": DIGEST},
+            {"finding_id": "N-001", "disposition": "open", "snapshot_digest": DIGEST},
         ],
     )
 
@@ -302,6 +309,46 @@ def test_open_gaps_and_advisories_are_reported():
 def test_unsupported_capability_is_named():
     decision = _gate(_report(**{PASS: 12}), operation=FORMAL_MAPPING)
     assert decision["unsupported_capability"] == "no_message_type_bundle"
+
+
+def test_gate_detects_a_template_edited_after_the_audit():
+    """Production chain: the gate hashes the currently published template, not just the report."""
+    from app.audit.snapshot import snapshot_digest
+    from app.nodes.gate import gate_node
+    from app.rules.templates import load_templates
+
+    pack = load_templates()[0]
+    state = {"fields": {}}
+    digest = snapshot_digest(state)
+    report = {
+        "planned": 1,
+        "counts": {PASS: 1, FINDING: 0, NOT_APPLICABLE: 0, NEEDS_INPUT: 0,
+                   UNABLE_TO_ASSESS: 0, FAILED: 0},
+        "completion": "complete",
+        "outcome": "no_findings",
+        "freshness": "current",
+        "snapshot_digest": digest,
+        "coverage": {"assessed": 1, "ratio": 1.0},
+        "reasons": [],
+        "template": {
+            "requested": True,
+            "template_id": pack.template_id,
+            "version": pack.version,
+            "content_sha256": pack.content_sha256,
+            "synthetic": False,
+        },
+    }
+    state["verification"] = {"audit": report}
+
+    assert gate_node(state, START_APPROVAL)["gate"]["decision"] == ALLOWED
+
+    state["verification"] = {
+        "audit": {**report, "template": {**report["template"], "content_sha256": "old-hash"}}
+    }
+    stale = gate_node(state, START_APPROVAL)["gate"]
+
+    assert stale["decision"] == INDETERMINATE
+    assert "template_changed" in stale["reason_codes"]
 
 
 def test_formal_export_and_handoff_follow_approval_policy():

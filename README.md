@@ -21,7 +21,7 @@ openspec validate --all
 
 | Change 目录 | Agent | 中文名 | Owner | 内容 |
 |---|---|---|---|---|
-| `poc-skeleton` | — | 地基 | **待定** | 契约冻结 + 共享层（parse/extract/normalize）+ 主图 + 阶段状态 + 操作留痕 + 独立触发 |
+| `poc-skeleton` | — | 地基 | **Shawn** | 契约冻结 + 共享层（parse/extract/normalize）+ 主图 + 阶段状态 + 操作留痕 + 独立触发 |
 | `agent-normalize` | **Agent 1** | 标准化 | **A** | 原始材料 → 结构化字段 + 出处 |
 | `agent-verify` | **Agent 2** | 要件校验 | **B** | 逐字段值校验 + 齐全性 + 业务参数 |
 | `agent-regulatory` | **Agent 3** | 法规合规 | **C** | RAG 检索 + 两种输入模式 + 覆盖声明 |
@@ -99,12 +99,24 @@ export SMART_EDIT_LLM=fixture:fixtures/llm/extract_sample.json
 | Endpoint | Purpose |
 |---|---|
 | `POST /runs` | Create one run. Multipart with field `files`, or JSON `{"text": "..."}` for pasted text |
-| `POST /runs/{thread_id}/stages/{stage}` | Run a stage chain (`parse` / `extract` / `normalize` / `audit`), backfilling prerequisites |
-| `GET /runs/{thread_id}` | Read the envelope: `fields`, `extra_fields`, `findings`, `stages`, `trail`, `verification`, `gate`, `supported_stages` |
+| `POST /runs?autostart=true` | Same, then run the graph and return the first review `interrupt` (opt-in) |
+| `POST /runs/{thread_id}/stages/{stage}` | Run a stage chain (`parse` / `extract` / `normalize` / `agent3` / `audit`), backfilling prerequisites; `?input_mode=raw\|enriched` applies to `agent3` |
+| `POST /runs/{thread_id}/run` | Run the checkpointed main graph to the first `interrupt` (or `END`) |
+| `POST /runs/{thread_id}/resume` | Resume one `hitl` interrupt with `{"edits": [...], "recheck": bool}`; duplicate payloads are applied once |
+| `GET /runs/{thread_id}/events` | Replay timeline: node order plus every appended `StageReport` / `TrailEntry` |
+| `GET /runs/{thread_id}` | Read the envelope: `fields`, `extra_fields`, `findings`, `legal`, `retrieved`, `stages`, `trail`, `verification`, `gate`, `supported_stages` |
+| `POST /runs/{thread_id}/gate` | Ask one protected operation for a decision (`operation` in the JSON body) |
+| `POST /runs/{thread_id}/findings/{finding_id}/disposition` | Append a human disposition event (`open` / `accepted` / `rejected` / `needs_human_review`) |
 
 `verification` / `gate` are `null` until they mean something: `null` verification = no audit yet, `null`
 gate = nobody asked the gate. Neither is ever "clean". The audit decides no operation by itself — a
 decision appears only when one is asked for (`gate.evaluate(state, operation, digest)`).
+
+The main graph has the Agent 2 position, but this build does not contain Agent 2's business rules.
+Its default node records `StageReport(stage="agent2", status="failed")` with a reason and never
+fabricates findings, so the gate stays blocked until the real verifier is plugged in through
+`app.graph_factory.compile_graph(agent2=<node>)`. That is deliberate: "not checked" must never look
+like "no problems".
 
 ```bash
 # create a run from the bundled sample document, then audit it
@@ -126,5 +138,51 @@ Errors always come back as `{code, message, detail?}` with `code` one of `EMPTY_
 `INCOMPLETE_RESULT` (500). Branch on `code`, not on `message`.
 
 Run state is process-scoped: after a restart the same `thread_id` answers `unknown_run` — never an
-empty run. Re-auditing means creating a new run, because `normalize` clears `_candidates` and a
-repeat trigger is refused.
+empty run. The graph checkpointer (`SMART_EDIT_CHECKPOINT_DB`) and the resume ledger
+(`SMART_EDIT_LEDGER_DB`) survive a restart for the control-plane endpoints, but the console's
+in-memory cache does not, so a vanished thread is still reported as an error. Re-auditing means
+creating a new run, because `normalize` clears `_candidates` and a repeat trigger is refused.
+
+---
+
+## Agent 3 · 本地法规检索（无需外部 repo）
+
+`mercatoria` 已移植为本仓的顶层包 `mercatoria/`，语料和索引在 `data/regulatory/`：
+
+```text
+mercatoria/                         # vendored retrieval package (SQLite + BM25 + vectors)
+data/regulatory/corpus/             # 92 documents / 35 MB
+data/regulatory/index/              # active SQLite index (7,196 chunks)
+data/regulatory/config.json         # corpus/index/embedding/retrieval config
+app/regulatory/                     # Agent 3 node, query, answer, cite_check, retriever
+```
+
+默认运行时**不依赖任何外部 repo 或 HTTP 检索服务**：
+
+```bash
+# 索引状态
+python -m app.regulatory.index status
+
+# 重建（需要 OpenAI-compatible embedding；默认 localhost:3425）
+python -m app.regulatory.index build
+
+# 完全离线重建 / 检索（BM25 only，不需要 embedding 服务）
+python -m app.regulatory.index build --keyword-only
+```
+
+环境变量：
+
+| 变量 | 作用 |
+|---|---|
+| `SMART_EDIT_RAG` | 设为 URL 时改用外部 HTTP 服务；`off` 显式禁用检索 |
+| `SMART_EDIT_RAG_CONFIG` | 覆盖 `data/regulatory/config.json` |
+| `SMART_EDIT_RAG_KEYWORD_ONLY=1` | 本地索引强制 BM25（无 embedding） |
+| `SMART_EDIT_ANSWERER=llm` | 可选 LLM claim 生成；默认 `extractive` |
+| `SMART_EDIT_ANSWER_BASE` / `_MODEL` / `_API_KEY` | 可选 LLM 端点（OpenAI-compatible） |
+
+本地检索在 embedding 网关不可达时自动降级为 BM25，并在 `retrieved` 响应
+`diagnostics.embedding_fallback` 中说明原因；不会把“检索失败”伪装成“未发现问题”。
+
+Agent 3 可通过 `POST /runs/{tid}/stages/agent3` 单独触发：只上传原文时自动补 `parse`，进入
+`raw` 模式；已跑过 `normalize` 时进入 `enriched` 模式。前端 **Legal advice** tab 可在没有审计
+报告时直接用当前编辑器内容创建 run 并触发。

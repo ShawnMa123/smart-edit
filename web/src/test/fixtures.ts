@@ -338,7 +338,7 @@ export const auditedEnvelope = (over: Partial<RunEnvelope> = {}): RunEnvelope =>
 export const blockedAuditEnvelope = (): RunEnvelope =>
   auditedEnvelope({
     verification: verification({
-      verdict: 'warn',
+      verdict: 'fail',
       audit: auditReport({
         counts: {
           pass: 32,

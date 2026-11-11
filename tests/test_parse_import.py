@@ -185,10 +185,27 @@ def test_scanned_pdf_falls_back_to_ocr_with_real_page_numbers(tmp_path, monkeypa
 
     doc = parse_file(_source(path, "F-1"))
 
-    assert doc["form"] == "pdf_text", "the file is still a PDF; OCR is how its text was obtained"
+    assert doc["form"] == "image_ocr", "OCR text must not be presented as a PDF text layer"
     assert doc["errors"] == []
     assert [block["page"] for block in doc["blocks"]] == [1, 2]
     assert doc["full_text"].count("AMOUNT: USD 500,000.00") == 2
+
+
+def test_a_scan_that_ocr_cannot_read_is_reported_as_ocr_not_text_layer(tmp_path, monkeypatch):
+    """An OCR attempt with no recognised text must not be misreported as `no_text_layer`."""
+    fitz = pytest.importorskip("pymupdf")
+    path = tmp_path / "blank-scan.pdf"
+    document = fitz.open()
+    document.new_page()
+    document.save(str(path))
+    document.close()
+    _stub_ocr(monkeypatch, [])
+
+    doc = parse_file(_source(path, "F-1"))
+
+    assert doc["form"] == "image_ocr"
+    assert doc["full_text"] == ""
+    assert any(error.startswith("no_text_recognized") for error in doc["errors"])
 
 
 def test_ocr_page_limit_is_reported(tmp_path, monkeypatch):

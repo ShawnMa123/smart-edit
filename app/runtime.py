@@ -1,7 +1,8 @@
-"""Runtime seams between the HTTP layer and the stage nodes.
+"""Runtime seams between the legacy chain executor and the HTTP layer.
 
-Until `poc-skeleton` §8 lands there is no graph, so nothing applies the reducers that
-`app/state.py` declares. This module owns the two things that must exist exactly once:
+The legacy console triggers one stage chain per request (`execute_chain`). It shares the node
+implementations and the one production `merge_update()` with the checkpointed graph
+(`app/graph.py`), so the two paths cannot drift:
 
 1. `merge_update()` — the **single** production implementation of "merge a node update into state"
    (`findings` / `trail` / `stages` append; everything else overwrites). `tests/helpers.apply_update`
@@ -14,12 +15,19 @@ Design: `openspec/changes/frontend-console/design.md` D1-D2.
 
 from __future__ import annotations
 
+try:
+    from langgraph.types import Overwrite
+except ImportError:  # pragma: no cover - older langgraph layout
+    from langgraph.graph.message import Overwrite  # type: ignore[no-redef]
+
 from app.config import FieldsConfigError, load_fields_config
 from app.nodes.audit import audit_node
 from app.nodes.extract import extract_node
 from app.nodes.normalize import normalize_node
 from app.nodes.parse import parse_node
+from app.regulatory.node import regulatory_node
 from app.stages import STAGE_TARGETS, latest_stage
+from app.standalone import clear_previous_outputs
 
 # The only keys with a reducer in `app/state.py`. Anything else overwrites.
 REDUCER_KEYS = ("findings", "trail", "stages")
@@ -28,6 +36,7 @@ NODES = {
     "parse": parse_node,
     "extract": extract_node,
     "normalize": normalize_node,
+    "agent3": regulatory_node,
     "audit": audit_node,
 }
 
@@ -39,7 +48,9 @@ class UnknownStage(ValueError):
 def merge_update(state: dict, update: dict) -> dict:
     """Apply one node's partial update to `state`, honouring the reducer keys."""
     for key, value in update.items():
-        if key in REDUCER_KEYS:
+        if isinstance(value, Overwrite):
+            state[key] = value.value
+        elif key in REDUCER_KEYS:
             state[key] = (state.get(key) or []) + list(value)
         else:
             state[key] = value
@@ -59,6 +70,8 @@ def execute_chain(
     llm=None,
     fields_yaml: dict[str, dict] | None = None,
     template_reference: dict | None = None,
+    retriever=None,
+    answerer=None,
 ) -> dict:
     """Run `chain` in order, merging each node update into `state` (mutated in place).
 
@@ -82,12 +95,24 @@ def execute_chain(
     field_keys = list(fields_yaml) if fields_yaml else []
 
     for stage in chain:
-        if is_done(state, stage):
+        # Agent 3 is explicitly re-runnable: a second trigger must replace its old legal opinion,
+        # retrieval and `R-` findings instead of showing a stale one. Other done stages stay reusable.
+        if is_done(state, stage) and stage != "agent3":
             continue
+        # Only the target's own conclusions are cleared; `stages` / `trail` stay append-only.
+        stale = clear_previous_outputs(state, stage)
+        if stale:
+            # `findings` is a reducer key in the graph, but the chain executor is a plain dict:
+            # replacing means assignment here, never `merge_update` (which would append).
+            if "findings" in stale:
+                state["findings"] = stale.pop("findings")
+            merge_update(state, stale)
         if stage == "parse":
             update = parse_node(state)
         elif stage == "extract":
             update = extract_node(state, llm=llm, field_keys=field_keys)
+        elif stage == "agent3":
+            update = regulatory_node(state, retriever=retriever, answerer=answerer)
         elif stage == "audit":
             update = audit_node(state, template_reference=template_reference)
         else:

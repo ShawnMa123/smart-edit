@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+web
+data/regulatory/index
+data/regulatory/embedding-cache.db
+runs
+docs
+__pycache__
+*.pyc
+.pytest_cache
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report

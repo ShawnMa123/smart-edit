@@ -300,6 +300,48 @@ button.primary {
   gap: 4px;
 }
 
+.finding--warn {
+  border-left: 3px solid var(--status-warn);
+}
+
+.legal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.legal-table th,
+.legal-table td {
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 4px;
+  vertical-align: top;
+}
+
+.chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.chip--warn {
+  color: var(--status-warn);
+  background: var(--status-warn-bg);
+}
+
+.chip--critical {
+  color: var(--status-bad);
+  background: var(--status-bad-bg);
+}
+
+.chip--info {
+  color: var(--muted);
+}
+
 .metrics {
   display: flex;
   gap: 14px;

@@ -248,6 +248,14 @@ class Chunk(TypedDict):
     text: str
     score: float
     source_type: Literal["kb", "web"]
+    # [SEMANTICS] agent-regulatory: citation fields returned by the retrieval service. Optional so
+    # existing fixtures/tests keep working; `text` is always the source text, never a summary.
+    source_doc: NotRequired[str]
+    articles: NotRequired[list[str]]
+    effective_from: NotRequired[str | None]
+    effective_to: NotRequired[str | None]
+    jurisdictions: NotRequired[list[str]]
+    applies_to: NotRequired[list[str]]
 
 
 # --------------------------------------------------------------------------
@@ -265,6 +273,7 @@ class EditState(TypedDict, total=False):
     extra_fields: dict[str, FieldValue]  # overwrite; keys not defined in fields.yaml
     _candidates: list[dict]  # [TEMPORARY CHANNEL] written by extract, cleared by normalize
     findings: Annotated[list[Finding], operator.add]  # reducer
+    dispositions: list[dict]  # append-only human disposition events; only the API appends
     legal: LegalOpinion | None  # overwrite
     retrieved: list[Chunk]  # overwrite
 

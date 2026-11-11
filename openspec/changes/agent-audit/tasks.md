@@ -17,6 +17,10 @@
 > stays at today's 51 units, and `tests/test_template_integration.py` asserts exactly that. Semantic
 > clause equivalence is **not** built: it is a fixed `unable_to_assess` with reason
 > `semantic_equivalence_not_implemented` (`design.md` D17), so AT-01 is untouched.
+>
+> **Status (2026-11-09, fourth pass):** group 16 makes Agent 4 reachable over HTTP (gate command +
+> append-only dispositions), fixes the `verdict`/`Issue` contradiction, and implements
+> `citation_support` / `coverage_declaration`. Backend: **430 passed**. `0.1` remains open.
 
 ## 0. Ownership and sign-off gate
 
@@ -244,6 +248,29 @@
 - [x] 15.3 Update `openspec/changes/agent-audit/DEMO.md` with the template commands, template id/version/
   digest, both scenarios' outcome/coverage/gate results, and an explicit statement that semantic
   equivalence is not implemented. Verify: numbers match 15.1/15.2.
+
+## 16. Closure — reachable gate, dispositions, evidence checks (2026-11-09)
+
+- [x] 16.1 `verification.verdict` follows the projected `Issue.level`: any `fail` → `fail`, `warn` →
+  `warn`, clean → `pass`; `unable_to_assess` stays `fail`. Verify: `tests/test_audit_project.py`.
+- [x] 16.2 `citation_support` independently checks claim `chunk_id` against `retrieved` and key entities
+  (amount/date/country/rule/clause) against the cited text; fabricated ids and entity gaps hard-block,
+  `insufficient` + chunk warns. Verify: `tests/test_audit_evidence.py`.
+- [x] 16.3 `coverage_declaration`: unavailable without a declaration and coverage claimed without
+  retrieval hard-block; uncertain business type without a note warns. Verify: `tests/test_audit_evidence.py`.
+- [x] 16.4 `conclusion_conflict` stays `not_applicable` with `requires_agent_verify_output`; it is never
+  reported as "no conflict". Verify: `tests/test_audit_evidence.py`.
+- [x] 16.5 Gate is a command: `app/nodes/gate.py` + `POST /runs/{thread_id}/gate`; unknown operation is
+  `400 UNKNOWN_OPERATION`, no audit is `200 indeterminate/no_audit_report`, a supplied digest binds the
+  decision. Verify: `tests/test_audit_gate_api.py`.
+- [x] 16.6 `audit_node` no longer accepts an operation or writes `gate`; the `audit` target produces
+  `verification` + `findings`. Verify: `tests/test_audit_node.py`.
+- [x] 16.7 `EditState.dispositions` + `POST /runs/{thread_id}/findings/{finding_id}/disposition`:
+  append-only, critical rejection requires a reason, unknown finding is 404, latest event changes the
+  gate answer. Verify: `tests/test_audit_disposition_api.py`.
+- [x] 16.8 Specs synced where they contradicted the code: orchestration standalone, Agent 4
+  prerequisites, gate hard-block source, eval-benchmark reference. Verify: `git diff`.
+- [x] 16.9 Full backend suite: **430 passed**.
 
 ## Workflow follow-up
 

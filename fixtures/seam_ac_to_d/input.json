@@ -1,0 +1,90 @@
+{
+  "_readme": "Acceptance carrier for seam (A + C) -> D: Agent 4 only needs docs/fields/legal/trail to locate evidence. Assertions live in assert.py.",
+  "run_id": "seam-ac-to-d",
+  "business_type": "guarantee",
+  "docs": [
+    {
+      "file_id": "F-1",
+      "filename": "guarantee.pdf",
+      "mime": "application/pdf",
+      "form": "pdf_text",
+      "blocks": [
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 90.0, 320.0, 104.0], "text": "保函编号：BG-2026-0001", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 120.0, 520.0, 150.0], "text": "本保函为见索即付独立保函，适用国际商会《见索即付保函统一规则》（URDG 758）。", "kind": "paragraph"},
+        {"file_id": "F-1", "page": 1, "bbox": [72.0, 160.0, 320.0, 174.0], "text": "开立日期：2026-03-12", "kind": "paragraph"}
+      ],
+      "full_text": "保函编号：BG-2026-0001\n本保函为见索即付独立保函，适用国际商会《见索即付保函统一规则》（URDG 758）。\n开立日期：2026-03-12",
+      "errors": [],
+      "sha256": "1a2b3c4d5e6f70819a2b3c4d5e6f70819a2b3c4d5e6f70819a2b3c4d5e6f7081"
+    }
+  ],
+  "fields": {
+    "guarantee_number": {
+      "key": "guarantee_number",
+      "value": "BG-2026-0001",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 90.0, 320.0, 104.0], "span": "BG-2026-0001", "form_label": null},
+      "normalized_from": "BG-2026-0001",
+      "label": "保函编号",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "issue_date": {
+      "key": "issue_date",
+      "value": "2026-03-12",
+      "status": "extracted",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": {"file_id": "F-1", "page": 1, "bbox": [72.0, 160.0, 320.0, 174.0], "span": "2026-03-12", "form_label": null},
+      "normalized_from": "2026-03-12",
+      "label": "开立日期",
+      "doc_type": "application_form",
+      "notes": []
+    },
+    "expiry_date": {
+      "key": "expiry_date",
+      "value": "2027-03-12",
+      "status": "inferred",
+      "confirmed": false,
+      "edited_by_user": false,
+      "source": null,
+      "normalized_from": "12/03/27",
+      "label": "到期日",
+      "doc_type": "application_form",
+      "notes": ["date_ambiguous"]
+    }
+  },
+  "findings": [
+    {"id": "N-001", "source": "normalization", "kind": "missing", "rule_id": "required-expiry_date", "severity": "warn", "blocking": false, "resolved": false, "resolution": null, "field_keys": ["expiry_date"], "message": "到期日未在原文中出现", "evidence": "12/03/27", "citation": null, "suggestion": "人工核对"},
+    {"id": "B-001", "source": "business", "kind": "invalid_value", "rule_id": "guarantee_number-pattern", "severity": "critical", "blocking": true, "resolved": false, "resolution": null, "field_keys": ["guarantee_number"], "message": "保函编号格式不符", "evidence": "BG-2026-0001", "citation": null, "suggestion": null},
+    {"id": "R-001", "source": "regulatory", "kind": "regulatory_risk", "rule_id": "REG-URDG", "severity": "warn", "blocking": false, "resolved": false, "resolution": null, "field_keys": [], "message": "适用规则需人工确认", "evidence": "URDG 758", "citation": "c1", "suggestion": "人工复核"}
+  ],
+  "legal": {
+    "input_mode": "enriched",
+    "applicable_rules": [{"rule_id": "URDG-758", "title": "见索即付保函统一规则", "version": "758", "effective_from": null, "chunk_id": "c1"}],
+    "claims": [{"text": "保函应载明适用规则", "chunk_id": "c1", "kind": "applicable_rule", "support": "supported"}],
+    "coverage": {"jurisdictions": ["CN"], "standards": ["URDG 758"], "unavailable": false, "business_type_uncertain": false, "notes": []},
+    "escalate_to_human": false,
+    "summary": "已检索到适用规则"
+  },
+  "retrieved": [
+    {"chunk_id": "c1", "doc_id": "doc-1", "title": "见索即付保函统一规则", "text": "保函应当载明适用规则。", "score": 0.91, "source_type": "kb"}
+  ],
+  "trail": [
+    {"id": "agent1.parse#001", "agent": "agent1", "stage": "parse", "op": "read", "before": null, "after": "1 docs / 3 blocks", "ref": null, "model": null, "prompt_hash": null, "detail": {"failed": []}},
+    {"id": "agent1.normalize#001", "agent": "agent1", "stage": "normalize", "op": "pass", "before": "见索即付独立保函", "after": "guarantee", "ref": "F-1", "model": null, "prompt_hash": null, "detail": {"business_type": "guarantee", "evidence": "见索即付独立保函", "file_id": "F-1", "reason": "explicit_independence_clause"}},
+    {"id": "agent1.normalize#002", "agent": "agent1", "stage": "normalize", "op": "emit", "before": null, "after": "B-001", "ref": "guarantee_number", "model": null, "prompt_hash": null, "detail": {"rule_id": "guarantee_number-pattern", "kind": "invalid_value"}},
+    {"id": "agent3.agent3#001", "agent": "agent3", "stage": "agent3", "op": "read", "before": null, "after": "1 chunk(s)", "ref": null, "model": null, "prompt_hash": null, "detail": {"input_mode": "enriched"}}
+  ],
+  "stages": [
+    {"stage": "ingest", "agent": "agent1", "status": "done", "reason": null, "produced": 1, "model_calls": 0},
+    {"stage": "parse", "agent": "agent1", "status": "done", "reason": null, "produced": 1, "model_calls": 0},
+    {"stage": "extract", "agent": "agent1", "status": "done", "reason": null, "produced": 2, "model_calls": 1},
+    {"stage": "normalize", "agent": "agent1", "status": "done", "reason": null, "produced": 3, "model_calls": 0},
+    {"stage": "agent2", "agent": "agent2", "status": "done", "reason": null, "produced": 1, "model_calls": 0},
+    {"stage": "agent3", "agent": "agent3", "status": "done", "reason": null, "produced": 2, "model_calls": 0},
+    {"stage": "audit", "agent": "agent4", "status": "done", "reason": null, "produced": 2, "model_calls": 0}
+  ]
+}
