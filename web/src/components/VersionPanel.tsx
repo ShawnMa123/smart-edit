@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { shortDigest } from '../snapshot';
 import type { VersionEntry } from '../versionStore';
 
@@ -7,6 +9,8 @@ export interface VersionPanelProps {
   onCapture: () => void;
   onRestore: (id: string) => void;
   onClear: () => void;
+  /** Optional demo surface rendered inside the same pane (e.g. the fixture automation panel). */
+  children?: ReactNode;
 }
 
 /** Left pane: browser-local, append-only version history (task 6.1). */
@@ -16,6 +20,7 @@ export function VersionPanel({
   onCapture,
   onRestore,
   onClear,
+  children,
 }: VersionPanelProps) {
   return (
     <aside className="pane" aria-label="Version history">
@@ -69,6 +74,7 @@ export function VersionPanel({
         History is stored in <strong>this browser only</strong> — it is not signed and not shared.
         Restoring only loads the text into the editor; it never rewrites a captured version.
       </div>
+      {children}
     </aside>
   );
 }

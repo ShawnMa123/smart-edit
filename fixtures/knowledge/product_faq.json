@@ -1,0 +1,127 @@
+{
+  "title": "合成产品手册（演示用）",
+  "version_id": "KV-PRODUCT-001-v2",
+  "source": {
+    "source_id": "KS-PRODUCT-001",
+    "source_type": "product_manual",
+    "publisher": "Synthetic Demo Publisher",
+    "version_label": "demo-2",
+    "language": "zh-CN",
+    "scope": "organization",
+    "license_reference": "synthetic-demo",
+    "synthetic": true,
+    "jurisdictions": [],
+    "effective_from": "2024-01-01",
+    "effective_to": null
+  },
+  "chunks": [
+    {
+      "chunk_id": "KC-PRODUCT-001-1",
+      "section": "提交与锁",
+      "title_path": "产品手册 / 提交与锁",
+      "text": "成功提交版本后，系统会生成一个新版本并释放编辑锁；提交失败不会释放编辑锁，也不会完成版本状态转换。",
+      "locator": {
+        "section": "提交与锁"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-2",
+      "section": "文件导入",
+      "title_path": "产品手册 / 文件导入",
+      "text": "支持导入带文本层的 PDF、DOCX、PNG 与 JPEG。扫描件会尝试 OCR，识别出的关键值仍标记为待人工核实；不支持的类型必须明确拒绝，不能当作成功。",
+      "locator": {
+        "section": "文件导入"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-3",
+      "section": "版本历史",
+      "title_path": "产品手册 / 版本历史",
+      "text": "版本历史保存在当前浏览器本地。版本条目同时保存富文档与投影文本；恢复旧版本不会改写历史条目，而是载入为未保存草稿。",
+      "locator": {
+        "section": "版本历史"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-4",
+      "section": "审查面板",
+      "title_path": "产品手册 / 审查面板",
+      "text": "审查面板显示“已运行的检查中没有发现问题”，这不等于文档合法或合规；没有运行的检查必须与“检查过且无问题”区分显示。",
+      "locator": {
+        "section": "审查面板"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-5",
+      "section": "编辑器",
+      "title_path": "产品手册 / 编辑器",
+      "text": "编辑器支持段落、三级标题、粗体、斜体、下划线、列表、表格、撤销重做与查找替换；审计读取的是确定性的纯文本投影。",
+      "locator": {
+        "section": "编辑器"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-6",
+      "section": "申请材料",
+      "title_path": "产品手册 / 申请材料",
+      "text": "申请材料通常包括申请书、基础合同、营业执照、授权文件与反洗钱资料；材料不齐时会被退回补充，补齐后重新进入审批。",
+      "locator": {
+        "section": "申请材料"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-7",
+      "section": "费率与收费",
+      "title_path": "产品手册 / 费率与收费",
+      "text": "费率按担保金额、期限、客户评级与国别风险确定；开立费、修改费与电报费分别计收，具体以报价单和收费表为准。",
+      "locator": {
+        "section": "费率与收费"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-8",
+      "section": "展期与增额",
+      "title_path": "产品手册 / 展期与增额",
+      "text": "展期或增额需提交书面申请与新的审批材料；审批通过后以修改后的保函文本为准，并相应调整收费与额度占用。",
+      "locator": {
+        "section": "展期与增额"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-9",
+      "section": "索赔材料",
+      "title_path": "产品手册 / 索赔材料",
+      "text": "索赔需提交书面索赔通知、支持声明、违约证明与索赔金额计算；材料不完整时银行会要求补正，补正期间不视为已受理。",
+      "locator": {
+        "section": "索赔材料"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-10",
+      "section": "注销与释放",
+      "title_path": "产品手册 / 注销与释放",
+      "text": "保函到期、申请人申请注销或受益人出具解除通知后，银行可办理注销并释放保证金或授信额度；注销前应确认没有未决索赔。",
+      "locator": {
+        "section": "注销与释放"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-11",
+      "section": "办理时限",
+      "title_path": "产品手册 / 办理时限",
+      "text": "资料齐全且审批通过后，一般三至五个工作日开出保函；涉及跨境担保登记、制裁复核或补充材料时可能延长。",
+      "locator": {
+        "section": "办理时限"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-12",
+      "section": "常见退件原因",
+      "title_path": "产品手册 / 常见退件原因",
+      "text": "常见退件原因包括金额与币种不一致、受益人名称错误、期限缺失、基础合同编号不符与签章不全；退件时应一次性列明补正要求。",
+      "locator": {
+        "section": "常见退件原因"
+      }
+    }
+  ]
+}

@@ -8,10 +8,12 @@
  */
 
 import { EditorContent, useEditorState, type Editor } from '@tiptap/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import type { AssistantSelection } from '../api/assistantTypes';
 import { richToPlainText } from '../rich/plainText';
 import { plainTextToDocument, type RichDocument } from '../rich/richDocument';
+import { selectionFromEditor, selectionFromTextarea } from '../rich/selection';
 import { useRichEditor as defaultUseRichEditor } from '../rich/useRichEditor';
 
 export interface RichEditorProps {
@@ -19,6 +21,15 @@ export interface RichEditorProps {
   onChange: (document: RichDocument) => void;
   /** Whether the projected text differs from the last captured version. */
   dirty?: boolean;
+  /** The latest single-block selection, in projected plain-text offsets (knowledge Q&A). */
+  onSelection?: (selection: AssistantSelection | null) => void;
+  /** Server draft state (document-host design D6). */
+  saveState?: 'local' | 'saving' | 'saved' | 'conflict' | 'error';
+  conflict?: { revision: number; sha256: string } | null;
+  recoveryNotice?: string | null;
+  onUseServer?: () => void;
+  onOverwriteLocal?: () => void;
+  onKeepLocal?: () => void;
   /** Test seam: a throwing implementation exercises the fallback path. */
   useEditorImpl?: (typeof defaultUseRichEditor);
 }
@@ -52,7 +63,7 @@ export const TABLE_TOOLS: Tool[] = [
   { label: '−C', title: 'Delete column', run: (e) => e.chain().focus().deleteColumn().run() },
 ];
 
-function FallbackEditor({ document, onChange, reason }: RichEditorProps & { reason: string }) {
+function FallbackEditor({ document, onChange, onSelection, reason }: RichEditorProps & { reason: string }) {
   return (
     <div>
       <p className="notice notice--warn tiny" role="status">
@@ -65,6 +76,12 @@ function FallbackEditor({ document, onChange, reason }: RichEditorProps & { reas
         value={richToPlainText(document)}
         spellCheck={false}
         onChange={(event) => onChange(plainTextToDocument(event.target.value))}
+        onSelect={(event) => {
+          const target = event.currentTarget;
+          onSelection?.(
+            selectionFromTextarea(target.value, target.selectionStart, target.selectionEnd),
+          );
+        }}
         placeholder="Paste or type the document text here, then run the spec audit."
       />
     </div>
@@ -87,19 +104,56 @@ export function RichEditor(props: RichEditorProps) {
   if (failure || !editor) {
     return <FallbackEditor {...props} reason={failure ?? 'the editor did not start'} />;
   }
-  return <Surface editor={editor} document={props.document} dirty={props.dirty ?? false} />;
+  return (
+    <Surface
+      editor={editor}
+      document={props.document}
+      dirty={props.dirty ?? false}
+      onSelection={props.onSelection}
+      saveState={props.saveState ?? 'local'}
+      conflict={props.conflict ?? null}
+      recoveryNotice={props.recoveryNotice ?? null}
+      onUseServer={props.onUseServer}
+      onOverwriteLocal={props.onOverwriteLocal}
+      onKeepLocal={props.onKeepLocal}
+    />
+  );
 }
 
 function Surface({
   editor,
   document,
   dirty,
+  onSelection,
+  saveState,
+  conflict,
+  recoveryNotice,
+  onUseServer,
+  onOverwriteLocal,
+  onKeepLocal,
 }: {
   editor: Editor;
   document: RichDocument;
   dirty: boolean;
+  onSelection?: (selection: AssistantSelection | null) => void;
+  saveState: 'local' | 'saving' | 'saved' | 'conflict' | 'error';
+  conflict: { revision: number; sha256: string } | null;
+  recoveryNotice: string | null;
+  onUseServer?: () => void;
+  onOverwriteLocal?: () => void;
+  onKeepLocal?: () => void;
 }) {
   const [findOpen, setFindOpen] = useState(false);
+
+  // Selection capture is a read-only projection: it never changes the document or the run.
+  useEffect(() => {
+    if (!onSelection) return;
+    const handler = () => onSelection(selectionFromEditor(editor));
+    editor.on('selectionUpdate', handler);
+    return () => {
+      editor.off('selectionUpdate', handler);
+    };
+  }, [editor, onSelection]);
   // Reactive read of the search plugin: `useEditor` alone does not re-render on every transaction.
   const { total, current } = useEditorState({
     editor,
@@ -149,12 +203,53 @@ function Surface({
 
       {findOpen ? <FindPanel editor={editor} total={total} current={current} onClose={() => setFindOpen(false)} /> : null}
 
+      {conflict ? (
+        <div className="notice notice--warn" role="alert" data-testid="draft-conflict">
+          <strong>Draft conflict.</strong> The server head is revision {conflict.revision}
+          {conflict.sha256 ? ` (${conflict.sha256.slice(0, 12)})` : ''}. Your editor content is
+          unchanged and was not overwritten.
+          {recoveryNotice ? <div className="tiny">{recoveryNotice}</div> : null}
+          <div className="version-actions">
+            <button type="button" onClick={onUseServer}>
+              Use server version
+            </button>
+            <button type="button" onClick={onOverwriteLocal}>
+              Overwrite with local content
+            </button>
+            <button type="button" onClick={onKeepLocal}>
+              Keep local as recovery draft
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <EditorContent editor={editor} className="editor-page" data-testid="editor-rich" />
 
       <div className="editor-footer">
         <span>{richToPlainText(document).length} characters in the audit text</span>
-        <span aria-live="polite" style={{ color: dirty ? 'var(--unsaved)' : 'var(--muted)' }}>
-          {dirty ? 'Unsaved changes' : 'No unsaved changes'}
+        <span
+          aria-live="polite"
+          data-testid="save-state"
+          style={{
+            color:
+              saveState === 'conflict' || saveState === 'error'
+                ? 'var(--unsaved)'
+                : saveState === 'saved'
+                  ? 'var(--muted)'
+                  : 'var(--unsaved)',
+          }}
+        >
+          {saveState === 'conflict'
+            ? 'Save conflict — local content is not saved to the server'
+            : saveState === 'saving'
+              ? 'Saving…'
+              : saveState === 'saved'
+                ? 'Saved to server'
+                : saveState === 'error'
+                  ? 'Save failed — local content is still in the editor'
+                  : dirty
+                    ? 'Unsaved changes (local only)'
+                    : 'No server draft available — local only'}
         </span>
       </div>
     </section>

@@ -11,9 +11,12 @@
 | 标准化（`agent1`：parse → extract → normalize） | 能跑 | fixture 模型下 8 个字段 `extracted`，出处可定位 |
 | 规范审计（`agent4`：`stages/audit`） | 能跑 | 每份保函 **51** 个计划单元，干净文档评估 **33** 项（ratio 0.647），引擎模型调用 **0** |
 | 三栏界面 + 右栏「Rule audit」 | 能跑 | `npm --prefix web run dev` → http://localhost:5173 |
-| 后端 / 前端测试 | 281 / 101 全绿 | `.venv/bin/python -m pytest -q`、`npm --prefix web run test` |
+| 右栏「Knowledge Q&A」知识助手（fixture 语料） | 能跑 | `/api/assistant/*`：202 + 轮询、Claim 级引用、support_level、澄清/弃答/转交、反馈 |
+| 后端 / 前端测试 | 509 后端 / 194 前端全绿 | `.venv/bin/python -m pytest -q`、`npm --prefix web run test` |
 
-还没做（跑的时候会看到"未实现"而不是假成功）：文件导入/OCR、富文本格式、导出、审批流、语义检查、法规覆盖。
+还没做（跑的时候会看到"未实现"而不是假成功）：审批流、自动化/法规 tab、语义检查、法规覆盖；
+知识助手的 PostgreSQL / Worker / 真实身份与快照 / 真实模型与向量检索 / 联网、语音、管理端 UI 都不在 A 里，
+界面用 `Fixture-backed` 横幅明确标注。
 
 ## 1. 起服务
 
@@ -64,6 +67,8 @@ npm --prefix web run dev          # 看到 Local: http://localhost:5173/
    必须是**这份文件**——`fixtures/llm/extract_sample.json` 是照着它录制的，换文本就不是在测链路了。
 2. （可选）左栏「Version history」点 Capture 存一版，报告会绑定到这一版的快照摘要。
 3. **右栏 → Rule audit 标签 → 点 `Run spec audit`**。
+4. （可选）右栏 → **Knowledge Q&A** → 输入问题（或先在中间栏选中一段文字再提问），点 `Ask`；
+   见 §8。
 
 界面内部发三个请求（可在浏览器 Network 面板看到）：
 
@@ -209,15 +214,106 @@ export SMART_EDIT_OCR_LANGS=chi_sim+eng
 DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**推断**（可能猜错标题级别，改了就好）；
 `fallback` 表示这份文件没有可用结构，按段落显示。
 
-**注意**：富文档只存在这个浏览器里（没有数据库）。换机器/清缓存后，编辑器只能恢复审计用的纯文本；
-版本历史里保存了富文档，恢复旧版本时版面也会回来。
+**注意**：富文档现在同时存在于**服务端草稿**（`runs/host.db`）和这个浏览器里；版本历史仍是浏览器本地的捕获。
+换机器/清缓存后，编辑器会从服务端草稿恢复正文；本地版本历史不会跟着走。
 
-## 8. 不开浏览器也能验证同一条链路
+## 7.1 服务端草稿、自动保存与冲突（Hybrid）
+
+- 第一次打开会读取 `GET /documents/demo-document`；没有就创建一个初始草稿。随后自动获取编辑锁。
+- 停止输入 2 秒后自动保存：`PUT /documents/{id}/drafts/{draft_id}`，带 `If-Match: "draft-<revision>"` 和
+  `lock_id` / `fencing_token`。编辑器底部会显示 `Saving…` / `Saved to server` / `Save failed` /
+  `Save conflict`；只有服务端接受后才显示 `Saved to server`。
+- **412 冲突时不会替换编辑器内容**：本地文字保留，恢复草稿写入
+  `localStorage["smart-edit:recovery:demo-document"]`，冲突面板显示服务端 revision/摘要，并提供
+  `Use server version` / `Overwrite with local content` / `Keep local as recovery draft`。
+- 恢复本地版本会通过正常自动保存写成**新的服务端 revision**，不会改写历史。
+- 这是 local/test 的本地宿主：单进程、单 writer、fake 身份；production 会失败关闭。不能据此声称支持多用户或生产部署。
+
+## 7.2 Automation fixture（仅演示 apply/undo 合同）
+
+版本栏底部有一个小的 **Automation fixture** 面板：
+
+1. `Create fixture proposal`：用确定性 `replace_text`（不接模型）生成提案。
+2. `Accept proposal`：只改 disposition，**不改正文**。
+3. `Apply proposal`：创建新 revision + checkpoint + 回执；幂等键保证重复点击不产生第二个 revision。
+4. `Undo application`：只在回执仍是当前头时成功；之后有人改过就返回 `undo_conflict`。
+
+右栏 assistant 的 `Automation` tab 仍然是 `not implemented`；这个面板只演示宿主写入合同，不是完整自动化 UI。
+
+## 8. 知识助手（Knowledge Q&A）
+
+右栏除了 **Rule audit**，还有 **Knowledge Q&A**（Automation / Legal 仍明确标 `not implemented`）。它只做
+"解释 + 引用 + 弃答/澄清/转交"，**不改正文、不审批、不提交、不联网**。
+
+当前演示语料为 **8 个 synthetic source / 72 chunks**（中文 36 + 英文 36：产品 12、规则 12、内部政策 8、帮助指南 4，各一份英文镜像），全部标
+`Fixture-backed`；评测集为 **33 题**（31 个回答题 + 2 个澄清题）。已有本地 `runs/assistant.db` 会在 local/test 启动时补种/升级；若补种失败，删除重建或按下面的 CLI 走 `import → review`。
+
+首次打开知识 tab 默认显示英文 **Can / Cannot / How** 引导卡片和 3 个英文快捷问题（有选区时为
+`What does this passage mean?`）。点击快捷问题只填入输入框，不会自动提交；第一次回答后折叠为 `Show examples`。
+
+可直接演示的问题：`What can you do?`、`What can this assistant not do?`、`How should I ask a question?`、
+`What documents are required for the application?`、`What does URDG 758 article 20 require for claims?`。
+中文问题仍按中文语料回答；`URDG 758 是否适用于德国？` 会走澄清，`帮我改写这段条款` 会转交。
+
+一次提问做的事（Network 面板可见）：
+
+```
+POST /api/assistant/snapshots                 {document_id, text, content_sha256, version_label}
+POST /api/assistant/sessions                  首次提问时创建，绑定当前快照摘要
+POST /api/assistant/sessions/{id}/runs        返回 202 + Run；前端按 poll_after_ms 轮询
+GET  /api/assistant/runs/{id}                 直到 succeeded / failed / cancelled / timed_out
+GET  /api/assistant/messages/{id}/citations/{cid}   打开引用卡片时读取获准摘录与定位
+PUT  /api/assistant/messages/{id}/feedback    Helpful / Not helpful
+```
+
+**能看到什么**：`outcome`（answered / needs_clarification / insufficient_evidence / unable_to_assess /
+needs_handoff）、`support_level`（strong / qualified / insufficient / not_applicable）、Claim 级引用、
+`limitations`、澄清问题、转交目标；点引用卡片只显示**本次获准的摘录**和定位（章节/页码/选区偏移），
+不返回整份来源或对象存储地址。会话绑定快照；编辑器改了文字后会话会显示"旧快照，请新建会话"。
+
+**三条诚实边界**：
+
+| 看到 | 含义 |
+|---|---|
+| 顶部 `Fixture-backed` 横幅 | 语料是 `fixtures/knowledge/*` 的**合成演示**文本，不是真实法规；回答不是法律意见 |
+| `insufficient_evidence` | 检索正常但没有足够证据；**不是**"文档合规" |
+| `needs_handoff` | 修改正文/审查/法规结论请求被转交；助手没有执行任何操作 |
+
+**不用浏览器也能看知识层**（导入 → 待审核 → 独立审核 → 发布 → 撤回）：
+
+```bash
+.venv/bin/python -m app.knowledge.cli --db runs/assistant.db seed
+.venv/bin/python -m app.knowledge.cli --db runs/assistant.db list --source KS-PRODUCT-001
+.venv/bin/python -m app.knowledge.cli --db runs/assistant.db withdraw \
+  --source KS-PRODUCT-001 --reason "superseded by policy"
+.venv/bin/python scripts/assistant_eval.py      # 33 个合成问题的引用命中/弃答/澄清报告
+# 实测：outcome_accuracy 1.0 · citation_hit_rate 1.0（31 个回答题 + 2 个澄清题）
+```
+
+**A 不做（C 再做）**：PostgreSQL、真实 Worker/队列、真实身份/组织 ACL、宿主快照服务、真实模型与
+向量/重排、受控联网、语音/截图、管理端 UI、导出。`SMART_EDIT_ASSISTANT_MODE=production` 时检测到
+fake adapter 会**启动失败**，而不是假装生产可用。
+
+**Sample input from UI
+```
+建议直接试这些问题（fixture 都能命中）
+目的	问题	预期
+产品 FAQ	提交版本后编辑锁会释放吗？	answered，引用产品手册
+文件导入	支持导入哪些文件类型？	answered，引用文件导入段
+规则解释	URDG 758 第 20 条对索赔有什么要求？	answered，引用贸易规则
+缺信息澄清	URDG 758 是否适用于德国？	needs_clarification（问规则版本/法域/日期）
+文档选区	选中 URDG 758，问 这段规则是什么意思？	answered，引用 document_snapshot，定位带选区偏移
+无证据	How do I enable dark mode in the toolbar?	insufficient_evidence，无伪造引用
+转交	帮我改写这段条款 / 帮我检查这份文档	needs_handoff（automation / standards_audit）
+```
+
+## 9. 不开浏览器也能验证同一条链路
 
 ```bash
 # 1) 引擎本体（无 HTTP、无模型）
 .venv/bin/python scripts/audit_demo.py              # 三种文档：0.647 / 0.529 / 0.020 + 闸门决策
 .venv/bin/python -m app.rules.doctor                # 规则包体检，退出码即门禁
+.venv/bin/python scripts/automation_demo.py         # fixture 提案→接受→应用→撤销（内存库，无模型）
 
 # 2) 前端 + 真实 HTTP 的端到端（后端放在 8010，避免和浏览器环境互相干扰）
 SMART_EDIT_LLM=fixture:fixtures/llm/extract_sample.json \
@@ -232,10 +328,18 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
 # 期望：did-not-run | no model provider configured | Field checks did not run
 
 # 4) 全部回归
-.venv/bin/python -m pytest -q && npm --prefix web run test && npm --prefix web run typecheck
+.venv/bin/python -m pytest -q \
+  && npm --prefix web run test \
+  && npm --prefix web run typecheck \
+  && npm --prefix web run build
+# 实测：509 passed（含知识助手 HTTP/真实 socket e2e、document host、automation apply/undo）· 194 前端测试通过 · typecheck/build clean
+
+# 5) 真浏览器里的知识助手与草稿/冲突/apply（Playwright 会自己起 8000/8010/5173/5174）
+PW_CHANNEL=chrome npm --prefix web run e2e -- e2e/knowledge.spec.ts --project=desktop
+PW_CHANNEL=chrome npm --prefix web run e2e -- e2e/draft.spec.ts --project=desktop
 ```
 
-## 9. 排查表
+## 10. 排查表
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
@@ -245,11 +349,14 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
 | `Checks did not run` | 后端没设 `SMART_EDIT_LLM` | 按 §1 带 fixture 重启，或接受诚实路径 |
 | Gate 一直是 `Not asked` | 正常：UI 目前不问闸门（`/audit/*` 属后续 change） | 想验闸门语义用 `scripts/audit_demo.py`，或 `app/audit/gate.py::evaluate(state, "start_approval", digest)` |
 | 刚点完就 `Report is stale` | 审计开始后编辑框内容变了（含末尾多一个换行） | 保持文本不动再跑一次 |
+| 编辑器底部 `Save conflict` | 服务端草稿被另一个标签页/操作推进了 revision | 用冲突面板选择 `Use server version` / `Overwrite with local content`；本地内容已存为恢复草稿 |
+| `lock_conflict` / `409` | 同一草稿已有活动锁（另一个标签页或旧进程） | 关闭另一个页面，或重启后端释放本地锁；不要绕过锁直接改 `host.db` |
+| `undo_conflict` | apply 之后又有人改了正文 | 基于当前头重新生成提案；不要尝试撤销旧回执 |
 
 两个 digest 不要混：面板底部的 `server digest` 是后端对"文件＋字段"做的规范化哈希，左侧快照的
 digest 是浏览器对纯文本做的 SHA-256，**算法不同**，代码里也刻意不比较它们。
 
-## 10. 想再进一步
+## 11. 想再进一步
 
 - 换真实文档：不设 `SMART_EDIT_LLM` 走诚实路径；要真抽取需接 provider（`openai:` 仍是保留值）。
 - 加规则：改 `app/rules/bundles/guarantee.yaml`，先 `python -m app.rules.doctor` 过门禁（每条规则必须有

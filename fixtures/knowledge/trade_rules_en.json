@@ -1,0 +1,148 @@
+{
+  "title": "Synthetic Trade Rules Summary (demo, not official)",
+  "version_id": "KV-RULES-001-EN-v1",
+  "source": {
+    "source_id": "KS-RULES-001-EN",
+    "source_type": "trade_rule",
+    "publisher": "Synthetic Trade Rules Demo",
+    "version_label": "demo-1",
+    "language": "en",
+    "scope": "organization",
+    "license_reference": "synthetic-demo-not-official",
+    "synthetic": true,
+    "jurisdictions": [
+      "GB",
+      "DE"
+    ],
+    "effective_from": "2024-01-01",
+    "effective_to": null
+  },
+  "chunks": [
+    {
+      "chunk_id": "KC-RULES-001-EN-1",
+      "section": "URDG 758 claims",
+      "title_path": "Trade rules / URDG 758 / Claims",
+      "text": "Synthetic summary: URDG 758 article 20 requires a claim to be made in writing and accompanied by a supporting statement explaining the claimed amount and the applicant's default. This is a demo summary, not the official ICC text.",
+      "locator": {
+        "section": "URDG 758 claims",
+        "page": 12
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-2",
+      "section": "URDG 758 expiry and extension",
+      "title_path": "Trade rules / URDG 758 / Expiry",
+      "text": "The expiry date is determined by the guarantee text. An extension must be requested in writing before expiry and expressly agreed; it is not extended automatically without consent.",
+      "locator": {
+        "section": "URDG 758 expiry and extension",
+        "page": 13
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-3",
+      "section": "ISP98 and UCP 600",
+      "title_path": "Trade rules / Practice / ISP98 and UCP 600",
+      "text": "ISP98 applies to standby letters of credit and UCP 600 applies to commercial letters of credit. The applicable rules depend on the rules expressly cited in the text and the instrument type, not on the title alone.",
+      "locator": {
+        "section": "ISP98 and UCP 600",
+        "page": 20
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-4",
+      "section": "Applicability and version",
+      "title_path": "Trade rules / Applicability",
+      "text": "The governing jurisdiction, rule name and version must be stated in the guarantee text. Without the jurisdiction, version or applicable date, the system cannot determine whether the rules apply and must state the missing information.",
+      "locator": {
+        "section": "Applicability and version",
+        "page": 3
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-5",
+      "section": "Independence principle",
+      "title_path": "Trade rules / Independent guarantee",
+      "text": "A demand guarantee is generally independent of the underlying commercial contract; the bank deals with documents and written demands and does not decide disputes under the underlying contract. This is an explanatory summary, not legal advice.",
+      "locator": {
+        "section": "Independence principle",
+        "page": 5
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-6",
+      "section": "URDG 758 definitions and scope",
+      "title_path": "Trade rules / URDG 758 / Definitions",
+      "text": "Synthetic summary: URDG 758 applies to demand guarantees that expressly incorporate it; the guarantee is independent of the underlying contract and the guarantor deals only with the guarantee text and written demands. This is not the official ICC text.",
+      "locator": {
+        "article": "1-3",
+        "section": "URDG 758 definitions and scope",
+        "page": 6
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-7",
+      "section": "URDG 758 issuance and effectiveness",
+      "title_path": "Trade rules / URDG 758 / Issuance and effectiveness",
+      "text": "Synthetic summary: once issued, a guarantee becomes effective according to its terms; effectiveness conditions, delivery and revocation rules must be stated in the guarantee text and cannot be changed by an oral request from the applicant.",
+      "locator": {
+        "article": "4-7",
+        "section": "URDG 758 issuance and effectiveness",
+        "page": 7
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-8",
+      "section": "URDG 758 examination and refusal",
+      "title_path": "Trade rules / URDG 758 / Examination and refusal",
+      "text": "Synthetic summary: the guarantor examines a demand within the period stated in the guarantee; a refusal must list all discrepancies at once and the demand and examination records must be retained.",
+      "locator": {
+        "article": "19-21",
+        "section": "URDG 758 examination and refusal",
+        "page": 11
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-9",
+      "section": "URDG 758 force majeure and termination",
+      "title_path": "Trade rules / URDG 758 / Force majeure and termination",
+      "text": "Synthetic summary: if force majeure prevents examination, the guarantee text governs whether time is extended or the guarantee terminates; after termination the guarantor has no liability for new demands.",
+      "locator": {
+        "article": "25-26",
+        "section": "URDG 758 force majeure and termination",
+        "page": 18
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-10",
+      "section": "UCP 600 independence and definitions",
+      "title_path": "Trade rules / UCP 600 / Independence",
+      "text": "Synthetic summary: a credit under UCP 600 is independent of the underlying sale contract; banks deal with documents and do not decide disputes about goods or the underlying contract.",
+      "locator": {
+        "article": "3-5",
+        "section": "UCP 600 independence and definitions",
+        "page": 4
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-11",
+      "section": "UCP 600 examination and discrepancies",
+      "title_path": "Trade rules / UCP 600 / Examination and discrepancies",
+      "text": "Synthetic summary: UCP 600 requires banks to examine documents within a reasonable period after presentation, normally no more than five banking days; discrepancies must be notified to the presenter at once.",
+      "locator": {
+        "article": "14-16",
+        "section": "UCP 600 examination and discrepancies",
+        "page": 9
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-12",
+      "section": "ISP98 and ISBP 821 points",
+      "title_path": "Trade rules / ISP98 / ISBP 821",
+      "text": "Synthetic summary: ISP98 applies to standby letters of credit; ISBP 821 is an examination guide for international standard banking practice, not an independent rule set. Neither replaces the credit or guarantee text.",
+      "locator": {
+        "section": "ISP98 and ISBP 821 points",
+        "page": 21
+      }
+    }
+  ]
+}

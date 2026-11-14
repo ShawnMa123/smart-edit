@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { Fragment, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { ApiError } from './api/errors';
 import { createRun, createRunWithFiles, triggerStage } from './api/client';
+import { acquireLock, createDocument, getDocument, getDraft, saveDraft, type DraftView, type LockView } from './api/documents';
+import type { AssistantSelection } from './api/assistantTypes';
 import type { ImportedDocument } from './api/types';
 import { auditReducer, initialAuditState } from './auditMachine';
 import { fieldChecksRan } from './auditView';
@@ -10,6 +12,7 @@ import { plainTextToDocument, type RichDocument } from './rich/richDocument';
 import { createSnapshot, digestText } from './snapshot';
 import { versionStore, type VersionEntry } from './versionStore';
 import { AssistantPanel } from './components/AssistantPanel';
+import { AutomationFixturePanel } from './components/AutomationFixturePanel';
 import { DocumentActions } from './components/DocumentActions';
 import { ImportReport, initialImportState, type ImportState } from './components/ImportReport';
 import { RichEditor } from './components/RichEditor';
@@ -18,6 +21,13 @@ import { useNarrowViewport } from './components/useViewport';
 
 const DOCUMENT_ID = 'demo-document';
 type PaneId = 'versions' | 'editor' | 'assistant';
+type SaveState = 'local' | 'saving' | 'saved' | 'conflict' | 'error';
+
+interface ConflictState {
+  revision: number;
+  sha256: string;
+  server: DraftView | null;
+}
 
 export function App() {
   const narrow = useNarrowViewport();
@@ -35,6 +45,198 @@ export function App() {
   const [templateId, setTemplateId] = useState('');
   /** File-import round: what was uploaded and how it went (`document-import` D10). */
   const [importState, setImportState] = useState<ImportState>(initialImportState);
+  /** Latest editor selection in projected text offsets; sent only when asking about a passage. */
+  const [knowledgeSelection, setKnowledgeSelection] = useState<AssistantSelection | null>(null);
+  const [draft, setDraft] = useState<DraftView | null>(null);
+  const [lock, setLock] = useState<LockView | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('local');
+  const [conflict, setConflict] = useState<ConflictState | null>(null);
+  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
+  const draftRef = useRef<DraftView | null>(null);
+  const lockRef = useRef<LockView | null>(null);
+  const richDocRef = useRef<RichDocument>(richDoc);
+  const userEditedRef = useRef(false);
+  const saveTimer = useRef<number | null>(null);
+  const aliveRef = useRef(true);
+
+  // First load: the server draft is authoritative. If none exists, seed one from the editor.
+  useEffect(() => {
+    aliveRef.current = true;
+    const load = async () => {
+      try {
+        let view: DraftView;
+        try {
+          view = await getDocument(DOCUMENT_ID);
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 404) {
+            view = await createDocument({
+              document_id: DOCUMENT_ID,
+              title: 'Demand Guarantee',
+              content: plainTextToDocument(''),
+            });
+          } else {
+            throw error;
+          }
+        }
+        const lockView = await acquireLock(view.document_id, view.draft_id);
+        if (!aliveRef.current) return;
+        draftRef.current = view;
+        lockRef.current = lockView;
+        setDraft(view);
+        setLock(lockView);
+        if (!userEditedRef.current) {
+          setRichDoc(view.content);
+          richDocRef.current = view.content;
+          setDirty(false);
+          setSaveState('saved');
+        } else {
+          // The operator typed before the draft arrived: never replace their content. Save it
+          // against the revision we just loaded instead.
+          scheduleSave(richDocRef.current);
+        }
+      } catch {
+        if (aliveRef.current) setSaveState('local');
+      }
+    };
+    void load();
+    return () => {
+      aliveRef.current = false;
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+    // The editor starts empty; a later local edit schedules its own save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const applySaveResult = (next: DraftView) => {
+    draftRef.current = next;
+    setDraft(next);
+    setDirty(false);
+    setSaveState('saved');
+    setConflict(null);
+    setRecoveryNotice(null);
+  };
+
+  const handleConflict = (error: ApiError, nextDoc: RichDocument, nextText: string) => {
+    const detail = (error.detail ?? {}) as { current_revision?: number; content_sha256?: string };
+    const state: ConflictState = {
+      revision: detail.current_revision ?? 0,
+      sha256: detail.content_sha256 ?? '',
+      server: null,
+    };
+    setConflict(state);
+    setSaveState('conflict');
+    try {
+      globalThis.localStorage?.setItem(
+        `smart-edit:recovery:${DOCUMENT_ID}`,
+        JSON.stringify({
+          text: nextText,
+          rich: nextDoc,
+          at: new Date().toISOString(),
+          serverRevision: state.revision,
+          serverSha256: state.sha256,
+        }),
+      );
+      setRecoveryNotice('A recovery draft is stored in this browser.');
+    } catch {
+      setRecoveryNotice('Could not store a recovery draft in this browser.');
+    }
+    const current = draftRef.current;
+    if (current) {
+      void getDraft(current.document_id, current.draft_id)
+        .then((server) => {
+          if (aliveRef.current) setConflict((previous) => (previous ? { ...previous, server } : previous));
+        })
+        .catch(() => undefined);
+    }
+  };
+
+  const scheduleSave = (nextDoc: RichDocument) => {
+    setDirty(true);
+    setSaveState('saving');
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    const currentDraft = draftRef.current;
+    const currentLock = lockRef.current;
+    if (!currentDraft || !currentLock) {
+      setSaveState('local');
+      return;
+    }
+    const nextText = richToPlainText(nextDoc);
+    saveTimer.current = window.setTimeout(() => {
+      void saveDraft(
+        currentDraft.document_id,
+        currentDraft.draft_id,
+        currentDraft.revision,
+        {
+          content: nextDoc,
+          text: nextText,
+          lockId: currentLock.lock_id,
+          fencingToken: currentLock.fencing_token,
+        },
+      )
+        .then((next) => {
+          if (aliveRef.current) applySaveResult(next);
+        })
+        .catch((error) => {
+          if (!aliveRef.current) return;
+          if (error instanceof ApiError && error.status === 412) {
+            handleConflict(error, nextDoc, nextText);
+          } else {
+            setSaveState('error');
+          }
+        });
+    }, 2000);
+  };
+
+  const useServerVersion = async () => {
+    let server = conflict?.server;
+    const current = draftRef.current;
+    if (!server && current) {
+      try {
+        server = await getDraft(current.document_id, current.draft_id);
+      } catch {
+        return;
+      }
+    }
+    if (server) {
+      richDocRef.current = server.content;
+      setRichDoc(server.content);
+      applySaveResult(server);
+    }
+    setConflict(null);
+    setPane('editor');
+  };
+
+  const overwriteWithLocal = async () => {
+    let server = conflict?.server;
+    const current = draftRef.current;
+    const currentLock = lockRef.current;
+    if (!server && current) {
+      try {
+        server = await getDraft(current.document_id, current.draft_id);
+      } catch {
+        return;
+      }
+    }
+    if (!server || !currentLock) return;
+    try {
+      const next = await saveDraft(server.document_id, server.draft_id, server.revision, {
+        content: richDoc,
+        text,
+        lockId: currentLock.lock_id,
+        fencingToken: currentLock.fencing_token,
+      });
+      if (!aliveRef.current) return;
+      applySaveResult(next);
+      setPane('editor');
+    } catch {
+      if (aliveRef.current) setSaveState('error');
+    }
+  };
+
+  const keepLocalRecovery = () => {
+    setConflict(null);
+    setSaveState('local');
+  };
 
   // Keep the "current" digest in step with the editor, so staleness is instant on the next keystroke.
   useEffect(() => {
@@ -59,8 +261,12 @@ export function App() {
   /** Every edit arrives as a document; the projected text is derived, never typed twice. */
   const handleDocumentChange = (next: RichDocument) => {
     if (next === richDoc) return;
+    userEditedRef.current = true;
+    richDocRef.current = next;
     setRichDoc(next);
-    setDirty(richToPlainText(next) !== text);
+    // A selection from the previous text no longer maps to the snapshot offsets.
+    setKnowledgeSelection(null);
+    scheduleSave(next);
   };
 
   const handleCapture = async () => {
@@ -79,10 +285,13 @@ export function App() {
     const restored = versionStore.restore(DOCUMENT_ID, id);
     if (restored === null) return;
     // Older entries have no rich document: they come back as paragraphs of the same text.
-    setRichDoc(versionStore.restoreRich(DOCUMENT_ID, id) ?? plainTextToDocument(restored));
+    const next = versionStore.restoreRich(DOCUMENT_ID, id) ?? plainTextToDocument(restored);
+    userEditedRef.current = true;
+    richDocRef.current = next;
+    setRichDoc(next);
     setCurrentVersionId(id);
-    setDirty(true);
     setPane('editor');
+    scheduleSave(next);
   };
 
   const handleClear = () => {
@@ -117,8 +326,11 @@ export function App() {
       return false;
     }
     setRichDoc(next);
-    setDirty(true);
+    richDocRef.current = next;
+    userEditedRef.current = true;
+    setKnowledgeSelection(null);
     setPane('editor');
+    scheduleSave(next);
     return true;
   };
 
@@ -159,6 +371,13 @@ export function App() {
   // run that finishes afterwards can never be rendered as if it were still current.
   const handleStopWaiting = () => dispatch({ type: 'reset' });
 
+  const handleApplied = (view: DraftView) => {
+    applySaveResult(view);
+    richDocRef.current = view.content;
+    setRichDoc(view.content);
+    setKnowledgeSelection(null);
+  };
+
   const panes: Record<PaneId, JSX.Element> = {
     versions: (
       <VersionPanel
@@ -167,10 +386,28 @@ export function App() {
         onCapture={() => void handleCapture()}
         onRestore={handleRestore}
         onClear={handleClear}
-      />
+      >
+        <AutomationFixturePanel
+          documentId={DOCUMENT_ID}
+          draft={draft}
+          lock={lock}
+          onApplied={handleApplied}
+        />
+      </VersionPanel>
     ),
     editor: (
-      <RichEditor document={richDoc} onChange={handleDocumentChange} dirty={dirty} />
+      <RichEditor
+        document={richDoc}
+        onChange={handleDocumentChange}
+        dirty={dirty}
+        onSelection={setKnowledgeSelection}
+        saveState={saveState}
+        conflict={conflict}
+        recoveryNotice={recoveryNotice}
+        onUseServer={useServerVersion}
+        onOverwriteLocal={() => void overwriteWithLocal()}
+        onKeepLocal={keepLocalRecovery}
+      />
     ),
     assistant: (
       <AssistantPanel
@@ -181,6 +418,12 @@ export function App() {
         templateId={templateId}
         onTemplateChange={setTemplateId}
         now={now}
+        knowledge={{
+          documentId: DOCUMENT_ID,
+          digest: currentDigest,
+          text,
+          selection: knowledgeSelection,
+        }}
       />
     ),
   };
@@ -199,7 +442,9 @@ export function App() {
           <h1>Demand Guarantee · 见索即付保函</h1>
           <div className="meta tiny">
             {versions.length} captured version{versions.length === 1 ? '' : 's'} ·{' '}
-            {text.length} characters · history stored in this browser
+            {text.length} characters ·{' '}
+            {draft ? `server draft rev ${draft.revision}` : 'server draft local-only'} ·{' '}
+            history stored in this browser
           </div>
         </div>
         <DocumentActions onImport={(files) => void handleImport(files)} />
@@ -229,7 +474,15 @@ export function App() {
       ) : null}
 
       <div className="work-grid" data-narrow={narrow}>
-        {narrow ? panes[pane] : [panes.versions, panes.editor, panes.assistant]}
+        {narrow ? (
+          panes[pane]
+        ) : (
+          [
+            <Fragment key="versions">{panes.versions}</Fragment>,
+            <Fragment key="editor">{panes.editor}</Fragment>,
+            <Fragment key="assistant">{panes.assistant}</Fragment>,
+          ]
+        )}
       </div>
     </div>
   );

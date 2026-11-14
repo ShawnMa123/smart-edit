@@ -1,0 +1,148 @@
+{
+  "title": "合成贸易规则摘要（演示用，非官方原文）",
+  "version_id": "KV-RULES-001-v2",
+  "source": {
+    "source_id": "KS-RULES-001",
+    "source_type": "trade_rule",
+    "publisher": "Synthetic Trade Rules Demo",
+    "version_label": "demo-2",
+    "language": "zh-CN",
+    "scope": "organization",
+    "license_reference": "synthetic-demo-not-official",
+    "synthetic": true,
+    "jurisdictions": [
+      "GB",
+      "DE"
+    ],
+    "effective_from": "2024-01-01",
+    "effective_to": null
+  },
+  "chunks": [
+    {
+      "chunk_id": "KC-RULES-001-1",
+      "section": "URDG 758 索赔",
+      "title_path": "贸易规则 / URDG 758 / 索赔",
+      "text": "URDG 758 第 20 条要求索赔以书面形式提出，并附支持声明说明索赔金额与申请人违约情形。本段是合成摘要，不是官方条文，不能替代规则原文。",
+      "locator": {
+        "section": "URDG 758 索赔",
+        "page": 12
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-2",
+      "section": "URDG 758 到期与展期",
+      "title_path": "贸易规则 / URDG 758 / 到期",
+      "text": "保函的到期日按保函文本确定。需要展期时，应在到期前以书面形式提出并取得明确同意；未取得同意不自动延长。",
+      "locator": {
+        "section": "URDG 758 到期与展期",
+        "page": 13
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-3",
+      "section": "ISP98 与 UCP 600",
+      "title_path": "贸易规则 / 惯例 / ISP98 与 UCP 600",
+      "text": "ISP98 适用于备用信用证，UCP 600 适用于商业信用证。选择哪套规则取决于文本明确引用的规则与文书类型，不能仅凭标题推断。",
+      "locator": {
+        "section": "ISP98 与 UCP 600",
+        "page": 20
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-4",
+      "section": "适用性与版本",
+      "title_path": "贸易规则 / 适用性",
+      "text": "适用法域、规则名称与版本必须在保函文本中明确。缺少法域、版本或适用日期时，系统不能判断该规则是否适用，只能说明缺失信息。",
+      "locator": {
+        "section": "适用性与版本",
+        "page": 3
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-5",
+      "section": "独立保函原则",
+      "title_path": "贸易规则 / 独立保函",
+      "text": "见索即付保函通常与基础商业合同相互独立；银行处理的是单据与书面索赔，不介入基础合同争议。本段仅解释概念，不构成法律意见。",
+      "locator": {
+        "section": "独立保函原则",
+        "page": 5
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-6",
+      "section": "URDG 758 定义与适用",
+      "title_path": "贸易规则 / URDG 758 / 定义",
+      "text": "合成摘要：URDG 758 适用于文本明确纳入的见索即付保函；保函与基础合同相互独立，担保人只处理保函文本与书面索赔。本段不是 ICC 官方条文。",
+      "locator": {
+        "article": "1-3",
+        "section": "URDG 758 定义与适用",
+        "page": 6
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-7",
+      "section": "URDG 758 开立与生效",
+      "title_path": "贸易规则 / URDG 758 / 开立与生效",
+      "text": "合成摘要：保函开立后按文本约定生效；生效条件、交付方式与撤销规则必须在保函文本中明确，不能由申请人单方口头变更。",
+      "locator": {
+        "article": "4-7",
+        "section": "URDG 758 开立与生效",
+        "page": 7
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-8",
+      "section": "URDG 758 审单与拒付",
+      "title_path": "贸易规则 / URDG 758 / 审单与拒付",
+      "text": "合成摘要：担保人收到索赔后应在保函约定的期限内审单；拒付时应一次性说明不符点，并保留索赔与审单记录。",
+      "locator": {
+        "article": "19-21",
+        "section": "URDG 758 审单与拒付",
+        "page": 11
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-9",
+      "section": "URDG 758 不可抗力与终止",
+      "title_path": "贸易规则 / URDG 758 / 不可抗力与终止",
+      "text": "合成摘要：不可抗力导致无法审单时，应按保函文本处理期限顺延或终止；保函终止后担保人不再承担新的索赔责任。",
+      "locator": {
+        "article": "25-26",
+        "section": "URDG 758 不可抗力与终止",
+        "page": 18
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-10",
+      "section": "UCP 600 独立性与定义",
+      "title_path": "贸易规则 / UCP 600 / 独立性",
+      "text": "合成摘要：UCP 600 下的信用证与基础销售合同相互独立；银行只处理单据，不介入货物或基础合同争议。",
+      "locator": {
+        "article": "3-5",
+        "section": "UCP 600 独立性与定义",
+        "page": 4
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-11",
+      "section": "UCP 600 审单与不符点",
+      "title_path": "贸易规则 / UCP 600 / 审单与不符点",
+      "text": "合成摘要：UCP 600 要求银行在收到单据后的合理期限内审单，通常不超过五个营业日；发现不符点应一次性通知交单方。",
+      "locator": {
+        "article": "14-16",
+        "section": "UCP 600 审单与不符点",
+        "page": 9
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-12",
+      "section": "ISP98 与 ISBP 821 要点",
+      "title_path": "贸易规则 / ISP98 / ISBP 821",
+      "text": "合成摘要：ISP98 适用于备用信用证；ISBP 821 是国际标准银行实务的审单指引，不是独立规则。两者都不能替代信用证或保函文本。",
+      "locator": {
+        "section": "ISP98 与 ISBP 821 要点",
+        "page": 21
+      }
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+"""Use-cases for the local document host (drafts, checkpoints, locks)."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from app.documents.errors import HostError, HostNotFound
+from app.documents.schemas import DocumentCreate, DraftSave, Heartbeat, LockCreate
+from app.documents.store import HostStore
+from app.shared.ports import IdsPort, Principal
+
+
+class DocumentService:
+    def __init__(self, store: HostStore, identity: Any, clock: Any, ids: IdsPort) -> None:
+        self.store = store
+        self.identity = identity
+        self.clock = clock
+        self.ids = ids
+
+    def principal(self, request) -> Principal:
+        return self.identity.resolve(request)
+
+    # --- views ---------------------------------------------------------------------------------
+    def _draft_view(self, draft: dict[str, Any], document: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "document_id": draft["document_id"],
+            "draft_id": draft["draft_id"],
+            "title": document.get("title"),
+            "revision": int(draft["revision"]),
+            "etag": f"draft-{int(draft['revision'])}",
+            "content": json.loads(draft["content_json"]),
+            "text": draft["text"],
+            "content_sha256": draft["text_sha256"],
+            "variables": json.loads(draft.get("variables_json") or "{}"),
+            "variables_version": int(draft.get("variables_version") or 1),
+            "updated_at": draft.get("updated_at"),
+        }
+
+    def _document(self, principal: Principal, document_id: str) -> dict[str, Any]:
+        document = self.store.get_document(document_id)
+        if (
+            not document
+            or document["owner_user_id"] != principal.user_id
+            or document["workspace_id"] != principal.workspace_id
+        ):
+            raise HostNotFound("document not found")
+        return document
+
+    def _draft(self, principal: Principal, document_id: str, draft_id: str) -> tuple[dict, dict]:
+        document = self._document(principal, document_id)
+        draft = self.store.get_draft(draft_id)
+        if not draft or draft["document_id"] != document_id:
+            raise HostNotFound("draft not found")
+        return document, draft
+
+    def view(self, principal: Principal, document_id: str, draft_id: str) -> dict[str, Any]:
+        document, draft = self._draft(principal, document_id, draft_id)
+        return self._draft_view(draft, document)
+
+    def document_view(self, principal: Principal, document_id: str) -> dict[str, Any]:
+        document = self._document(principal, document_id)
+        draft = self.store.find_draft_by_document(document_id)
+        if not draft:
+            raise HostNotFound("draft not found")
+        return self._draft_view(draft, document)
+
+    # --- commands ------------------------------------------------------------------------------
+    def create_document(
+        self, principal: Principal, payload: DocumentCreate, request_id: str
+    ) -> dict[str, Any]:
+        document_id = payload.document_id or self.ids.new("doc")
+        if self.store.get_document(document_id):
+            raise HostError(409, "document_exists", "a document with this id already exists")
+        draft = self.store.create_document(
+            workspace_id=principal.workspace_id,
+            owner_user_id=principal.user_id,
+            title=payload.title,
+            content=payload.content,
+            text=payload.text,
+            variables=payload.variables,
+            document_id=document_id,
+            created_by=principal.user_id,
+        )
+        document = self._document(principal, document_id)
+        return self._draft_view(draft, document)
+
+    def save_draft(
+        self,
+        principal: Principal,
+        document_id: str,
+        draft_id: str,
+        expected_revision: int,
+        payload: DraftSave,
+        request_id: str,
+    ) -> dict[str, Any]:
+        document, _ = self._draft(principal, document_id, draft_id)
+        self.store.validate_lock(
+            draft_id=draft_id,
+            lock_id=payload.lock_id,
+            owner_user_id=principal.user_id,
+            fencing_token=payload.fencing_token,
+        )
+        draft = self.store.save_draft(
+            draft_id=draft_id,
+            expected_revision=expected_revision,
+            content=payload.content,
+            text=payload.text,
+            variables=payload.variables,
+            actor=principal.user_id,
+            request_id=request_id,
+        )
+        return self._draft_view(draft, document)
+
+    def restore_checkpoint(
+        self,
+        principal: Principal,
+        document_id: str,
+        draft_id: str,
+        checkpoint_id: str,
+        expected_revision: int,
+        request_id: str,
+    ) -> dict[str, Any]:
+        document, _ = self._draft(principal, document_id, draft_id)
+        draft = self.store.restore_checkpoint(
+            draft_id=draft_id,
+            checkpoint_id=checkpoint_id,
+            expected_revision=expected_revision,
+            actor=principal.user_id,
+            request_id=request_id,
+        )
+        return self._draft_view(draft, document)
+
+    def acquire_lock(
+        self, principal: Principal, document_id: str, draft_id: str, payload: LockCreate
+    ) -> dict[str, Any]:
+        self._draft(principal, document_id, draft_id)
+        return self.store.acquire_lock(
+            draft_id=draft_id,
+            owner_user_id=principal.user_id,
+            session_id=payload.session_id,
+            lease_seconds=payload.lease_seconds,
+        )
+
+    def heartbeat(
+        self, principal: Principal, document_id: str, lock_id: str, payload: Heartbeat
+    ) -> dict[str, Any]:
+        lock = self.store.one("SELECT * FROM document_locks WHERE lock_id = ?", (lock_id,))
+        if not lock:
+            raise HostNotFound("lock not found")
+        self._draft(principal, document_id, lock["draft_id"])
+        return self.store.heartbeat_lock(
+            lock_id=lock_id, owner_user_id=principal.user_id, lease_seconds=payload.lease_seconds
+        )
+
+    def release(self, principal: Principal, document_id: str, lock_id: str) -> dict[str, Any]:
+        lock = self.store.one("SELECT * FROM document_locks WHERE lock_id = ?", (lock_id,))
+        if not lock:
+            raise HostNotFound("lock not found")
+        self._draft(principal, document_id, lock["draft_id"])
+        return self.store.release_lock(lock_id=lock_id, owner_user_id=principal.user_id)
+
+
+__all__ = ["DocumentService"]

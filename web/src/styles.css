@@ -277,6 +277,93 @@ button.primary {
   flex-wrap: wrap;
 }
 
+/* Knowledge Q&A (task 5.2): a reading surface, not a chat transcript. */
+.knowledge-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knowledge-onboarding {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.knowledge-onboarding summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.knowledge-onboarding p {
+  margin: 4px 0;
+}
+
+.knowledge-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.knowledge-suggestions button {
+  font-size: 12px;
+}
+
+.knowledge-show-examples {
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.knowledge-panel textarea {
+  width: 100%;
+  min-height: 64px;
+  font: inherit;
+  resize: vertical;
+}
+
+.knowledge-binding {
+  border-left: 2px solid var(--border);
+  padding-left: 6px;
+}
+
+.knowledge-answer {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.knowledge-claims,
+.knowledge-limitations {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.knowledge-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.knowledge-citations button {
+  font-size: 12px;
+}
+
+.knowledge-citation {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.knowledge-citation blockquote {
+  margin: 4px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
 .checks {
   width: 100%;
   border-collapse: collapse;

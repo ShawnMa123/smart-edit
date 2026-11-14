@@ -29,15 +29,39 @@ export class Workspace {
 
   async open(): Promise<void> {
     await this.page.goto('/');
-    await expect(this.textarea).toBeVisible();
+    await expect(this.editor).toBeVisible();
+  }
+
+  get editor() {
+    return this.page
+      .locator('[data-testid="editor-rich"], [data-testid="editor-text"]')
+      .first();
   }
 
   get textarea() {
-    return this.page.locator('[data-testid="editor-text"]');
+    return this.editor;
   }
 
   async paste(text: string): Promise<void> {
+    const rich = this.page.locator('[data-testid="editor-rich"] .ProseMirror');
+    if ((await rich.count()) > 0) {
+      await rich.click();
+      await this.page.keyboard.press('Meta+A');
+      await this.page.keyboard.insertText(text);
+      return;
+    }
     await this.textarea.fill(text);
+  }
+
+  async clear(): Promise<void> {
+    const rich = this.page.locator('[data-testid="editor-rich"] .ProseMirror');
+    if ((await rich.count()) > 0) {
+      await rich.click();
+      await this.page.keyboard.press('Meta+A');
+      await this.page.keyboard.press('Backspace');
+      return;
+    }
+    await this.textarea.fill('');
   }
 
   async runAudit(): Promise<void> {

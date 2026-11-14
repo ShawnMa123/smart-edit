@@ -38,14 +38,60 @@ text projection, so formatting cannot change a verdict:
 | bullet / numbered list | `- item` / `1. item` |
 | table | one line per row, cells joined with ` | ` |
 
-The projection lives in `src/rich/plainText.ts` and is covered by golden tests; formatting-only edits
-therefore leave the snapshot digest and the audit result unchanged. If the editor cannot start at all,
+The projection lives in `src/rich/projection.ts` (re-exported as `richToPlainText`) and is covered by
+golden tests; formatting-only edits therefore leave the snapshot digest and the audit result unchanged.
+Selection offsets are Unicode code points, not UTF-16 units. If the editor cannot start at all,
 `RichEditor` falls back to a textarea and says why — a blank pane is never the failure mode.
+
+### Server draft, autosave and conflicts
+
+The centre pane now has a server-authoritative draft (`/api/documents/*`, local/test only). On first
+load it reads the draft, acquires an edit lock and autosaves 2 seconds after typing with
+`If-Match: "draft-<revision>"`. The footer says `Saving…`, `Saved to server`, `Save failed` or
+`Save conflict`; it never reports `Saved` before the host accepted the write.
+
+A `412 stale_draft` **does not replace the editor**. The local content stays, a recovery draft is
+written to `localStorage` (`smart-edit:recovery:demo-document`), and the conflict panel offers
+`Use server version`, `Overwrite with local content` or `Keep local as recovery draft`. Automation
+apply/undo are rejected when the head moved; they never auto-rebase.
+
+### Automation fixture (demo only)
+
+The version pane contains a deliberately small **Automation fixture** panel. It creates a
+deterministic `replace_text` proposal (no model), lets you accept it, apply it, and undo it. Accept
+is not apply; apply creates a new draft revision and an application receipt; undo only works while
+that receipt is still the current head. The assistant's `Automation` tab remains labelled
+`not implemented`; this panel is the host/apply contract demo, not a general automation UI.
 
 `Import file` (header) uploads a PDF / DOCX / PNG / JPEG and fills the editor with the text the server
 read out of it: `POST /api/runs` (multipart) → `POST /api/runs/{id}/stages/parse` → read
 `documents[]` from the envelope. Images and scanned PDFs need a local OCR engine
 (`brew install tesseract tesseract-lang`); text-layer PDFs and DOCX do not.
+
+### Knowledge Q&A (right pane)
+
+The `Knowledge Q&A` tab is wired to `/api/assistant/*`; `Automation` and `Legal advice` remain labelled
+`not implemented`. The panel registers an immutable snapshot + session on the first question, sends
+`POST /api/assistant/sessions/{id}/runs` (202), polls `GET /api/assistant/runs/{id}`, and renders the
+reviewed answer: outcome, support level, claims, citations, limitations, clarification questions or the
+handoff target. Citation cards read `GET /api/assistant/messages/{id}/citations/{cid}` (allowed excerpt +
+locator only); feedback is `PUT …/feedback` and replaces the previous rating.
+
+Honesty rules the UI keeps: a `Fixture-backed` banner is always visible (the corpus is synthetic, not
+legal text), no placeholder answers or citations are rendered, a technical failure is not shown as
+`insufficient_evidence`, and an older bound snapshot is called out with a "start a new conversation"
+action. `web/src/api/assistant.ts` is the only module that talks to the assistant API; the contract types
+live in `web/src/api/assistantTypes.ts` and mirror the server DTOs.
+
+The demo corpus is **8 synthetic sources / 72 chunks** (Chinese 36 + English 36: 12 product manual, 12 trade-rule summaries, 8 internal-policy chunks, 4 help-guide chunks per language), all `synthetic: true`. The reproducible evaluation set is **33 questions** and is run with `python scripts/assistant_eval.py`; it measures citation hit, outcome accuracy and clarification accuracy only (no embeddings, reranking or model).
+
+On first open the knowledge tab shows an English **Can / Cannot / How** card and up to 3 English suggested
+questions (`What can you do?`, `What documents are required for the application?`,
+`What does URDG 758 article 20 require for claims?`; the selection variant uses
+`What does this passage mean?`). Clicking a suggestion only fills the question and focuses the input; it
+never creates a run. After the first answer the suggestions collapse into `Show examples`. English
+questions retrieve only English sources, Chinese questions only Chinese sources, and capability questions
+are answered from the matching published help guide with a citation.
 
 Failures are listed per file and are never dressed as success — a file with errors gets no "use this
 text" action. The user-facing wording for each code lives in `src/components/ImportReport.tsx`:
@@ -82,6 +128,8 @@ never attempted on placeholder fields.
 ## Checks
 
 ```bash
+.venv/bin/python -m pytest -q                 # Python, incl. document host + automation apply/undo
+.venv/bin/python scripts/automation_demo.py   # fixture proposal -> accept -> apply -> undo (in-memory)
 npm --prefix web run typecheck  # tsc --noEmit
 npm --prefix web run test       # vitest (jsdom); the HTTP e2e is skipped without VITE_E2E=1
 npm --prefix web run build      # emits web/dist/index.html
@@ -111,7 +159,7 @@ for p in 8000 8010 5173 5174; do lsof -nP -iTCP:$p -sTCP:LISTEN -t | xargs -r ki
 
 | Project | Backend | Frontend | Viewport | Covers |
 |---|---|---|---|---|
-| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, unimplemented tabs, three-pane layout |
+| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, knowledge Q&A, unimplemented automation/legal tabs, three-pane layout |
 | `honesty` | `:8010` with `SMART_EDIT_LLM=''` | `:5174` (`VITE_PROXY_TARGET`) | 1440×900 | "checks did not run", and **no** `/stages/audit` request |
 | `narrow` | `:8000` | `:5173` | iPhone 13 | one pane + tabs below 1366px, audit still reachable |
 
@@ -153,7 +201,11 @@ Without either variable Playwright looks for its own bundled build, which needs 
 
 ## What this build deliberately does not do
 
-Rich-text formatting, file import/OCR, server-side versions/locks/approvals, structural diff, the
-knowledge/automation/legal assistant tabs, semantic checks, template rule packs and regulatory
-coverage. Each is labelled "not implemented in this build" in the UI rather than simulated — see
-`openspec/changes/editor-shell/design.md` Non-Goals and the `Requirements.md` §14 gap table.
+The document host is a **local/test** adapter only: one process, one writer, fake identity, no
+PostgreSQL/Worker/multi-tenant host, and no production deployment. There is still no structural diff,
+real semantic automation model, regulatory coverage, approved production identity/snapshot/model
+adapters, real models/embeddings/reranking, controlled web access, voice/screenshot or export.
+Automation and Legal remain labelled "not implemented in this build"; the version-pane
+**Automation fixture** panel only demonstrates the `replace_text` host/apply/undo contract, and the
+knowledge tab is explicitly `Fixture-backed` — see `openspec/changes/document-host-foundation/`,
+`openspec/changes/agent-knowledge/` and the `Requirements.md` §14 gap table.

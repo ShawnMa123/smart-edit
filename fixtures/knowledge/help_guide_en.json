@@ -1,0 +1,55 @@
+{
+  "title": "Knowledge Assistant Guide (synthetic demo)",
+  "version_id": "KV-HELP-002-v1",
+  "source": {
+    "source_id": "KS-HELP-002",
+    "source_type": "product_manual",
+    "publisher": "Synthetic Demo Publisher",
+    "version_label": "demo-1",
+    "language": "en",
+    "scope": "public",
+    "license_reference": "synthetic-demo",
+    "synthetic": true,
+    "jurisdictions": [],
+    "effective_from": "2024-01-01",
+    "effective_to": null
+  },
+  "chunks": [
+    {
+      "chunk_id": "KC-HELP-002-1",
+      "section": "What can you do",
+      "title_path": "Assistant guide / What can you do",
+      "text": "What can you do: the knowledge assistant supports product and operations FAQ, trade-rule explanations, and explanations of selected document text. Answers include claim-level citations, support_level and limitations; when evidence is insufficient it says so, and when a request is out of scope it suggests a handoff. This is a synthetic demo guide, not official product documentation.",
+      "locator": {
+        "section": "What can you do"
+      }
+    },
+    {
+      "chunk_id": "KC-HELP-002-2",
+      "section": "What can this assistant not do",
+      "title_path": "Assistant guide / What can this assistant not do",
+      "text": "What can this assistant not do: it does not edit the document, approve, submit, browse the web, provide legal conclusions or replace sanctions screening. Edit, approval or full compliance-review requests are handed off; it produces no document or business side effects.",
+      "locator": {
+        "section": "What can this assistant not do"
+      }
+    },
+    {
+      "chunk_id": "KC-HELP-002-3",
+      "section": "How should I ask",
+      "title_path": "Assistant guide / How should I ask",
+      "text": "How should I ask: include the rule name, version, jurisdiction or applicable date; select a passage before asking about the document; ask one question at a time. Example: What does URDG 758 article 20 require for claims? or What does this passage mean?",
+      "locator": {
+        "section": "How should I ask"
+      }
+    },
+    {
+      "chunk_id": "KC-HELP-002-4",
+      "section": "How to read an answer",
+      "title_path": "Assistant guide / How to read an answer",
+      "text": "How to read an answer: answers include outcome, support_level, claims, citations and limitations. strong or qualified indicates support; insufficient_evidence means evidence is missing; needs_handoff means the request must be handed off. Citation cards show only the approved excerpt and locator.",
+      "locator": {
+        "section": "How to read an answer"
+      }
+    }
+  ]
+}

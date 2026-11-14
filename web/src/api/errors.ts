@@ -46,6 +46,27 @@ const MESSAGES: Record<string, string> = {
     'The API is temporarily unavailable, so no conclusion is shown. Try again once the backend is up.',
   HTTP_504:
     'The API gateway timed out before the backend answered, so no conclusion is shown.',
+  // Knowledge assistant codes (knowledge-assistant spec §8).
+  RESOURCE_NOT_FOUND:
+    'This assistant resource does not exist, or it is not visible to you. Nothing about it is shown.',
+  INVALID_REQUEST: 'The assistant request is missing something required, so it was not run.',
+  VALIDATION_ERROR: 'One or more assistant fields are invalid; nothing was created or changed.',
+  IDEMPOTENCY_CONFLICT:
+    'The same idempotency key was reused with a different request, so the retry was refused.',
+  SESSION_BUSY: 'This conversation already has a run in progress. Wait for it or cancel it first.',
+  CONTEXT_NOT_READY: 'The bound document snapshot is not available, so the answer cannot use it.',
+  ANCHOR_MISMATCH:
+    'The selected text no longer matches the bound snapshot. Select the passage again or start a new conversation.',
+  RUN_TERMINAL: 'This run already finished, so it can no longer be cancelled.',
+  REVIEW_FAILED:
+    'The answer failed the citation review, so nothing unsupported was published. Try a narrower question.',
+  ASSISTANT_FAILED:
+    'The knowledge assistant could not complete this run. This is a technical failure, not a statement that no knowledge exists.',
+  RUN_TIMEOUT: 'The assistant run passed its deadline, so it stopped without publishing an answer.',
+  RUN_INTERRUPTED: 'The assistant process restarted while this run was active, so the run ended.',
+  SESSION_MISSING: 'The conversation this run belongs to no longer exists.',
+  HELP_SOURCE_UNAVAILABLE:
+    'The help guide is not loaded in this demo database. Restart with a fresh fixture database or re-import the help source; this is not a statement that no knowledge exists.',
 };
 
 export function explainError(code: string): string {

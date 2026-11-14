@@ -9,13 +9,23 @@ to `poc-skeleton` §8-§9 once the graph exists.
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.api.assistant import router as assistant_router
+from app.api.automation import router as automation_router
+from app.api.documents import router as documents_router
 from app.api.envelope import to_envelope
 from app.api.errors import ApiFailure, IncompleteResult, error_body
+from app.assistant.bootstrap import build_services
+from app.assistant.errors import AssistantError
+from app.assistant.service import AssistantService
+from app.documents.bootstrap import build_host_services
+from app.documents.errors import HostError
 from app.llm import resolve_llm
 from app.runs import RunStore, UnknownRun
 from app.runtime import UnknownStage, execute_chain
@@ -72,11 +82,77 @@ def create_app(
     store: RunStore | None = None,
     llm=_UNSET,
     runs_dir: str | Path | None = None,
+    assistant_services=None,
+    assistant_deadline_seconds: int = 120,
+    host_services=None,
 ) -> FastAPI:
     """Build the app. `llm` overrides provider resolution (tests inject a fixture or `None`)."""
     app = FastAPI(title="smart-edit console API", version="0.1.0")
     app.state.store = store if store is not None else RunStore(runs_dir)
     app.state.llm = resolve_llm() if llm is _UNSET else llm
+    app.state.assistant = AssistantService(
+        assistant_services or build_services(), deadline_seconds=assistant_deadline_seconds
+    )
+    app.state.host = host_services or build_host_services()
+    app.include_router(assistant_router)
+    app.include_router(documents_router)
+    app.include_router(automation_router)
+
+    @app.middleware("http")
+    async def _request_id(request: Request, call_next):
+        request.state.request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:12]}"
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        return response
+
+    @app.exception_handler(AssistantError)
+    async def _assistant_error(request: Request, exc: AssistantError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status,
+            content={
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "request_id": str(getattr(request.state, "request_id", "")),
+                    "retryable": exc.retryable,
+                    **({"detail": exc.detail} if exc.detail is not None else {}),
+                }
+            },
+        )
+
+    @app.exception_handler(HostError)
+    async def _host_error(request: Request, exc: HostError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status,
+            content={
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "request_id": str(getattr(request.state, "request_id", "")),
+                    "retryable": exc.retryable,
+                    **(dict(exc.detail) if isinstance(exc.detail, dict) else {}),
+                }
+            },
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        fields = [
+            {"field": ".".join(str(part) for part in error.get("loc", [])), "code": str(error.get("type"))}
+            for error in exc.errors()
+        ]
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "request fields are invalid",
+                    "request_id": str(getattr(request.state, "request_id", "")),
+                    "retryable": False,
+                    "field_errors": fields,
+                }
+            },
+        )
 
     @app.exception_handler(ApiFailure)
     async def _api_failure(request: Request, exc: ApiFailure) -> JSONResponse:  # noqa: ARG001

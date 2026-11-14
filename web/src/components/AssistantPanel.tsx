@@ -1,6 +1,9 @@
 import { useState } from 'react';
 
+import type { AssistantClient, AssistantOptions } from '../api/assistant';
+import type { AssistantSelection } from '../api/assistantTypes';
 import { AuditPanel, type AuditPanelProps } from './AuditPanel';
+import { KnowledgePanel } from './KnowledgePanel';
 
 interface Tab {
   id: string;
@@ -10,18 +13,31 @@ interface Tab {
 
 const TABS: Tab[] = [
   { id: 'audit', label: 'Rule audit', implemented: true },
-  { id: 'knowledge', label: 'Knowledge Q&A', implemented: false },
+  { id: 'knowledge', label: 'Knowledge Q&A', implemented: true },
   { id: 'automation', label: 'Automation', implemented: false },
   { id: 'legal', label: 'Legal advice', implemented: false },
 ];
 
+export interface KnowledgePanelBinding {
+  documentId: string;
+  digest: string;
+  text: string;
+  selection?: AssistantSelection | null;
+  locale?: 'zh-CN' | 'en';
+  client?: AssistantClient;
+  options?: AssistantOptions;
+  pollDelayMs?: number;
+}
+
+export interface AssistantPanelProps extends AuditPanelProps {
+  knowledge: KnowledgePanelBinding;
+}
+
 /**
- * Right pane (task 6.3): the prototype's four tabs, with only the audit one implemented.
- *
- * Selecting an unimplemented tab states that it is unimplemented — it never renders sample answers,
- * findings or citations (spec: "MUST NOT render sample answers").
+ * Right pane: the prototype's four tabs. Audit and knowledge are wired to the backend; automation and
+ * legal stay labelled as unimplemented and never render sample answers, findings or citations.
  */
-export function AssistantPanel(props: AuditPanelProps) {
+export function AssistantPanel({ knowledge, ...auditProps }: AssistantPanelProps) {
   const [activeTab, setActiveTab] = useState<string>('audit');
   const active = TABS.find((tab) => tab.id === activeTab) ?? TABS[0];
 
@@ -47,14 +63,16 @@ export function AssistantPanel(props: AuditPanelProps) {
       </div>
 
       <div className="assistant-body">
-        {active.implemented ? (
-          <AuditPanel {...props} />
+        {active.id === 'audit' ? (
+          <AuditPanel {...auditProps} />
+        ) : active.id === 'knowledge' ? (
+          <KnowledgePanel {...knowledge} />
         ) : (
           <div className="notice" role="status">
             <h3>{active.label} is not implemented in this build</h3>
             <p className="tiny">
               No answers, findings or citations are produced for this capability. Only the rule audit
-              tab is wired to a backend in this build.
+              and knowledge tabs are wired to a backend in this build.
             </p>
           </div>
         )}

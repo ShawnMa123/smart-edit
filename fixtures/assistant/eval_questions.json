@@ -1,0 +1,203 @@
+{
+  "note": "Synthetic evaluation set for the A slice. Every source is fixture-backed; this is not a legal corpus. Retrieval is lexical only: no embeddings, no reranking, no model.",
+  "questions": [
+    {
+      "id": "Q01",
+      "question": "提交版本后编辑锁会释放吗？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-1"
+    },
+    {
+      "id": "Q02",
+      "question": "提交失败会释放编辑锁吗？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-1"
+    },
+    {
+      "id": "Q03",
+      "question": "支持导入哪些文件类型？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-2"
+    },
+    {
+      "id": "Q04",
+      "question": "扫描件识别出的关键值需要人工核实吗？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-2"
+    },
+    {
+      "id": "Q05",
+      "question": "版本历史保存在哪里？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-3"
+    },
+    {
+      "id": "Q06",
+      "question": "恢复旧版本会覆盖历史条目吗？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-3"
+    },
+    {
+      "id": "Q07",
+      "question": "审查面板没有发现问题，是否代表文档合法？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-4"
+    },
+    {
+      "id": "Q08",
+      "question": "编辑器支持哪些格式和操作？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-5"
+    },
+    {
+      "id": "Q09",
+      "question": "URDG 758 第 20 条对索赔有什么要求？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-RULES-001-1"
+    },
+    {
+      "id": "Q10",
+      "question": "保函到期后会自动延长吗？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-RULES-001-2"
+    },
+    {
+      "id": "Q11",
+      "question": "ISP98 和 UCP 600 分别约束什么？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-RULES-001-3"
+    },
+    {
+      "id": "Q12",
+      "question": "缺少规则版本和适用日期时，能判断规则是否适用吗？",
+      "expected_outcome": "needs_clarification",
+      "expected_chunk": null
+    },
+    {
+      "id": "Q13",
+      "question": "见索即付保函和基础商业合同是什么关系？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-RULES-001-5"
+    },
+    {
+      "id": "Q14",
+      "question": "保函期限超过十二个月需要什么审批？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-POLICY-001-1"
+    },
+    {
+      "id": "Q15",
+      "question": "金额超过分行授权上限时怎么办？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-POLICY-001-1"
+    },
+    {
+      "id": "Q16",
+      "question": "涉及受制裁国家时需要先做什么？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-POLICY-001-2"
+    },
+    {
+      "id": "Q17",
+      "question": "文档中的公司名称能证明已通过制裁筛查吗？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-POLICY-001-2"
+    },
+    {
+      "id": "Q18",
+      "question": "审计日志可以记录完整客户正文吗？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-POLICY-001-3"
+    },
+    {
+      "id": "Q19",
+      "question": "保函版本、审批意见与审计事件如何保留？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-POLICY-001-3"
+    },
+    {
+      "id": "Q20",
+      "question": "URDG 758 的适用性和版本要求是什么？",
+      "expected_outcome": "needs_clarification",
+      "expected_chunk": null
+    },
+    {
+      "id": "Q21",
+      "question": "UCP 600 下银行审单的依据是什么？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-RULES-001-11"
+    },
+    {
+      "id": "Q22",
+      "question": "ISP98 和 ISBP 821 分别约束什么？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-RULES-001-12"
+    },
+    {
+      "id": "Q23",
+      "question": "保函费率按什么标准收取？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-7"
+    },
+    {
+      "id": "Q24",
+      "question": "保函展期或增额怎么办理？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-8"
+    },
+    {
+      "id": "Q25",
+      "question": "操作差错需要向谁报告并保留哪些记录？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-POLICY-001-7"
+    },
+    {
+      "id": "Q26",
+      "question": "你能做什么？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-HELP-001-1"
+    },
+    {
+      "id": "Q27",
+      "question": "这个助手不能做什么？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-HELP-001-2"
+    },
+    {
+      "id": "Q28",
+      "question": "我该怎么提问？",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-HELP-001-3"
+    },
+    {
+      "id": "Q29",
+      "question": "What can you do?",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-HELP-002-1"
+    },
+    {
+      "id": "Q30",
+      "question": "What can this assistant not do?",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-HELP-002-2"
+    },
+    {
+      "id": "Q31",
+      "question": "How should I ask a question?",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-HELP-002-3"
+    },
+    {
+      "id": "Q32",
+      "question": "What documents are required for the application?",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-PRODUCT-001-EN-6"
+    },
+    {
+      "id": "Q33",
+      "question": "What does URDG 758 article 20 require for claims?",
+      "expected_outcome": "answered",
+      "expected_chunk": "KC-RULES-001-EN-1"
+    }
+  ]
+}

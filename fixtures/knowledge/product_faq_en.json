@@ -1,0 +1,127 @@
+{
+  "title": "Synthetic Product Manual (demo)",
+  "version_id": "KV-PRODUCT-001-EN-v1",
+  "source": {
+    "source_id": "KS-PRODUCT-001-EN",
+    "source_type": "product_manual",
+    "publisher": "Synthetic Demo Publisher",
+    "version_label": "demo-1",
+    "language": "en",
+    "scope": "organization",
+    "license_reference": "synthetic-demo",
+    "synthetic": true,
+    "jurisdictions": [],
+    "effective_from": "2024-01-01",
+    "effective_to": null
+  },
+  "chunks": [
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-1",
+      "section": "Submission and lock",
+      "title_path": "Product manual / Submission and lock",
+      "text": "After a version is submitted successfully, the system creates a new version and releases the edit lock; a failed submission keeps the lock and does not complete the version transition.",
+      "locator": {
+        "section": "Submission and lock"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-2",
+      "section": "File import",
+      "title_path": "Product manual / File import",
+      "text": "Text-layer PDF, DOCX, PNG and JPEG are supported. Scanned files attempt OCR; recognised key values stay marked for human verification. Unsupported types must be rejected explicitly, never treated as success.",
+      "locator": {
+        "section": "File import"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-3",
+      "section": "Version history",
+      "title_path": "Product manual / Version history",
+      "text": "Version history is stored locally in this browser. Entries keep both the rich document and its projected text; restoring an old version does not rewrite history, it loads an unsaved draft.",
+      "locator": {
+        "section": "Version history"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-4",
+      "section": "Audit panel",
+      "title_path": "Product manual / Audit panel",
+      "text": "The audit panel's 'no findings in checks that ran' is not a statement that the document is lawful or compliant; checks that did not run must be shown differently from checks that ran cleanly.",
+      "locator": {
+        "section": "Audit panel"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-5",
+      "section": "Editor",
+      "title_path": "Product manual / Editor",
+      "text": "The editor supports paragraphs, three heading levels, bold, italic, underline, lists, tables, undo/redo and find/replace; the audit reads a deterministic plain-text projection.",
+      "locator": {
+        "section": "Editor"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-6",
+      "section": "Application materials",
+      "title_path": "Product manual / Application materials",
+      "text": "Application documents usually include the application form, underlying contract, business licence, authorisation documents and AML information. Incomplete applications are returned for completion and re-enter approval.",
+      "locator": {
+        "section": "Application materials"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-7",
+      "section": "Fees and charges",
+      "title_path": "Product manual / Fees and charges",
+      "text": "Fees depend on the guaranteed amount, tenor, customer rating and country risk; issuance, amendment and cable charges are billed separately, subject to the quotation and tariff.",
+      "locator": {
+        "section": "Fees and charges"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-8",
+      "section": "Extension and increase",
+      "title_path": "Product manual / Extension and increase",
+      "text": "Extension or increase requires a written request and new approval materials; after approval the amended guarantee text governs, and fees and limit usage are adjusted.",
+      "locator": {
+        "section": "Extension and increase"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-9",
+      "section": "Claim documents",
+      "title_path": "Product manual / Claim documents",
+      "text": "A claim requires a written claim notice, supporting statement, evidence of default and a calculation of the claimed amount; incomplete claims are returned for correction and are not treated as accepted.",
+      "locator": {
+        "section": "Claim documents"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-10",
+      "section": "Cancellation and release",
+      "title_path": "Product manual / Cancellation and release",
+      "text": "After expiry, applicant cancellation or a beneficiary release notice, the bank may cancel the guarantee and release cash or credit lines; no outstanding claim may remain.",
+      "locator": {
+        "section": "Cancellation and release"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-11",
+      "section": "Processing time",
+      "title_path": "Product manual / Processing time",
+      "text": "With complete documents and approval, issuance normally takes three to five business days; cross-border guarantee registration, sanctions review or missing documents may extend it.",
+      "locator": {
+        "section": "Processing time"
+      }
+    },
+    {
+      "chunk_id": "KC-PRODUCT-001-EN-12",
+      "section": "Common rejection reasons",
+      "title_path": "Product manual / Common rejection reasons",
+      "text": "Common rejection reasons include amount or currency mismatch, wrong beneficiary name, missing expiry date, wrong contract number and incomplete signatures or seals; all corrections should be listed at once.",
+      "locator": {
+        "section": "Common rejection reasons"
+      }
+    }
+  ]
+}

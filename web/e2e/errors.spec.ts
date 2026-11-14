@@ -8,7 +8,8 @@ import { Workspace } from './support/workspace';
  */
 test('empty submission is refused and reported as a failed audit', async ({ page }) => {
   const ws = new Workspace(page);
-  await ws.open(); // textarea intentionally left empty
+  await ws.open();
+  await ws.clear(); // a server draft may exist; this test needs an intentionally empty editor
   await ws.runAudit();
 
   const failure = page.getByRole('alert');
@@ -31,12 +32,12 @@ test('empty submission is refused and reported as a failed audit', async ({ page
 test('unimplemented assistant tabs are labelled and render no sample output', async ({ page }) => {
   await page.goto('/');
 
-  const tab = page.getByRole('tab', { name: /Knowledge Q&A/ });
+  const tab = page.getByRole('tab', { name: /Automation/ });
   await expect(tab).toContainText('not implemented');
   await tab.click();
 
   await expect(page.getByRole('status')).toContainText('is not implemented in this build');
-  await expect(page.getByRole('status')).toContainText('Only the rule audit tab is wired');
+  await expect(page.getByRole('status')).toContainText('rule audit and knowledge tabs');
   // No fabricated output for a capability this build lacks: no run control, no audit result block.
   await expect(page.locator('[data-testid="audit-run"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="rule-audit"]')).toHaveCount(0);
