@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { Editor } from '@tiptap/react';
 
-import type { RichDocument } from './richDocument';
+import projectionFixture from '../../../fixtures/automation/variable_projection.json';
+import type { InlineNode, RichDocument } from './richDocument';
 import { codePointLength, projectDocument } from './projection';
 import { selectionFromEditor, selectionFromTextarea } from './selection';
 
@@ -56,6 +57,40 @@ describe('projectDocument', () => {
   });
 });
 
+describe('variable projection parity (1.3)', () => {
+  it('matches the shared golden fixture, code points and block spans included', () => {
+    const projection = projectDocument(projectionFixture.document as unknown as RichDocument);
+    expect(projection.text).toBe(projectionFixture.expected_text);
+    expect(
+      projection.blocks.map(({ nodeId, start, end }) => ({ nodeId, start, end })),
+    ).toEqual(projectionFixture.expected_blocks);
+  });
+
+  it('shows {{label}} for an empty variable and never invents a value', () => {
+    const projection = projectDocument(
+      doc([
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Beneficiary: ' },
+            {
+              type: 'variableReference',
+              attrs: {
+                variableId: 'var_beneficiary',
+                label: 'beneficiary',
+                valueType: 'string',
+                required: true,
+                displayValue: null,
+              },
+            },
+          ],
+        },
+      ]),
+    );
+    expect(projection.text).toBe('Beneficiary: {{beneficiary}}');
+  });
+});
+
 describe('selectionFromTextarea', () => {
   it('returns code-point offsets around an emoji', () => {
     expect(selectionFromTextarea('A😀B', 1, 3)).toEqual({
@@ -64,6 +99,98 @@ describe('selectionFromTextarea', () => {
       endOffset: 2,
       selectedText: '😀',
     });
+  });
+});
+
+/** ProseMirror positions inside one block: text in UTF-16 units, a variable atom as one position. */
+const inlinePmLength = (node: InlineNode): number => {
+  if (node.type === 'text') return (node.text ?? '').length;
+  if (node.type === 'variableReference') return 1;
+  return (node.content ?? []).reduce((sum, child) => sum + (child.text ?? '').length, 0);
+};
+
+/** The same fake projection the editor tests use: only block boundaries matter to `selectionFromEditor`. */
+const editorWithSelection = (content: RichDocument, from: number, to: number): Editor => {
+  const nodes = content.content.map((block) => ({
+    type: { name: block.type },
+    textContent:
+      block.type === 'paragraph' || block.type === 'heading'
+        ? (block.content ?? [])
+            .map((node) => (node.type === 'text' ? node.text ?? '' : '{{variable}}'))
+            .join('')
+        : '',
+    toJSON: () => block,
+  }));
+  const offsets: number[] = [];
+  let offset = 0;
+  for (const block of content.content) {
+    offsets.push(offset);
+    const pmLength =
+      block.type === 'paragraph' || block.type === 'heading'
+        ? (block.content ?? []).reduce((sum, node) => sum + inlinePmLength(node), 0)
+        : 1;
+    offset += 1 + pmLength;
+  }
+  return {
+    state: {
+      selection: { from, to },
+      doc: {
+        content: {
+          forEach: (callback: (node: (typeof nodes)[number], at: number) => void) =>
+            nodes.forEach((node, index) => callback(node, offsets[index])),
+        },
+        toJSON: () => content,
+      },
+    },
+  } as unknown as Editor;
+};
+
+describe('selectionFromEditor: variable conversion boundaries (1.4)', () => {
+  it('accepts a single-paragraph CJK/emoji selection in code points', () => {
+    const content = doc([paragraph('Amount: 保函 😀 end')]);
+    // Block content starts at PM position 1; "保函 😀" occupies 5 UTF-16 units (emoji is a pair).
+    const selection = selectionFromEditor(editorWithSelection(content, 1 + 8, 1 + 8 + 5));
+
+    expect(selection?.nodeId).toBe('b0');
+    expect(selection?.selectedText).toBe('保函 😀');
+    expect(selection?.startOffset).toBe(8);
+    expect(selection?.endOffset).toBe(12);
+  });
+
+  it('accepts a heading selection relative to its hashes', () => {
+    const content = doc([heading(2, 'Parties')]);
+    const selection = selectionFromEditor(editorWithSelection(content, 1, 1 + 'Parties'.length));
+
+    expect(selection?.selectedText).toBe('Parties');
+    expect(selection?.startOffset).toBe(codePointLength('## '));
+  });
+
+  it('rejects a selection that crosses blocks', () => {
+    const content = doc([paragraph('first'), paragraph('second')]);
+    // Block 1 starts after "first" plus the two paragraph boundaries.
+    const editor = editorWithSelection(content, 1, 1 + 5 + 2 + 3);
+
+    expect(selectionFromEditor(editor)).toBeNull();
+  });
+
+  it('rejects a selection inside a table', () => {
+    const content = doc([
+      {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [{ type: 'tableCell', content: [paragraph('Amount')] }],
+          },
+        ],
+      },
+    ]);
+
+    expect(selectionFromEditor(editorWithSelection(content, 1, 4))).toBeNull();
+  });
+
+  it('rejects an empty selection', () => {
+    expect(selectionFromEditor(editorWithSelection(doc([paragraph('Amount')]), 2, 2))).toBeNull();
   });
 });
 

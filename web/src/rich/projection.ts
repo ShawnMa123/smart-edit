@@ -32,7 +32,14 @@ export const codePointLength = (value: string): number => Array.from(value).leng
 const inlineText = (nodes: InlineNode[] | undefined): string => {
   let text = '';
   for (const node of nodes ?? []) {
-    const piece = node.type === 'text' ? (node.text ?? '') : inlineText(node.content);
+    let piece = '';
+    if (node.type === 'text') {
+      piece = node.text ?? '';
+    } else if (node.type === 'variableReference') {
+      piece = node.attrs.displayValue ?? `{{${node.attrs.label}}}`;
+    } else {
+      piece = inlineText(node.content);
+    }
     if (!piece) continue;
     if (text && !/\s$/.test(text) && !/^\s/.test(piece)) text += ' ';
     text += piece;

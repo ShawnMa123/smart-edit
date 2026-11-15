@@ -53,17 +53,30 @@ def _lock(client: TestClient, view: dict) -> dict:
 
 def _proposal(client: TestClient, view: dict) -> dict:
     response = client.post(
-        "/automation/proposals",
+        "/automation/runs",
         json={
+            "task_type": "rewrite",
             "document_id": view["document_id"],
             "draft_id": view["draft_id"],
-            "search_text": "USD 500,000.00",
-            "replacement_text": "USD 600,000.00",
+            "input": {
+                "intent": "replace_text",
+                "search_text": "USD 500,000.00",
+                "replacement_text": "USD 600,000.00",
+            },
         },
-        headers=_h(**{"Idempotency-Key": "proposal-key"}),
+        headers=_h(**{"Idempotency-Key": "run-key"}),
     )
-    assert response.status_code == 201, response.text
-    return response.json()
+    assert response.status_code == 202, response.text
+    run = response.json()
+    for _ in range(40):
+        current = client.get(f"/automation/runs/{run['run_id']}", headers=_h()).json()
+        if current["status"] in ("succeeded", "failed", "cancelled", "timed_out"):
+            break
+    assert current["status"] == "succeeded", current
+    assert current["result_id"]
+    result = client.get(f"/automation/results/{current['result_id']}", headers=_h()).json()
+    assert result["outcome"] == "proposal_ready", result
+    return result["payload"]
 
 
 def _accept(client: TestClient, proposal: dict) -> dict:
@@ -88,7 +101,7 @@ def _apply_body(proposal: dict, view: dict, lock: dict) -> dict:
         "expected_draft_revision": view["revision"],
         "lock_id": lock["lock_id"],
         "fencing_token": lock["fencing_token"],
-        "acknowledged_risk_codes": [],
+        "acknowledged_risk_codes": list(proposal.get("risk_flags") or []),
     }
 
 
@@ -165,6 +178,26 @@ def test_accept_apply_replay_and_undo(client):
     )
     assert twice.status_code == 409
     assert twice.json()["error"]["code"] == "undo_conflict"
+
+
+def test_apply_requires_edit_capability(client):
+    view = _document(client)
+    lock = _lock(client, view)
+    proposal = _proposal(client, view)
+    _accept(client, proposal)
+    denied = client.post(
+        f"/automation/proposals/{proposal['proposal_id']}/apply",
+        json=_apply_body(proposal, view, lock),
+        headers=_h(
+            **{
+                "X-Demo-Capabilities": "read,use_ai",
+                "If-Match": '"draft-1"',
+                "Idempotency-Key": "no-edit",
+            }
+        ),
+    )
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "capability_denied"
 
 
 def test_apply_after_head_moved_is_stale(client):

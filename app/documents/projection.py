@@ -50,6 +50,10 @@ def _inline_text(nodes: list[dict[str, Any]]) -> str:
             continue
         if node.get("type") == "text":
             piece = str(node.get("text") or "")
+        elif node.get("type") == "variableReference":
+            attrs = node.get("attrs") or {}
+            value = attrs.get("displayValue")
+            piece = str(value) if value not in (None, "") else "{{" + str(attrs.get("label") or "variable") + "}}"
         else:
             piece = _inline_text(list(node.get("content") or []))
         if not piece:

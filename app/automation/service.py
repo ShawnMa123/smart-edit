@@ -9,7 +9,6 @@ from typing import Any
 
 from app.automation.operations import (
     apply_operations,
-    build_fixture_proposal,
     build_inverse_operations,
     validate_operations,
 )
@@ -17,7 +16,6 @@ from app.automation.schemas import (
     ApplyReceipt,
     ApplyRequest,
     ChangeProposal,
-    FixtureProposalCreate,
     ProposalContext,
     ProposalDecision,
     ProposalPreview,
@@ -44,6 +42,43 @@ class AutomationService:
 
     def principal(self, request) -> Principal:
         return self.identity.resolve(request)
+
+    def _require(self, principal: Principal, capability: str) -> None:
+        if not principal.has(capability):
+            raise HostError(403, "capability_denied", f"the principal lacks {capability}")
+
+    def _check_dependencies(
+        self, proposal: ChangeProposal, draft: dict[str, Any], principal: Principal
+    ) -> None:
+        dependencies = self.store.list_dependencies("proposal", proposal.proposal_id)
+        if not dependencies:
+            raise HostError(409, "stale_context", "the proposal has no recorded dependencies")
+        for dependency in dependencies:
+            kind = dependency["resource_type"]
+            version = dependency.get("version")
+            if kind == "draft_revision" and str(draft["revision"]) != str(version):
+                raise HostError(409, "stale_context", "the draft revision changed")
+            if kind == "draft_content_sha256" and draft["text_sha256"] != version:
+                raise HostError(409, "stale_context", "the draft content changed")
+            if kind == "variables_version" and str(draft["variables_version"]) != str(version):
+                raise HostError(409, "stale_context", "the variables changed")
+            if kind == "authorization" and principal.authorization_version != version:
+                raise HostError(409, "stale_context", "the authorization version changed")
+            if kind == "generator" and version != "fixture-v1":
+                raise HostError(409, "stale_context", "the generator version changed")
+            if kind == "reviewer" and version != "review-v1":
+                raise HostError(409, "stale_context", "the reviewer version changed")
+
+    def _check_review(self, proposal: ChangeProposal) -> None:
+        review = self.store.get_review(proposal.review_receipt.receipt_id)
+        context_hash = json.dumps(proposal.context.model_dump(mode="json"), sort_keys=True)
+        if (
+            not review
+            or review["proposal_id"] != proposal.proposal_id
+            or review["context_hash"] != context_hash
+            or review["verdict"] != "pass"
+        ):
+            raise HostError(409, "review_required", "the proposal has no matching passing review")
 
     # --- helpers -------------------------------------------------------------------------------
     @staticmethod
@@ -125,21 +160,6 @@ class AutomationService:
         ).model_dump()
 
     # --- commands ------------------------------------------------------------------------------
-    def create_fixture(
-        self, principal: Principal, payload: FixtureProposalCreate, request_id: str
-    ) -> ChangeProposal:
-        draft = self._draft(principal, payload.document_id, payload.draft_id)
-        proposal = build_fixture_proposal(draft, payload, proposal_id=self.ids.new("prop"))
-        self.store.create_proposal(proposal)
-        self.store.set_owner(proposal.proposal_id, principal.user_id, principal.workspace_id)
-        self.host.append_audit(
-            request_id=request_id,
-            event_type="proposal_created",
-            actor=principal.user_id,
-            payload={"proposal_id": proposal.proposal_id, "draft_id": draft["draft_id"]},
-        )
-        return self._model(self.store.get_proposal(proposal.proposal_id) or {})
-
     def get(self, principal: Principal, proposal_id: str) -> ChangeProposal:
         return self._model(self._proposal_row(principal, proposal_id))
 
@@ -195,6 +215,7 @@ class AutomationService:
             return cached
 
         row = self._proposal_row(principal, proposal_id)
+        self._require(principal, "edit")
         model = self._model(row)
         if model.disposition != "accepted":
             raise HostError(409, "proposal_not_accepted", "accept the proposal before applying it")
@@ -227,6 +248,8 @@ class AutomationService:
         draft = self.host.get_draft(model.context.draft_id)
         if not draft:
             raise HostNotFound("draft not found")
+        self._check_review(model)
+        self._check_dependencies(model, draft, principal)
         self.host.validate_lock(
             draft_id=draft["draft_id"],
             lock_id=payload.lock_id,

@@ -32,13 +32,22 @@ def assert_host_mode_safe(mode: str) -> None:
 
 
 class FakeIdentity:
-    """`X-Demo-User` is a local/test-only switch; two principals make isolation testable."""
+    """`X-Demo-User` is a local/test-only switch; `X-Demo-Capabilities` narrows capabilities."""
 
     def resolve(self, request) -> Principal:
         user = (request.headers.get("x-demo-user") or "user_demo_01").strip()
         if not user:
             user = "user_demo_01"
-        return Principal(user_id=user, workspace_id=DEFAULT_WORKSPACE)
+        raw = request.headers.get("x-demo-capabilities")
+        if raw is None:
+            capabilities = ("read", "use_ai", "confirm_fields", "edit", "apply")
+        else:
+            capabilities = tuple(part.strip() for part in raw.split(",") if part.strip())
+        return Principal(
+            user_id=user,
+            workspace_id=DEFAULT_WORKSPACE,
+            capabilities=capabilities,
+        )
 
 
 class SystemClock:

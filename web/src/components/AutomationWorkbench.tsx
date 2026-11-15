@@ -1,0 +1,1293 @@
+/**
+ * Frontend-first Automation workbench: Template / Variables & Fill / Downstream Mapping.
+ *
+ * Every action here is mock-backed (`mockWorkbench.ts`); the component never fetches, never calls a
+ * model and never delivers a payload. The only real effect is editing the in-memory rich document.
+ */
+
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+
+import type { AssistantSelection } from '../api/assistantTypes';
+import type { DraftView } from '../api/documents';
+import {
+  buildPayload,
+  defaultTemplateName,
+  downstreamTemplates,
+  matchDocument,
+  suggestDefinition,
+  type ApiTemplateSummary,
+  type MappingCandidate,
+} from '../automation/mockWorkbench';
+import { describeCapture } from '../automation/templateCapture';
+import { applyTemplate } from '../automation/templateApply';
+import { parseOpenApi, type OpenApiContract } from '../automation/openapi';
+import { buildOpenApiPayload, suggestMappings } from '../automation/openapiPayload';
+import { downloadJson } from '../automation/payloadExport';
+import {
+  MAX_TEMPLATES,
+  automationTemplateStore,
+  type TemplateRecord,
+  type TemplateStore,
+  type TemplateStoreIssue,
+} from '../automation/templateStore';
+import type { RichDocument } from '../rich/richDocument';
+import { projectDocument } from '../rich/projection';
+import {
+  collectVariables,
+  replaceSelectionWithVariable,
+  setVariableValue,
+  variableDisplay,
+  type VariableDefinition,
+} from '../rich/variableOperations';
+
+type Area = 'template' | 'variables' | 'mapping';
+type MappingSource = 'fixture' | 'openapi';
+
+const AREAS: Array<[Area, string]> = [
+  ['template', 'Template'],
+  ['variables', 'Variables & Fill'],
+  ['mapping', 'Downstream Mapping'],
+];
+
+const EXCERPT_LIMIT = 240;
+
+/** Code-point-safe excerpt; never split an emoji in half. */
+const excerptOf = (text: string): string => {
+  if (!text.trim()) return '(no text content)';
+  const chars = Array.from(text);
+  return chars.length > EXCERPT_LIMIT ? `${chars.slice(0, EXCERPT_LIMIT).join('')}…` : text;
+};
+
+/** Deterministic, locale-independent display of a captured timestamp. */
+const formatCapturedAt = (iso: string): string => {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+};
+
+const recordSourceLabel = (template: TemplateRecord): string =>
+  template.source.kind === 'imported'
+    ? `Imported · ${template.source.provenance}${template.source.note ? ` · ${template.source.note}` : ''}`
+    : 'Edited in this browser';
+
+export interface AutomationWorkbenchProps {
+  draft: DraftView | null;
+  document: RichDocument;
+  /** Latest single-block editor selection (projected offsets). */
+  selection: AssistantSelection | null;
+  /** A selection the editor already handed to the workbench through right-click. */
+  pendingVariable: AssistantSelection | null;
+  /** Current document digest, shown as the payload preview binding. */
+  digest?: string;
+  /** False when the editor fell back to a textarea: variable actions are unavailable. */
+  richEditorAvailable?: boolean;
+  /** Test seam: a store backed by a specific `Storage` (reload/persistence tests). */
+  templateStore?: TemplateStore;
+  /** Apply a template snapshot to the editor (App owns the replacement/autosave path). */
+  onApplyTemplate?: (document: RichDocument) => void;
+  onChange: (document: RichDocument) => void;
+  onVariableHandled: () => void;
+}
+
+export function AutomationWorkbench({
+  draft,
+  document,
+  selection,
+  pendingVariable,
+  digest,
+  richEditorAvailable = true,
+  templateStore = automationTemplateStore,
+  onApplyTemplate,
+  onChange,
+  onVariableHandled,
+}: AutomationWorkbenchProps) {
+  const [area, setArea] = useState<Area>('template');
+  const [templates, setTemplates] = useState<TemplateRecord[]>(() => templateStore.list());
+  const [templateIssue, setTemplateIssue] = useState<TemplateStoreIssue | null>(() =>
+    templateStore.issue(),
+  );
+  const [templateName, setTemplateName] = useState(defaultTemplateName);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [renamingTemplate, setRenamingTemplate] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
+  const [saveTemplateId, setSaveTemplateId] = useState<string | null>(null);
+  const [updatingTemplateId, setUpdatingTemplateId] = useState<string | null>(null);
+  const templateListRef = useRef<HTMLUListElement | null>(null);
+  const [selectedVariableId, setSelectedVariableId] = useState<string | null>(null);
+  const [fillValue, setFillValue] = useState('');
+  /** Session registry: lets a deleted required variable be reported instead of vanishing silently. */
+  const [knownVariables, setKnownVariables] = useState<
+    Array<{ variableId: string; label: string; required: boolean }>
+  >([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [definition, setDefinition] = useState<VariableDefinition>(suggestDefinition(''));
+  const [notice, setNotice] = useState<string | null>(null);
+  const [mappingTemplateId, setMappingTemplateId] = useState(downstreamTemplates[0]?.id ?? '');
+  const [candidates, setCandidates] = useState<MappingCandidate[]>([]);
+  const [decisions, setDecisions] = useState<Record<string, string>>({});
+  const [mappingSource, setMappingSource] = useState<MappingSource>('fixture');
+  const [openApiText, setOpenApiText] = useState('');
+  const [openApiContract, setOpenApiContract] = useState<OpenApiContract | null>(null);
+  const [openApiError, setOpenApiError] = useState<string | null>(null);
+  const [openApiOperationId, setOpenApiOperationId] = useState<string | null>(null);
+  const [openApiMappings, setOpenApiMappings] = useState<Record<string, string>>({});
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const labelRef = useRef<HTMLInputElement | null>(null);
+
+  const variables = useMemo(() => collectVariables(document), [document]);
+  const selectedVariable =
+    variables.find((item) => item.variableId === selectedVariableId) ?? null;
+  const mappingTemplate: ApiTemplateSummary | undefined = downstreamTemplates.find(
+    (item) => item.id === mappingTemplateId,
+  );
+  const canMarkVariable = Boolean(draft) && richEditorAvailable && Boolean(selection);
+  const missingRequired = knownVariables.filter(
+    (known) => known.required && !variables.some((variable) => variable.variableId === known.variableId),
+  );
+  const capturePreview = useMemo(
+    () =>
+      describeCapture({
+        document,
+        draftRevision: draft?.revision ?? null,
+        name: templateName,
+        templates,
+        nextVersion: templateStore.nextVersion(),
+      }),
+    [document, draft?.revision, templateName, templates, templateStore],
+  );
+  const selectedTemplate = templates.find((item) => item.id === selectedTemplateId) ?? null;
+  const selectedTemplateExcerpt = selectedTemplate
+    ? excerptOf(projectDocument(selectedTemplate.rich).text)
+    : null;
+  const hasContent = useMemo(() => projectDocument(document).text.trim().length > 0, [document]);
+  const saveTargetTemplate =
+    templates.find((template) => template.id === saveTemplateId) ?? templates[0] ?? null;
+
+  useEffect(() => {
+    if (!pendingVariable) return;
+    setDefinition(suggestDefinition(pendingVariable.selectedText));
+    setDialogOpen(true);
+  }, [pendingVariable]);
+
+  useEffect(() => {
+    if (dialogOpen) labelRef.current?.focus();
+  }, [dialogOpen]);
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    onVariableHandled();
+  };
+
+  const refreshTemplates = () => {
+    setTemplates(templateStore.list());
+    setTemplateIssue(templateStore.issue());
+  };
+
+  const captureTemplate = () => {
+    if (!capturePreview.canCapture) {
+      setNotice(capturePreview.nameError ?? 'A template needs document content.');
+      return;
+    }
+    const result = templateStore.capture({
+      name: capturePreview.name,
+      document,
+      source: capturePreview.source,
+      revision: capturePreview.boundRevision,
+      charCount: capturePreview.charCount,
+      variables: capturePreview.variables,
+    });
+    if (!result.ok) {
+      setNotice('Enter a template name before saving.');
+      return;
+    }
+    refreshTemplates();
+    setSelectedTemplateId(result.record.id);
+    setTemplateName(defaultTemplateName);
+    setNotice(
+      result.persisted
+        ? `Saved "${result.record.name}" (${result.record.version}) in this browser — not on the server.`
+        : `"${result.record.name}" is session only — browser storage failed.`,
+    );
+  };
+
+  const startRenameTemplate = (template: TemplateRecord) => {
+    setRenamingTemplate({ id: template.id, name: template.name });
+    setDeletingTemplateId(null);
+    setApplyingTemplateId(null);
+  };
+
+  const cancelRenameTemplate = () => setRenamingTemplate(null);
+
+  const submitRenameTemplate = () => {
+    if (!renamingTemplate) return;
+    const result = templateStore.rename(renamingTemplate.id, renamingTemplate.name);
+    if (!result.ok) {
+      setNotice(
+        result.reason === 'blank_name'
+          ? 'Enter a template name before saving.'
+          : 'That template no longer exists.',
+      );
+      if (result.reason === 'not_found') {
+        setRenamingTemplate(null);
+        refreshTemplates();
+      }
+      return;
+    }
+    refreshTemplates();
+    setRenamingTemplate(null);
+    setNotice(
+      result.persisted
+        ? `Renamed to "${result.record.name}".`
+        : 'Renamed in this session only — browser storage failed.',
+    );
+  };
+
+  const confirmDeleteTemplate = (template: TemplateRecord) => {
+    const removed = templateStore.remove(template.id);
+    refreshTemplates();
+    if (selectedTemplateId === template.id) setSelectedTemplateId(null);
+    setDeletingTemplateId(null);
+    setNotice(
+      removed ? `Deleted "${template.name}" from this browser.` : 'That template no longer exists.',
+    );
+    templateListRef.current?.focus();
+  };
+
+  const applySelectedTemplate = (template: TemplateRecord) => {
+    if (!onApplyTemplate) return;
+    const applied = applyTemplate(template);
+    setKnownVariables((current) => {
+      const next = [...current];
+      for (const variable of applied.variables) {
+        if (!next.some((item) => item.variableId === variable.variableId)) {
+          next.push(variable);
+        }
+      }
+      return next;
+    });
+    onApplyTemplate(applied.document);
+    setApplyingTemplateId(null);
+    setNotice(
+      `Applied "${template.name}" (${template.version}) to the editor — continue editing there.`,
+    );
+  };
+
+  const updateTemplateFromDocument = (template: TemplateRecord) => {
+    const result = templateStore.update(template.id, {
+      document,
+      source: capturePreview.source,
+      revision: capturePreview.boundRevision,
+      charCount: capturePreview.charCount,
+      variables: capturePreview.variables,
+    });
+    if (!result.ok) {
+      setNotice('That template no longer exists.');
+      setUpdatingTemplateId(null);
+      refreshTemplates();
+      return;
+    }
+    refreshTemplates();
+    setSelectedTemplateId(result.record.id);
+    setSaveTemplateId(result.record.id);
+    setUpdatingTemplateId(null);
+    setNotice(
+      result.persisted
+        ? `Updated "${result.record.name}" to ${result.record.version} in this browser.`
+        : `Updated "${result.record.name}" in this session only — browser storage failed.`,
+    );
+  };
+
+  const openVariableDialog = () => {
+    const target = pendingVariable ?? selection;
+    if (!richEditorAvailable) {
+      setNotice('The rich editor is unavailable; variable creation needs the rich editor.');
+      return;
+    }
+    if (!target) {
+      setNotice('Select a non-empty single paragraph/heading first.');
+      return;
+    }
+    setDefinition(suggestDefinition(target.selectedText));
+    setDialogOpen(true);
+  };
+
+  const confirmVariable = () => {
+    const target = pendingVariable ?? selection;
+    if (!target) {
+      setNotice('Select a non-empty single paragraph/heading first.');
+      return;
+    }
+    try {
+      const next = replaceSelectionWithVariable(document, target, definition);
+      const created = collectVariables(next).find(
+        (variable) => variable.label === (definition.label.trim() || 'variable'),
+      );
+      onChange(next);
+      setDialogOpen(false);
+      onVariableHandled();
+      if (created) {
+        setKnownVariables((current) => [
+          ...current,
+          { variableId: created.variableId, label: created.label, required: created.required },
+        ]);
+      }
+      setSelectedVariableId(created?.variableId ?? null);
+      setArea('variables');
+      setNotice(`Marked "${definition.label || 'variable'}" as a variable.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const fillVariable = () => {
+    if (!selectedVariable || !richEditorAvailable) return;
+    onChange(setVariableValue(document, selectedVariable.variableId, fillValue));
+    setNotice(
+      `Filled ${selectedVariable.occurrences.length} occurrence(s) of ${selectedVariable.label}; same-named ordinary text was not changed.`,
+    );
+  };
+
+  const runMapping = () => {
+    if (!mappingTemplate) return;
+    setCandidates(matchDocument(document, mappingTemplate));
+    setDecisions({});
+    setNotice('Matched the mock downstream template; the payload has not been sent.');
+  };
+
+  const selectMappingTemplate = (id: string) => {
+    setMappingTemplateId(id);
+    setCandidates([]);
+    setDecisions({});
+  };
+
+  const setDecision = (fieldId: string, value: string) => {
+    setDecisions((current) => ({ ...current, [fieldId]: value }));
+  };
+
+  const loadOpenApi = (text: string) => {
+    setOpenApiText(text);
+    const result = parseOpenApi(text);
+    if (!result.ok) {
+      setOpenApiError(result.error);
+      setOpenApiContract(null);
+      setOpenApiOperationId(null);
+      setOpenApiMappings({});
+      return;
+    }
+    setOpenApiError(null);
+    setOpenApiContract(result.contract);
+    const first = result.contract.operations.find((operation) => operation.available) ?? null;
+    setOpenApiOperationId(first?.id ?? null);
+    setOpenApiMappings(first ? suggestMappings(first.fields, mappingVariables) : {});
+  };
+
+  const selectOpenApiOperation = (id: string) => {
+    const operation = openApiContract?.operations.find((item) => item.id === id) ?? null;
+    setOpenApiOperationId(operation?.id ?? null);
+    setOpenApiMappings(operation ? suggestMappings(operation.fields, mappingVariables) : {});
+  };
+
+  const downloadOpenApiPayload = () => {
+    if (!openApiOperation || !openApiPayload?.ready) return;
+    const filename = downloadJson(openApiOperation, openApiPayload.payload);
+    setNotice(`Downloaded ${filename} — not sent to the downstream API.`);
+  };
+
+  const payload = mappingTemplate
+    ? buildPayload(mappingTemplate, decisions, {
+        templateVersion: mappingTemplate.version,
+        documentDigest: digest || 'digest-unavailable',
+      })
+    : null;
+
+  const mappingVariables = variables.map((variable) => ({
+    variableId: variable.variableId,
+    label: variable.label,
+    displayValue: variable.displayValue,
+  }));
+  const openApiOperation =
+    openApiContract?.operations.find((operation) => operation.id === openApiOperationId) ?? null;
+  const openApiPayload = openApiOperation
+    ? buildOpenApiPayload(openApiOperation.fields, openApiMappings, mappingVariables)
+    : null;
+
+  const confirmedRequired =
+    mappingTemplate?.fields.filter(
+      (field) => field.required && Boolean(decisions[field.fieldId]?.trim()),
+    ).length ?? 0;
+  const requiredCount = mappingTemplate?.fields.filter((field) => field.required).length ?? 0;
+
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (
+      event.key !== 'ArrowRight' &&
+      event.key !== 'ArrowLeft' &&
+      event.key !== 'Home' &&
+      event.key !== 'End'
+    ) {
+      return;
+    }
+    event.preventDefault();
+    const last = AREAS.length - 1;
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? last
+          : event.key === 'ArrowRight'
+            ? (index + 1) % AREAS.length
+            : (index - 1 + AREAS.length) % AREAS.length;
+    setArea(AREAS[next][0]);
+    tabRefs.current[next]?.focus();
+  };
+
+  return (
+    <section className="automation-workbench" aria-label="Automation workbench">
+      <div className="row">
+        <h2>Automation</h2>
+        <span className="muted tiny">fixture only</span>
+      </div>
+      <p className="notice tiny" data-testid="automation-boundary">
+        <strong>Fixture-backed workbench.</strong> Template capture, variable fill and downstream
+        mapping are simulated locally; no server persistence, model or external request is used. Not
+        implemented: real extract/confirm, template registry, real API template import, payload
+        delivery, compare, rewrite and voice.
+      </p>
+      {!draft ? (
+        <p className="muted tiny" data-testid="no-draft">
+          No server draft — workbench actions are disabled.
+        </p>
+      ) : null}
+      <p className="muted tiny" data-testid="workbench-context">
+        Draft rev {draft?.revision ?? '—'} ·{' '}
+        {digest ? `document ${digest.slice(0, 12)}` : 'digest pending'} · {variables.length}{' '}
+        variable(s) · {templates.length} captured template(s) in this session
+      </p>
+      {notice ? (
+        <p className="tiny" role="status" aria-live="polite" data-testid="workbench-status">
+          {notice}
+        </p>
+      ) : null}
+
+      <div
+        className="assistant-tabs"
+        role="tablist"
+        aria-label="Automation areas"
+        aria-orientation="horizontal"
+      >
+        {AREAS.map(([id, label], index) => (
+          <button
+            key={id}
+            ref={(element) => {
+              tabRefs.current[index] = element;
+            }}
+            id={`automation-tab-${id}`}
+            type="button"
+            role="tab"
+            aria-selected={area === id}
+            aria-controls={`automation-panel-${id}`}
+            tabIndex={area === id ? 0 : -1}
+            onClick={() => setArea(id)}
+            onKeyDown={(event) => onTabKeyDown(event, index)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {area === 'template' ? (
+        <div
+          role="tabpanel"
+          id="automation-panel-template"
+          aria-labelledby="automation-tab-template"
+        >
+          <p className="muted tiny">
+            Capture the current imported or edited document as a template. Inspect it, rename it or
+            delete it here; the content stays a snapshot even after the editor changes.
+          </p>
+          <p className="tiny" data-testid="template-boundary">
+            <strong>Saved in this browser — not on the server.</strong> Up to {MAX_TEMPLATES}{' '}
+            templates · oldest removed first.
+          </p>
+          {templateIssue === 'unreadable' ? (
+            <p className="notice notice--warn tiny" data-testid="template-storage-issue">
+              Stored templates could not be read; new captures will still work in this session.
+            </p>
+          ) : null}
+          {templateIssue === 'unavailable' ? (
+            <p className="notice notice--warn tiny" data-testid="template-storage-issue">
+              Browser storage is unavailable. Captures stay in this session and are lost on reload.
+            </p>
+          ) : null}
+
+          <div className="template-capture" data-testid="template-capture">
+            <label className="tiny">
+              Template name
+              <input
+                aria-label="Template name"
+                value={templateName}
+                maxLength={80}
+                onChange={(event) => setTemplateName(event.target.value)}
+              />
+            </label>
+            <dl className="tiny" data-testid="capture-preview">
+              <div>
+                <dt>Source</dt>
+                <dd>
+                  {capturePreview.sourceLabel}
+                  {capturePreview.provenanceNote
+                    ? ` · ${capturePreview.provenanceNote}`
+                    : ''}
+                </dd>
+              </div>
+              <div>
+                <dt>Revision</dt>
+                <dd>{capturePreview.revisionLabel}</dd>
+              </div>
+              <div>
+                <dt>Content</dt>
+                <dd>
+                  {capturePreview.charCount} characters · {capturePreview.variables.length}{' '}
+                  variable(s)
+                </dd>
+              </div>
+              <div>
+                <dt>Version</dt>
+                <dd>{capturePreview.nextVersion}</dd>
+              </div>
+              {capturePreview.variables.length ? (
+                <div>
+                  <dt>Variables</dt>
+                  <dd>
+                    {capturePreview.variables
+                      .map(
+                        (variable) =>
+                          `${variable.label} (${variable.valueType}${
+                            variable.required ? ', required' : ''
+                          })`,
+                      )
+                      .join(', ')}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+            {capturePreview.duplicate ? (
+              <p className="notice tiny" data-testid="duplicate-warning">
+                <strong>“{capturePreview.duplicate.name}” already exists.</strong> Saving adds{' '}
+                {capturePreview.nextVersion}; the existing template is not overwritten.
+              </p>
+            ) : null}
+            {capturePreview.nameError ? (
+              <p className="tiny" data-testid="template-name-error">
+                {capturePreview.nameError}
+              </p>
+            ) : null}
+            {capturePreview.empty ? (
+              <p className="muted tiny" data-testid="template-empty-document">
+                A template needs document content. Import or type something first.
+              </p>
+            ) : null}
+            <button type="button" onClick={captureTemplate} disabled={!capturePreview.canCapture}>
+              Save as template
+            </button>
+          </div>
+          <ul
+            className="template-list"
+            data-testid="template-list"
+            aria-label="Captured templates"
+            ref={templateListRef}
+            tabIndex={-1}
+          >
+            {templates.length === 0 ? (
+              <li className="muted" data-testid="template-empty">
+                No templates yet. Capturing the current document adds one here.
+              </li>
+            ) : null}
+            {templates.map((template) => (
+              <li key={template.id}>
+                <button
+                  type="button"
+                  data-testid="template-item"
+                  aria-pressed={selectedTemplateId === template.id}
+                  aria-label={`${template.name} · ${template.version}`}
+                  onClick={() => {
+                    setSelectedTemplateId(template.id);
+                    setDeletingTemplateId(null);
+                    setApplyingTemplateId(null);
+                  }}
+                >
+                  <strong>{template.name}</strong> <span>{template.version}</span>
+                  <span className="muted tiny">
+                    {' '}
+                    · {recordSourceLabel(template)} · {template.charCount} characters ·{' '}
+                    {template.variables.length} variable(s) · {formatCapturedAt(template.capturedAt)}
+                  </span>
+                  {!template.persisted ? (
+                    <span className="tiny"> · Session only — browser storage failed</span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {selectedTemplate ? (
+            <div className="notice tiny" data-testid="template-detail">
+              <div className="row">
+                <h3>{selectedTemplate.name}</h3>
+                <span className="muted tiny">{selectedTemplate.version}</span>
+              </div>
+              <p className="muted tiny">
+                {recordSourceLabel(selectedTemplate)} · captured{' '}
+                {formatCapturedAt(selectedTemplate.capturedAt)} · {selectedTemplate.charCount}{' '}
+                characters ·{' '}
+                {selectedTemplate.boundRevision === null
+                  ? 'Captured without a server draft'
+                  : `Captured at revision ${selectedTemplate.boundRevision}`}
+              </p>
+              {selectedTemplate.variables.length ? (
+                <p className="tiny">
+                  Variables:{' '}
+                  {selectedTemplate.variables
+                    .map(
+                      (variable) =>
+                        `${variable.label} (${variable.valueType}${
+                          variable.required ? ', required' : ''
+                        })`,
+                    )
+                    .join(', ')}
+                </p>
+              ) : null}
+              <div
+                className="version-actions"
+                onKeyDown={(event) => {
+                  if (event.key !== 'Escape') return;
+                  if (renamingTemplate) {
+                    event.preventDefault();
+                    cancelRenameTemplate();
+                  } else if (deletingTemplateId === selectedTemplate.id) {
+                    event.preventDefault();
+                    setDeletingTemplateId(null);
+                  } else if (applyingTemplateId === selectedTemplate.id) {
+                    event.preventDefault();
+                    setApplyingTemplateId(null);
+                  }
+                }}
+              >
+                {onApplyTemplate ? (
+                  applyingTemplateId === selectedTemplate.id ? (
+                    <div className="version-actions">
+                      <p className="tiny" role="status" aria-live="polite">
+                        Replace the current document with “{selectedTemplate.name}” (
+                        {selectedTemplate.version})? The current content will be replaced.
+                      </p>
+                      <button
+                        type="button"
+                        autoFocus
+                        onClick={() => applySelectedTemplate(selectedTemplate)}
+                      >
+                        Replace document
+                      </button>
+                      <button type="button" onClick={() => setApplyingTemplateId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!richEditorAvailable}
+                      title={
+                        richEditorAvailable
+                          ? 'Apply this template to the editor'
+                          : 'Applying a rich template needs the rich editor'
+                      }
+                      onClick={() => {
+                        if (hasContent) {
+                          setApplyingTemplateId(selectedTemplate.id);
+                        } else {
+                          applySelectedTemplate(selectedTemplate);
+                        }
+                      }}
+                    >
+                      Apply to editor
+                    </button>
+                  )
+                ) : null}
+                {!richEditorAvailable ? (
+                  <p className="muted tiny" data-testid="apply-fallback">
+                    Applying a rich template needs the rich editor.
+                  </p>
+                ) : null}
+                {renamingTemplate?.id === selectedTemplate.id ? (
+                  <div className="version-actions">
+                    <label className="tiny">
+                      Rename template
+                      <input
+                        aria-label="Rename template"
+                        value={renamingTemplate.name}
+                        maxLength={80}
+                        autoFocus
+                        onChange={(event) =>
+                          setRenamingTemplate({ ...renamingTemplate, name: event.target.value })
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            submitRenameTemplate();
+                          }
+                        }}
+                      />
+                    </label>
+                    <button type="button" onClick={submitRenameTemplate}>
+                      Save name
+                    </button>
+                    <button type="button" onClick={cancelRenameTemplate}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => startRenameTemplate(selectedTemplate)}>
+                    Rename
+                  </button>
+                )}
+                {deletingTemplateId === selectedTemplate.id ? (
+                  <div className="version-actions">
+                    <p className="tiny" role="status" aria-live="polite">
+                      Delete “{selectedTemplate.name}” from this browser?
+                    </p>
+                    <button type="button" autoFocus onClick={() => confirmDeleteTemplate(selectedTemplate)}>
+                      Confirm delete
+                    </button>
+                    <button type="button" onClick={() => setDeletingTemplateId(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setDeletingTemplateId(selectedTemplate.id)}>
+                    Delete
+                  </button>
+                )}
+              </div>
+              <p className="tiny">
+                <strong>Captured content</strong>
+              </p>
+              <p className="tiny" data-testid="template-excerpt">
+                {selectedTemplateExcerpt}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+{area === 'variables' ? (
+        <div
+          role="tabpanel"
+          id="automation-panel-variables"
+          aria-labelledby="automation-tab-variables"
+        >
+          <p className="muted tiny">
+            Select text in the editor, then use right-click or the button below. Occurrences are
+            updated together; same-named ordinary text is not changed.
+          </p>
+          {!richEditorAvailable ? (
+            <p className="notice notice--warn tiny" data-testid="fallback-variables">
+              The rich editor is unavailable, so variable creation and fill are disabled. Variable
+              placeholders appear as <code>{'{{label}}'}</code> in the textarea.
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={openVariableDialog}
+            disabled={!canMarkVariable}
+            title={
+              richEditorAvailable
+                ? selection
+                  ? 'Mark the selected text as a variable'
+                  : 'Select text in one paragraph/heading first'
+                : 'Variable editing needs the rich editor'
+            }
+          >
+            Mark selection as variable
+          </button>
+          {richEditorAvailable && !selection ? (
+            <p className="muted tiny" data-testid="selection-hint">
+              Mark as variable needs a non-empty selection inside one paragraph or heading.
+            </p>
+          ) : null}
+          {missingRequired.length ? (
+            <p className="notice notice--warn tiny" data-testid="missing-required">
+              Required variable(s) deleted from the document:{' '}
+              {missingRequired.map((known) => known.label).join(', ')}. They are reported as
+              missing, not silently dropped.
+            </p>
+          ) : null}
+          <div
+            className="template-save"
+            data-testid="save-to-template"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && updatingTemplateId) {
+                event.preventDefault();
+                setUpdatingTemplateId(null);
+              }
+            }}
+          >
+            <label className="tiny">
+              Save document to template
+              <select
+                aria-label="Template to update"
+                value={saveTargetTemplate?.id ?? ''}
+                disabled={!templates.length || !hasContent}
+                onChange={(event) => setSaveTemplateId(event.target.value)}
+              >
+                {templates.length === 0 ? (
+                  <option value="">No templates yet</option>
+                ) : (
+                  templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} · {template.version}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            {updatingTemplateId && saveTargetTemplate ? (
+              <div className="version-actions">
+                <p className="tiny" role="status" aria-live="polite">
+                  Update “{saveTargetTemplate.name}” from {saveTargetTemplate.version} to{' '}
+                  {templateStore.nextVersion()}? The previous snapshot will be replaced.
+                </p>
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => updateTemplateFromDocument(saveTargetTemplate)}
+                >
+                  Update template
+                </button>
+                <button type="button" onClick={() => setUpdatingTemplateId(null)}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={!saveTargetTemplate || !hasContent}
+                onClick={() => {
+                  if (saveTargetTemplate) setUpdatingTemplateId(saveTargetTemplate.id);
+                }}
+              >
+                Save to template
+              </button>
+            )}
+            {templates.length === 0 ? (
+              <p className="muted tiny">No template yet — capture one in Template first.</p>
+            ) : null}
+            {!hasContent ? (
+              <p className="muted tiny">A template needs document content.</p>
+            ) : null}
+          </div>
+          <ul className="tiny" data-testid="variable-list">
+            {variables.length === 0 ? (
+              <li>No variables yet. Mark a selection to create one.</li>
+            ) : null}
+            {variables.map((variable) => (
+              <li key={variable.variableId}>
+                <button
+                  type="button"
+                  aria-pressed={selectedVariableId === variable.variableId}
+                  onClick={() => {
+                    setSelectedVariableId(variable.variableId);
+                    setFillValue(variable.displayValue ?? '');
+                  }}
+                >
+                  {variable.label} · {variable.valueType}
+                  {variable.required ? ' · required' : ' · optional'} ·{' '}
+                  {variable.occurrences.length} occurrence(s)
+                </button>
+              </li>
+            ))}
+          </ul>
+          {selectedVariable ? (
+            <div className="notice tiny" data-testid="variable-detail">
+              <p>
+                Current: {selectedVariable.displayValue ?? `{{${selectedVariable.label}}}`} · type{' '}
+                {selectedVariable.valueType} · {selectedVariable.required ? 'required' : 'optional'}
+              </p>
+              <ul data-testid="occurrence-list">
+                {selectedVariable.occurrences.map((occurrence) => (
+                  <li key={occurrence.occurrenceId}>
+                    {occurrence.nodeId} · {occurrence.start}–{occurrence.end} ·{' '}
+                    {variableDisplay({
+                      type: 'variableReference',
+                      attrs: {
+                        variableId: selectedVariable.variableId,
+                        label: selectedVariable.label,
+                        valueType: selectedVariable.valueType,
+                        required: selectedVariable.required,
+                        displayValue: selectedVariable.displayValue,
+                        occurrenceId: occurrence.occurrenceId,
+                      },
+                    })}{' '}
+                    → {fillValue.trim() || '{{empty}}'}
+                  </li>
+                ))}
+              </ul>
+              <label className="tiny">
+                New value
+                <input
+                  aria-label="Variable value"
+                  value={fillValue}
+                  onChange={(event) => setFillValue(event.target.value)}
+                  disabled={!richEditorAvailable}
+                />
+              </label>
+              <button type="button" onClick={fillVariable} disabled={!richEditorAvailable}>
+                Fill all occurrences
+              </button>
+              <p className="tiny">
+                Preview: {selectedVariable.occurrences.length} occurrence(s) will change from{' '}
+                {selectedVariable.displayValue ?? `{{${selectedVariable.label}}}`} to{' '}
+                {fillValue.trim() || '{{empty}}'}. Nothing is saved to the server.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {area === 'mapping' ? (
+        <div
+          role="tabpanel"
+          id="automation-panel-mapping"
+          aria-labelledby="automation-tab-mapping"
+        >
+          <label className="tiny">
+            Downstream source
+            <select
+              aria-label="Downstream source"
+              value={mappingSource}
+              onChange={(event) => setMappingSource(event.target.value as MappingSource)}
+            >
+              <option value="fixture">Synthetic fixture</option>
+              <option value="openapi">OpenAPI JSON</option>
+            </select>
+          </label>
+          {mappingSource === 'fixture' ? (
+            <div data-testid="fixture-mapping">
+              <p className="muted tiny">
+                Choose a mock downstream API template. Matching is deterministic; nothing is sent
+                to an external system.
+              </p>
+          <label className="tiny">
+            Downstream template
+            <select
+              aria-label="Downstream template"
+              value={mappingTemplateId}
+              onChange={(event) => selectMappingTemplate(event.target.value)}
+            >
+              {downstreamTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} · {template.version}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={runMapping} disabled={!draft || !mappingTemplate}>
+            Match document
+          </button>
+          {mappingTemplate ? (
+            <p className="tiny" data-testid="mapping-coverage">
+              Coverage: {confirmedRequired}/{requiredCount} required field(s) confirmed ·{' '}
+              {candidates.length
+                ? `${candidates.filter((item) => item.status === 'missing').length} missing · ${
+                    candidates.filter((item) => item.status === 'ambiguous').length
+                  } ambiguous`
+                : 'not matched yet'}
+            </p>
+          ) : (
+            <p className="muted tiny">No mock downstream templates available.</p>
+          )}
+          <ul className="tiny" data-testid="mapping-fields">
+            {mappingTemplate?.fields.map((field) => {
+              const candidate = candidates.find((item) => item.fieldId === field.fieldId);
+              const status = candidate?.status ?? 'unmapped';
+              const decision = decisions[field.fieldId] ?? '';
+              const confirmed = candidate?.value != null && decision === candidate.value;
+              return (
+                <li key={field.fieldId}>
+                  <strong>{field.label}</strong> · {field.required ? 'required' : 'optional'} ·
+                  status: {status}
+                  {field.type === 'enum' && field.options
+                    ? ` · options ${field.options.join(' / ')}`
+                    : ''}
+                  {candidate?.evidence ? <div>evidence: {candidate.evidence}</div> : null}
+                  <div>{candidate?.reason ?? 'Not matched yet.'}</div>
+                  {candidate?.status === 'matched' && candidate.value ? (
+                    <button
+                      type="button"
+                      onClick={() => setDecision(field.fieldId, candidate.value ?? '')}
+                    >
+                      {confirmed ? `Confirmed ${candidate.value}` : `Confirm ${candidate.value}`}
+                    </button>
+                  ) : null}
+                  {field.type === 'enum' && field.options && candidate ? (
+                    <label className="tiny">
+                      {field.label} value
+                      <select
+                        aria-label={`${field.label} value`}
+                        value={decision}
+                        onChange={(event) => setDecision(field.fieldId, event.target.value)}
+                      >
+                        <option value="">Unresolved</option>
+                        {field.options.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {field.required && !decision ? (
+                    <div className="muted">Not confirmed — stays out of the payload.</div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {payload ? (
+            <div className="notice tiny" data-testid="payload-preview" data-state={payload.state}>
+              <div>
+                Payload preview ·{' '}
+                {payload.state === 'ready'
+                  ? 'ready'
+                  : `mapping_not_ready (missing ${payload.missing.join(', ')})`}{' '}
+                · <strong>Not sent</strong>
+              </div>
+              <div className="muted tiny">
+                Bound to mock template {payload.templateVersion} · document digest{' '}
+                {payload.documentDigest.slice(0, 12)}
+              </div>
+              <pre>{JSON.stringify(payload.payload, null, 2)}</pre>
+            </div>
+          ) : null}
+            </div>
+          ) : (
+            <div data-testid="openapi-mapping">
+              <p className="muted tiny">
+                Only OpenAPI 3.x JSON with local <code>$ref</code> is supported. YAML, Swagger 2.0,
+                external refs and oneOf/anyOf are not. The spec is parsed locally, never uploaded,
+                and not saved — a reload loses it.
+              </p>
+              <label className="tiny">
+                OpenAPI JSON file
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  aria-label="OpenAPI JSON file"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void file.text().then(loadOpenApi);
+                  }}
+                />
+              </label>
+              <label className="tiny">
+                OpenAPI JSON
+                <textarea
+                  aria-label="OpenAPI JSON"
+                  rows={6}
+                  value={openApiText}
+                  onChange={(event) => setOpenApiText(event.target.value)}
+                />
+              </label>
+              <button type="button" onClick={() => loadOpenApi(openApiText)}>
+                Parse OpenAPI
+              </button>
+              {openApiError ? (
+                <p className="notice notice--bad tiny" role="alert" data-testid="openapi-error">
+                  {openApiError}
+                </p>
+              ) : null}
+              {openApiContract ? (
+                <p className="tiny" data-testid="openapi-title">
+                  {openApiContract.title} · {openApiContract.version} ·{' '}
+                  {openApiContract.operations.length} operation(s)
+                </p>
+              ) : null}
+              {openApiContract ? (
+                <label className="tiny">
+                  Operation
+                  <select
+                    aria-label="OpenAPI operation"
+                    value={openApiOperationId ?? ''}
+                    onChange={(event) => selectOpenApiOperation(event.target.value)}
+                  >
+                    <option value="">Choose an operation</option>
+                    {openApiContract.operations.map((operation) => (
+                      <option key={operation.id} value={operation.id} disabled={!operation.available}>
+                        {operation.method} {operation.path}
+                        {operation.operationId ? ` · ${operation.operationId}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {openApiOperation ? (
+                <>
+                  <p className="tiny" data-testid="openapi-operation">
+                    {openApiOperation.method} {openApiOperation.path}
+                    {openApiOperation.operationId ? ` · ${openApiOperation.operationId}` : ''}
+                  </p>
+                  <ul className="tiny" data-testid="openapi-fields">
+                    {openApiOperation.fields.map((field) => {
+                      const mapping = openApiMappings[field.path] ?? '';
+                      const issue = openApiPayload?.issues.find((item) => item.path === field.path);
+                      return (
+                        <li key={field.path}>
+                          <strong>{field.path}</strong> · {field.type} ·{' '}
+                          {field.required ? 'required' : 'optional'}
+                          {field.enumValues ? ` · enum ${field.enumValues.join(' / ')}` : ''}
+                          {field.unsupported ? (
+                            <div className="muted">{field.unsupported}</div>
+                          ) : (
+                            <label className="tiny">
+                              Variable
+                              <select
+                                aria-label={`Map ${field.path}`}
+                                value={mapping}
+                                onChange={(event) =>
+                                  setOpenApiMappings((current) => ({
+                                    ...current,
+                                    [field.path]: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">Not mapped</option>
+                                {variables.map((variable) => (
+                                  <option key={variable.variableId} value={variable.variableId}>
+                                    {variable.label} ({variable.valueType})
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                          {issue ? (
+                            <div className="notice notice--warn tiny">{issue.message}</div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {openApiOperation.warnings.length ? (
+                    <ul className="tiny muted" data-testid="openapi-warnings">
+                      {openApiOperation.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {openApiPayload ? (
+                    <div
+                      className="notice tiny"
+                      data-testid="openapi-payload"
+                      data-state={openApiPayload.ready ? 'ready' : 'not_ready'}
+                    >
+                      <div>
+                        OpenAPI request preview ·{' '}
+                        {openApiPayload.ready
+                          ? 'ready'
+                          : `not_ready${
+                              openApiPayload.missing.length
+                                ? ` (missing ${openApiPayload.missing.join(', ')})`
+                                : ''
+                            }`}{' '}
+                        · <strong>Not sent</strong>
+                      </div>
+                      <pre>{JSON.stringify(openApiPayload.payload, null, 2)}</pre>
+                      {openApiPayload.issues.length ? (
+                        <ul className="tiny">
+                          {openApiPayload.issues.map((issue) => (
+                            <li key={`${issue.path}:${issue.reason}`}>
+                              {issue.path}: {issue.message}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={!openApiPayload.ready}
+                        onClick={downloadOpenApiPayload}
+                      >
+                        Download JSON
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {dialogOpen ? (
+        <div
+          className="notice"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Variable definition"
+          data-testid="variable-dialog"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              closeDialog();
+            }
+          }}
+        >
+          <h3>Mark selection as variable</h3>
+          <p className="muted tiny">
+            The selected text becomes the initial value. Clear it later to show the{' '}
+            <code>{'{{label}}'}</code> placeholder.
+          </p>
+          <label className="tiny">
+            Label
+            <input
+              ref={labelRef}
+              aria-label="Variable label"
+              value={definition.label}
+              onChange={(event) => setDefinition({ ...definition, label: event.target.value })}
+            />
+          </label>
+          <label className="tiny">
+            Type
+            <select
+              aria-label="Variable type"
+              value={definition.valueType}
+              onChange={(event) =>
+                setDefinition({
+                  ...definition,
+                  valueType: event.target.value as VariableDefinition['valueType'],
+                })
+              }
+            >
+              <option value="string">string</option>
+              <option value="amount">amount</option>
+              <option value="date">date</option>
+              <option value="currency">currency</option>
+            </select>
+          </label>
+          <label className="tiny">
+            <input
+              type="checkbox"
+              checked={definition.required}
+              onChange={(event) => setDefinition({ ...definition, required: event.target.checked })}
+            />{' '}
+            Required before submit
+          </label>
+          <div className="version-actions">
+            <button type="button" onClick={confirmVariable}>
+              Create variable
+            </button>
+            <button type="button" onClick={closeDialog}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}

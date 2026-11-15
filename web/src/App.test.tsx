@@ -1,10 +1,12 @@
 /** Task 2.2 — the three-pane shell and the narrow-viewport switcher. */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
+import { automationTemplateStore } from './automation/templateStore';
+import { plainTextToDocument } from './rich/richDocument';
 
 const setViewport = (narrow: boolean) => {
   vi.stubGlobal('matchMedia', (query: string) => ({
@@ -40,6 +42,31 @@ describe('wide viewport', () => {
     render(<App />);
 
     expect(screen.getByRole('button', { name: /Run spec audit/i })).toBeTruthy();
+  });
+});
+
+describe('automation template apply (8.3)', () => {
+  it('replaces the editor content and marks it dirty/autosave-pending', async () => {
+    automationTemplateStore.capture({
+      name: 'Shell template',
+      document: plainTextToDocument('Template body'),
+      source: { kind: 'edited' },
+      revision: null,
+      charCount: 'Template body'.length,
+      variables: [],
+      now: new Date('2026-11-15T10:00:00Z'),
+    });
+    setViewport(false);
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('tab', { name: /Automation · fixture only/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Shell template · v1' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Apply to editor' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('editor-rich').textContent).toContain('Template body'),
+    );
+    expect(screen.getByTestId('save-state').textContent).toContain('Unsaved changes');
   });
 });
 

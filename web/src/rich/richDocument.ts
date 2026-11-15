@@ -51,7 +51,23 @@ export interface PdfGapNode {
   content?: TextNode[];
 }
 
-export type InlineNode = TextNode | PdfGapNode;
+/**
+ * A document-local variable reference. `displayValue` is the current rendered value; when it is
+ * null the editor/projection show `{{label}}` instead of inventing a value.
+ */
+export interface VariableReferenceNode {
+  type: 'variableReference';
+  attrs: {
+    variableId: string;
+    label: string;
+    valueType: 'string' | 'amount' | 'date' | 'currency';
+    required: boolean;
+    displayValue: string | null;
+    occurrenceId?: string;
+  };
+}
+
+export type InlineNode = TextNode | PdfGapNode | VariableReferenceNode;
 
 /** A page boundary: visible in the editor, contributes no characters to the audit text. */
 export interface PageBreakNode {
@@ -75,7 +91,8 @@ export interface OrderedListNode {
 }
 
 export interface TableCellNode {
-  type: 'tableCell';
+  /** TipTap emits `tableHeader` for a header row; both project the same way. */
+  type: 'tableCell' | 'tableHeader';
   attrs?: { header?: boolean };
   content: ParagraphNode[];
 }
@@ -107,24 +124,106 @@ export interface RichDocument {
   provenanceNote?: string;
 }
 
-const BLOCK_TYPES = new Set([
-  'paragraph',
-  'heading',
-  'bulletList',
-  'orderedList',
-  'table',
-  'pageBreak',
-]);
+const VALUE_TYPES = new Set(['string', 'amount', 'date', 'currency']);
 
 export const emptyDocument = (): RichDocument => ({ type: 'doc', content: [] });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+function isTextNode(node: unknown): boolean {
+  return isRecord(node) && node.type === 'text' && typeof node.text === 'string';
+}
+
+function isVariableNode(node: Record<string, unknown>): boolean {
+  const attrs = node.attrs;
+  return (
+    isRecord(attrs) &&
+    typeof attrs.variableId === 'string' &&
+    attrs.variableId.length > 0 &&
+    typeof attrs.label === 'string' &&
+    attrs.label.length > 0 &&
+    typeof attrs.valueType === 'string' &&
+    VALUE_TYPES.has(attrs.valueType) &&
+    typeof attrs.required === 'boolean' &&
+    (attrs.displayValue === null || typeof attrs.displayValue === 'string') &&
+    (attrs.occurrenceId === undefined ||
+      attrs.occurrenceId === null ||
+      typeof attrs.occurrenceId === 'string')
+  );
+}
+
+/** `text` | `pdfGap` (text children) | `variableReference`; anything else is rejected. */
+function isInlineNode(node: unknown): boolean {
+  if (!isRecord(node)) return false;
+  switch (node.type) {
+    case 'text':
+      return typeof node.text === 'string';
+    case 'variableReference':
+      return isVariableNode(node);
+    case 'pdfGap':
+      return node.content === undefined || (Array.isArray(node.content) && node.content.every(isTextNode));
+    default:
+      return false;
+  }
+}
+
+function isInlineContent(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every(isInlineNode));
+}
+
+function isListItem(node: unknown): boolean {
+  return (
+    isRecord(node) &&
+    node.type === 'listItem' &&
+    Array.isArray(node.content) &&
+    node.content.every((paragraph) => isRecord(paragraph) && paragraph.type === 'paragraph' && isInlineContent(paragraph.content))
+  );
+}
+
+function isTableCell(node: unknown): boolean {
+  return (
+    isRecord(node) &&
+    (node.type === 'tableCell' || node.type === 'tableHeader') &&
+    Array.isArray(node.content) &&
+    node.content.every((paragraph) => isRecord(paragraph) && paragraph.type === 'paragraph' && isInlineContent(paragraph.content))
+  );
+}
+
+function isTableRow(node: unknown): boolean {
+  return (
+    isRecord(node) &&
+    node.type === 'tableRow' &&
+    Array.isArray(node.content) &&
+    node.content.every(isTableCell)
+  );
+}
+
+function isBlockNode(node: unknown): boolean {
+  if (!isRecord(node)) return false;
+  switch (node.type) {
+    case 'paragraph':
+      return isInlineContent(node.content);
+    case 'heading': {
+      const level = isRecord(node.attrs) ? Number(node.attrs.level) : NaN;
+      return [1, 2, 3].includes(level) && isInlineContent(node.content);
+    }
+    case 'pageBreak':
+      return true;
+    case 'bulletList':
+    case 'orderedList':
+      return Array.isArray(node.content) && node.content.every(isListItem);
+    case 'table':
+      return Array.isArray(node.content) && node.content.every(isTableRow);
+    default:
+      return false;
+  }
+}
+
 /** Structural guard: enough to reject a malformed payload before the editor sees it. */
 export function isRichDocument(value: unknown): value is RichDocument {
   if (!isRecord(value) || value.type !== 'doc' || !Array.isArray(value.content)) return false;
-  return value.content.every((block) => isRecord(block) && BLOCK_TYPES.has(String(block.type)));
+  return value.content.every(isBlockNode);
 }
 
 /**

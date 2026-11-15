@@ -12,7 +12,6 @@ import { plainTextToDocument, type RichDocument } from './rich/richDocument';
 import { createSnapshot, digestText } from './snapshot';
 import { versionStore, type VersionEntry } from './versionStore';
 import { AssistantPanel } from './components/AssistantPanel';
-import { AutomationFixturePanel } from './components/AutomationFixturePanel';
 import { DocumentActions } from './components/DocumentActions';
 import { ImportReport, initialImportState, type ImportState } from './components/ImportReport';
 import { RichEditor } from './components/RichEditor';
@@ -47,8 +46,11 @@ export function App() {
   const [importState, setImportState] = useState<ImportState>(initialImportState);
   /** Latest editor selection in projected text offsets; sent only when asking about a passage. */
   const [knowledgeSelection, setKnowledgeSelection] = useState<AssistantSelection | null>(null);
+  /** A selection the editor handed to the Automation workbench (right-click or Alt+Shift+V). */
+  const [pendingVariable, setPendingVariable] = useState<AssistantSelection | null>(null);
+  /** Whether the rich editor started; variable actions are unavailable in the textarea fallback. */
+  const [editorMode, setEditorMode] = useState<'rich' | 'fallback'>('rich');
   const [draft, setDraft] = useState<DraftView | null>(null);
-  const [lock, setLock] = useState<LockView | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('local');
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
@@ -83,7 +85,6 @@ export function App() {
         draftRef.current = view;
         lockRef.current = lockView;
         setDraft(view);
-        setLock(lockView);
         if (!userEditedRef.current) {
           setRichDoc(view.content);
           richDocRef.current = view.content;
@@ -320,9 +321,13 @@ export function App() {
   };
 
   /** Filling the editor is the only thing import does; user edits are never replaced silently. */
-  const replaceDocument = (next: RichDocument) => {
+  const replaceDocument = (
+    next: RichDocument,
+    options: { confirm?: boolean } = {},
+  ) => {
+    const { confirm = true } = options;
     const hasUserText = text.trim().length > 0 && dirty;
-    if (hasUserText && !window.confirm('Replace the current editor content with the imported text?')) {
+    if (confirm && hasUserText && !window.confirm('Replace the current editor content with the imported text?')) {
       return false;
     }
     setRichDoc(next);
@@ -332,6 +337,11 @@ export function App() {
     setPane('editor');
     scheduleSave(next);
     return true;
+  };
+
+  /** Template apply confirms inside the workbench; App only performs the replacement/autosave. */
+  const handleApplyTemplate = (next: RichDocument) => {
+    replaceDocument(next, { confirm: false });
   };
 
   /** Imported structure wins; a document without `rich` degrades to paragraphs of its text. */
@@ -371,13 +381,6 @@ export function App() {
   // run that finishes afterwards can never be rendered as if it were still current.
   const handleStopWaiting = () => dispatch({ type: 'reset' });
 
-  const handleApplied = (view: DraftView) => {
-    applySaveResult(view);
-    richDocRef.current = view.content;
-    setRichDoc(view.content);
-    setKnowledgeSelection(null);
-  };
-
   const panes: Record<PaneId, JSX.Element> = {
     versions: (
       <VersionPanel
@@ -386,14 +389,7 @@ export function App() {
         onCapture={() => void handleCapture()}
         onRestore={handleRestore}
         onClear={handleClear}
-      >
-        <AutomationFixturePanel
-          documentId={DOCUMENT_ID}
-          draft={draft}
-          lock={lock}
-          onApplied={handleApplied}
-        />
-      </VersionPanel>
+      />
     ),
     editor: (
       <RichEditor
@@ -401,6 +397,8 @@ export function App() {
         onChange={handleDocumentChange}
         dirty={dirty}
         onSelection={setKnowledgeSelection}
+        onMarkVariable={setPendingVariable}
+        onModeChange={setEditorMode}
         saveState={saveState}
         conflict={conflict}
         recoveryNotice={recoveryNotice}
@@ -423,6 +421,17 @@ export function App() {
           digest: currentDigest,
           text,
           selection: knowledgeSelection,
+        }}
+        automation={{
+          draft,
+          document: richDoc,
+          selection: knowledgeSelection,
+          pendingVariable,
+          digest: currentDigest,
+          richEditorAvailable: editorMode === 'rich',
+          onApplyTemplate: handleApplyTemplate,
+          onChange: handleDocumentChange,
+          onVariableHandled: () => setPendingVariable(null),
         }}
       />
     ),

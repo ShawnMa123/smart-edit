@@ -32,12 +32,12 @@ test('empty submission is refused and reported as a failed audit', async ({ page
 test('unimplemented assistant tabs are labelled and render no sample output', async ({ page }) => {
   await page.goto('/');
 
-  const tab = page.getByRole('tab', { name: /Automation/ });
+  const tab = page.getByRole('tab', { name: /Legal advice/ });
   await expect(tab).toContainText('not implemented');
   await tab.click();
 
-  await expect(page.getByRole('status')).toContainText('is not implemented in this build');
-  await expect(page.getByRole('status')).toContainText('rule audit and knowledge tabs');
+  await expect(page.getByRole('status')).toContainText('Legal advice is not implemented in this build');
+  await expect(page.getByRole('status')).toContainText('fixture-backed automation tabs');
   // No fabricated output for a capability this build lacks: no run control, no audit result block.
   await expect(page.locator('[data-testid="audit-run"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="rule-audit"]')).toHaveCount(0);

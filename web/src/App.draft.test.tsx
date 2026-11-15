@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from './api/errors';
 import { App } from './App';
+import { automationTemplateStore } from './automation/templateStore';
+import { plainTextToDocument } from './rich/richDocument';
 import { versionStore } from './versionStore';
 import {
   acquireLock,
@@ -158,6 +160,7 @@ describe('autosave', () => {
     expect(draftId).toBe('draft-1');
     expect(revision).toBe(1);
     expect(body).toMatchObject({ lockId: 'lock-1', fencingToken: 1, text: 'Changed' });
+    expect(body).not.toHaveProperty('variables');
   });
 
   it('keeps the local editor content and stores a recovery draft on 412', async () => {
@@ -188,6 +191,46 @@ describe('autosave', () => {
     const stored = globalThis.localStorage.getItem('smart-edit:recovery:demo-document');
     expect(stored).toContain('Changed');
     expect(stored).toContain('"serverRevision":2');
+  });
+
+  it('does not claim a conflict is resolved when a template is applied', async () => {
+    vi.useFakeTimers();
+    automationTemplateStore.capture({
+      name: 'Conflict template',
+      document: plainTextToDocument('Template body'),
+      source: { kind: 'edited' },
+      revision: null,
+      charCount: 'Template body'.length,
+      variables: [],
+      now: new Date('2026-11-15T10:00:00Z'),
+    });
+    vi.mocked(getDocument).mockResolvedValue(view());
+    vi.mocked(acquireLock).mockResolvedValue(lock);
+    vi.mocked(saveDraft).mockRejectedValue(
+      new ApiError(412, 'stale_draft', 'moved', {
+        current_revision: 2,
+        content_sha256: 'b'.repeat(64),
+      }),
+    );
+    vi.mocked(getDraft).mockResolvedValue(view({ revision: 2, etag: 'draft-2', text: 'Server' }));
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByRole('tab', { name: /Automation · fixture only/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Conflict template · v1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to editor' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('conflict').textContent).toContain('revision 2');
+    expect(screen.getByTestId('save-state').textContent).toBe('conflict');
   });
 
   it('restores a local version by writing a new server revision', async () => {

@@ -1,4 +1,4 @@
-/** Task 5.3 — assistant tabs: knowledge is wired, automation/legal stay labelled. */
+/** Assistant tabs: knowledge available, automation fixture-only, legal still labelled. */
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,6 +8,14 @@ import { AssistantPanel } from './AssistantPanel';
 import { initialAuditState } from '../auditMachine';
 
 const knowledge = { documentId: 'doc-1', digest: 'a'.repeat(64), text: '保函文本' };
+const automation = {
+  draft: null,
+  document: { type: 'doc' as const, content: [] },
+  selection: null,
+  pendingVariable: null,
+  onChange: vi.fn(),
+  onVariableHandled: vi.fn(),
+};
 
 const renderPanel = () =>
   render(
@@ -17,16 +25,17 @@ const renderPanel = () =>
       onRun={vi.fn()}
       onStopWaiting={vi.fn()}
       knowledge={knowledge}
+      automation={automation}
     />,
   );
 
 describe('AssistantPanel', () => {
-  it('offers the audit and knowledge tabs and marks only automation/legal unimplemented', () => {
+  it('offers audit, knowledge and fixture-only automation; only legal is not implemented', () => {
     renderPanel();
 
     expect(screen.getByRole('tab', { name: 'Rule audit' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Knowledge Q&A' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Automation · not implemented/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Automation · fixture only/ })).toBeTruthy();
     expect(screen.getByRole('tab', { name: /Legal advice · not implemented/ })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: /Knowledge Q&A · not implemented/ })).toBeNull();
   });
@@ -48,19 +57,32 @@ describe('AssistantPanel', () => {
     expect(screen.queryByRole('button', { name: /Run spec audit/i })).toBeNull();
   });
 
-  it('renders no sample answer for an unimplemented tab', async () => {
+  it('renders the fixture-only automation workbench, not a generic placeholder', async () => {
     renderPanel();
 
-    await userEvent.click(screen.getByRole('tab', { name: /Automation · not implemented/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Automation · fixture only/ }));
 
-    expect(screen.getByText(/Automation is not implemented in this build/i)).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Template' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Variables & Fill' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Downstream Mapping' })).toBeTruthy();
+    expect(screen.getByTestId('automation-boundary').textContent).toContain('Fixture-backed');
+    expect(screen.getByTestId('automation-boundary').textContent).toContain('Not implemented');
+    expect(screen.queryByText(/Automation is not implemented in this build/i)).toBeNull();
+  });
+
+  it('renders no sample answer for the remaining unimplemented tab', async () => {
+    renderPanel();
+
+    await userEvent.click(screen.getByRole('tab', { name: /Legal advice · not implemented/ }));
+
+    expect(screen.getByText(/Legal advice is not implemented in this build/i)).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
     expect(document.querySelectorAll('.finding')).toHaveLength(0);
     expect(screen.queryByLabelText('Knowledge question')).toBeNull();
     expect(screen.queryByRole('button', { name: /Run spec audit/i })).toBeNull();
   });
 
-  it('returns to the audit panel from an unimplemented tab', async () => {
+  it('returns to the audit panel from the legal tab', async () => {
     renderPanel();
 
     await userEvent.click(screen.getByRole('tab', { name: /Legal advice · not implemented/ }));

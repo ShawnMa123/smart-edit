@@ -32,8 +32,19 @@ export function useRichEditor({ document, onChange }: UseRichEditorOptions): Edi
     },
     onUpdate: ({ editor: instance }) => {
       const next = toRichDocument(instance.getJSON());
-      applied.current = next;
-      onChange(next);
+      // Import provenance is document-level metadata, not part of the TipTap schema. Carry it
+      // forward so an edited import can still be described honestly (never invented).
+      const inherited = applied.current.provenance
+        ? {
+            provenance: applied.current.provenance,
+            ...(applied.current.provenanceNote
+              ? { provenanceNote: applied.current.provenanceNote }
+              : {}),
+          }
+        : null;
+      const withProvenance = inherited ? { ...next, ...inherited } : next;
+      applied.current = withProvenance;
+      onChange(withProvenance);
     },
   });
 

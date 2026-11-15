@@ -14,6 +14,10 @@ class Principal:
     workspace_id: str
     roles: tuple[str, ...] = ("member",)
     authorization_version: str = "auth-demo-1"
+    capabilities: tuple[str, ...] = ("read", "use_ai", "confirm_fields", "edit", "apply")
+
+    def has(self, capability: str) -> bool:
+        return capability in self.capabilities
 
 
 @dataclass(frozen=True)

@@ -16,10 +16,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from app.documents.errors import HostNotFound, LockConflict, RevisionConflict
+from app.documents.errors import HostError, HostNotFound, LockConflict, RevisionConflict
 from app.documents.projection import plain_text_document, project_document, sha256_text
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS document_checkpoints (
   checkpoint_id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, revision INTEGER NOT NULL,
   content_json TEXT NOT NULL, text TEXT NOT NULL, text_sha256 TEXT NOT NULL, variables_json TEXT NOT NULL DEFAULT '{}',
   variables_version INTEGER NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL,
-  UNIQUE (draft_id, revision),
+  UNIQUE (draft_id, revision, variables_version),
   FOREIGN KEY (draft_id) REFERENCES document_drafts(draft_id));
 CREATE TABLE IF NOT EXISTS document_locks (
   lock_id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, owner_user_id TEXT NOT NULL,
@@ -76,6 +76,26 @@ CREATE TABLE IF NOT EXISTS automation_applications (
   FOREIGN KEY (proposal_id) REFERENCES automation_proposals(proposal_id));
 CREATE UNIQUE INDEX IF NOT EXISTS one_applied_application ON automation_applications(proposal_id)
   WHERE status = 'applied';
+CREATE TABLE IF NOT EXISTS automation_runs (
+  run_id TEXT PRIMARY KEY, task_type TEXT NOT NULL, document_id TEXT NOT NULL, draft_id TEXT NOT NULL,
+  owner_user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, status TEXT NOT NULL, stage TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, deadline_at TEXT NOT NULL,
+  started_at TEXT, finished_at TEXT, result_id TEXT, request_json TEXT NOT NULL DEFAULT '{}',
+  error_json TEXT);
+CREATE TABLE IF NOT EXISTS automation_results (
+  result_id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE, completion TEXT NOT NULL,
+  outcome TEXT NOT NULL, payload_json TEXT NOT NULL, limitations_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES automation_runs(run_id));
+CREATE TABLE IF NOT EXISTS automation_dependencies (
+  owner_type TEXT NOT NULL, owner_id TEXT NOT NULL, resource_type TEXT NOT NULL,
+  resource_id TEXT NOT NULL, version TEXT, created_at TEXT NOT NULL,
+  PRIMARY KEY (owner_type, owner_id, resource_type, resource_id));
+CREATE TABLE IF NOT EXISTS automation_reviews (
+  review_id TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, context_hash TEXT NOT NULL,
+  verdict TEXT NOT NULL, validator_version TEXT NOT NULL, issues_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (proposal_id) REFERENCES automation_proposals(proposal_id));
 """
 
 
@@ -122,11 +142,31 @@ class HostStore:
                 f"host database schema v{found} is newer than this build (v{SCHEMA_VERSION})"
             )
         if found < SCHEMA_VERSION:
-            with self.transaction() as conn:
+            self._migrate(found)
+
+    def _migrate(self, found: int) -> None:
+        with self.transaction() as conn:
+            if found < 2:
+                conn.execute("ALTER TABLE document_checkpoints RENAME TO document_checkpoints_v1")
                 conn.execute(
-                    "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
-                    (str(SCHEMA_VERSION),),
+                    "CREATE TABLE document_checkpoints ("
+                    " checkpoint_id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, revision INTEGER NOT NULL,"
+                    " content_json TEXT NOT NULL, text TEXT NOT NULL, text_sha256 TEXT NOT NULL,"
+                    " variables_json TEXT NOT NULL DEFAULT '{}', variables_version INTEGER NOT NULL,"
+                    " created_by TEXT NOT NULL, created_at TEXT NOT NULL,"
+                    " UNIQUE (draft_id, revision, variables_version),"
+                    " FOREIGN KEY (draft_id) REFERENCES document_drafts(draft_id))"
                 )
+                conn.execute(
+                    "INSERT INTO document_checkpoints SELECT checkpoint_id, draft_id, revision,"
+                    " content_json, text, text_sha256, variables_json, variables_version, created_by,"
+                    " created_at FROM document_checkpoints_v1"
+                )
+                conn.execute("DROP TABLE document_checkpoints_v1")
+            conn.execute(
+                "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+                (str(SCHEMA_VERSION),),
+            )
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
@@ -246,11 +286,18 @@ class HostStore:
         payload = content or plain_text_document(text or "")
         projection = project_document(payload)
         content_sha = sha256_text(projection.text)
-        variables_json = json.dumps(variables or {}, sort_keys=True, ensure_ascii=False)
+        current_variables_json = current["variables_json"]
+        variables_json = (
+            current_variables_json
+            if variables is None
+            else json.dumps(variables, sort_keys=True, ensure_ascii=False)
+        )
+        variables_changed = variables_json != current_variables_json
+        new_variables_version = int(current["variables_version"]) + (1 if variables_changed else 0)
 
         if current["revision"] != expected_revision:
             raise RevisionConflict(current)
-        if current["text_sha256"] == content_sha and current["variables_json"] == variables_json:
+        if current["text_sha256"] == content_sha and not variables_changed:
             return current
 
         stamp = now_iso()
@@ -259,7 +306,7 @@ class HostStore:
         with self.transaction() as conn:
             updated = conn.execute(
                 "UPDATE document_drafts SET revision=?, content_json=?, text=?, text_sha256=?,"
-                " variables_json=?, variables_version=variables_version+1, updated_at=?"
+                " variables_json=?, variables_version=?, updated_at=?"
                 " WHERE draft_id=? AND revision=? AND text_sha256=? AND variables_json=?",
                 (
                     new_revision,
@@ -267,11 +314,12 @@ class HostStore:
                     projection.text,
                     content_sha,
                     variables_json,
+                    new_variables_version,
                     stamp,
                     draft_id,
                     expected_revision,
                     current["text_sha256"],
-                    current["variables_json"],
+                    current_variables_json,
                 ),
             )
             if updated.rowcount != 1:
@@ -289,7 +337,7 @@ class HostStore:
                     projection.text,
                     content_sha,
                     variables_json,
-                    int(current["variables_version"]) + 1,
+                    new_variables_version,
                     actor,
                     stamp,
                 ),
@@ -302,6 +350,73 @@ class HostStore:
                 {"draft_id": draft_id, "revision": new_revision, "content_sha256": content_sha},
             )
             self._enqueue(conn, "draft.saved", {"draft_id": draft_id, "revision": new_revision})
+        return self.get_draft(draft_id) or {}
+
+    def update_variables(
+        self,
+        *,
+        draft_id: str,
+        expected_variables_version: int,
+        variables: dict[str, Any],
+        actor: str,
+        request_id: str = "",
+    ) -> dict[str, Any]:
+        current = self.get_draft(draft_id)
+        if not current:
+            raise HostNotFound("draft not found")
+        variables_json = json.dumps(variables, sort_keys=True, ensure_ascii=False)
+        if int(current["variables_version"]) != int(expected_variables_version):
+            raise HostError(
+                412,
+                "stale_variables",
+                "the variables moved since this update was based on them",
+                {"current_variables_version": int(current["variables_version"])},
+            )
+        if current["variables_json"] == variables_json:
+            return current
+
+        stamp = now_iso()
+        new_version = int(current["variables_version"]) + 1
+        checkpoint_id = new_id("ckpt")
+        with self.transaction() as conn:
+            updated = conn.execute(
+                "UPDATE document_drafts SET variables_json=?, variables_version=?, updated_at=?"
+                " WHERE draft_id=? AND variables_version=?",
+                (variables_json, new_version, stamp, draft_id, expected_variables_version),
+            )
+            if updated.rowcount != 1:
+                latest = self.get_draft(draft_id)
+                raise HostError(
+                    412,
+                    "stale_variables",
+                    "the variables moved during this update",
+                    {"current_variables_version": int((latest or current)["variables_version"])},
+                )
+            conn.execute(
+                "INSERT INTO document_checkpoints VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (
+                    checkpoint_id,
+                    draft_id,
+                    int(current["revision"]),
+                    current["content_json"],
+                    current["text"],
+                    current["text_sha256"],
+                    variables_json,
+                    new_version,
+                    actor,
+                    stamp,
+                ),
+            )
+            self._audit(
+                conn,
+                request_id,
+                "variables_saved",
+                actor,
+                {"draft_id": draft_id, "variables_version": new_version},
+            )
+            self._enqueue(
+                conn, "draft.variables_saved", {"draft_id": draft_id, "variables_version": new_version}
+            )
         return self.get_draft(draft_id) or {}
 
     def restore_checkpoint(

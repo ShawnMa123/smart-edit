@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   AUTOMATION_BASE,
   applyProposal,
-  createFixtureProposal,
+  createRun,
   decideProposal,
+  getRun,
   undoApplication,
 } from './automation';
 
@@ -51,14 +52,37 @@ const proposal = {
 };
 
 describe('automation client', () => {
-  it('creates a fixture proposal with an idempotency key', async () => {
+  it('creates a rewrite run with an idempotency key', async () => {
     const calls: Call[] = [];
-    await createFixtureProposal(
-      { document_id: 'doc-1', draft_id: 'draft-1' },
-      { fetchImpl: record(calls, proposal, 201), idempotencyKey: 'p-key' },
+    const run = {
+      run_id: 'run-1',
+      task_type: 'rewrite',
+      document_id: 'doc-1',
+      draft_id: 'draft-1',
+      status: 'queued',
+      stage: 'queued',
+      revision: 1,
+      created_at: '2026-01-01T00:00:00+00:00',
+      deadline_at: '2026-01-01T00:02:00+00:00',
+      started_at: null,
+      finished_at: null,
+      result_id: null,
+      error: null,
+    };
+    await createRun(
+      {
+        task_type: 'rewrite',
+        document_id: 'doc-1',
+        draft_id: 'draft-1',
+        input: { intent: 'replace_text', search_text: 'Amount:', replacement_text: 'Reviewed amount:' },
+      },
+      { fetchImpl: record(calls, run, 202), idempotencyKey: 'run-key' },
     );
-    expect(calls[0].url).toBe(`${AUTOMATION_BASE}/proposals`);
-    expect((calls[0].init.headers as Record<string, string>)['Idempotency-Key']).toBe('p-key');
+    expect(calls[0].url).toBe(`${AUTOMATION_BASE}/runs`);
+    expect((calls[0].init.headers as Record<string, string>)['Idempotency-Key']).toBe('run-key');
+
+    await getRun('run-1', { fetchImpl: record(calls, run, 200) });
+    expect(calls[1].url).toBe(`${AUTOMATION_BASE}/runs/run-1`);
   });
 
   it('sends proposal If-Match on decisions and draft If-Match on apply/undo', async () => {

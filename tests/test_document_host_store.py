@@ -37,8 +37,12 @@ def test_schema_tables_and_version(tmp_path):
         "idempotency_records",
         "automation_proposals",
         "automation_applications",
+        "automation_runs",
+        "automation_results",
+        "automation_dependencies",
+        "automation_reviews",
     } <= tables
-    assert store.schema_version() == 1
+    assert store.schema_version() == 2
 
     newer = sqlite3.connect(tmp_path / "host.db")
     newer.execute("UPDATE schema_meta SET value = '99' WHERE key = 'schema_version'")
@@ -81,6 +85,38 @@ def test_stale_revision_is_rejected_without_a_write(tmp_path):
     assert error.value.status == 412
     assert error.value.detail["current_revision"] == 2
     assert store.get_draft(draft["draft_id"])["text"] == "two"
+
+
+def test_variables_are_independent_and_checkpointed(tmp_path):
+    store = _store(tmp_path)
+    draft = store.create_document(
+        workspace_id="ws_demo_01",
+        owner_user_id="user_a",
+        title="G",
+        text="Amount: USD 500,000.00",
+        variables={"guarantee_amount": "500000.00"},
+    )
+    checkpoint_before = store.list_checkpoints(draft["draft_id"])[0]
+    store.save_draft(
+        draft_id=draft["draft_id"], expected_revision=1, text="Amount: USD 600,000.00", actor="user_a"
+    )
+    after_text = store.get_draft(draft["draft_id"])
+    assert after_text["variables_version"] == 1
+    assert after_text["variables_json"] == '{"guarantee_amount": "500000.00"}'
+    assert store.get_checkpoint(checkpoint_before["checkpoint_id"])["text"] == "Amount: USD 500,000.00"
+
+    updated = store.update_variables(
+        draft_id=draft["draft_id"],
+        expected_variables_version=1,
+        variables={"guarantee_amount": "600000.00"},
+        actor="user_a",
+    )
+    assert updated["revision"] == 2
+    assert updated["variables_version"] == 2
+    latest = store.list_checkpoints(draft["draft_id"])[-1]
+    assert latest["revision"] == 2
+    assert latest["variables_version"] == 2
+    assert latest["variables_json"] == '{"guarantee_amount": "600000.00"}'
 
 
 def test_restore_creates_a_new_revision(tmp_path):

@@ -11,7 +11,13 @@ import json
 import os
 from pathlib import Path
 
-from app.automation.schemas import ApplyRequest, FixtureProposalCreate, ProposalDecision, UndoRequest
+from app.automation.run_schemas import RunCreate
+from app.automation.schemas import (
+    ApplyRequest,
+    ChangeProposal,
+    ProposalDecision,
+    UndoRequest,
+)
 from app.documents.bootstrap import build_host_services
 from app.shared.ports import Principal
 
@@ -34,16 +40,29 @@ def main() -> int:
     lock = host.store.acquire_lock(
         draft_id=draft["draft_id"], owner_user_id=principal.user_id, lease_seconds=120
     )
-    proposal = host.automation.create_fixture(
+    run = host.runs.create(
         principal,
-        FixtureProposalCreate(
+        RunCreate(
+            task_type="rewrite",
             document_id=draft["document_id"],
             draft_id=draft["draft_id"],
-            search_text=payload["proposal"]["search_text"],
-            replacement_text=payload["proposal"]["replacement_text"],
+            input={
+                "intent": "replace_text",
+                "search_text": payload["proposal"]["search_text"],
+                "replacement_text": payload["proposal"]["replacement_text"],
+            },
         ),
-        request_id="demo",
+        "demo-run",
+        "demo",
     )
+    host.runs.execute(run.run_id)
+    finished = host.runs.get(principal, run.run_id)
+    if not finished.result_id:
+        raise RuntimeError(f"run did not produce a result: {finished.status}")
+    result = host.runs.result(principal, finished.result_id)
+    if result.outcome != "proposal_ready":
+        raise RuntimeError(f"run outcome: {result.outcome}")
+    proposal = ChangeProposal.model_validate(result.payload)
     accepted = host.automation.decide(
         principal,
         proposal.proposal_id,
@@ -60,7 +79,7 @@ def main() -> int:
             expected_draft_revision=proposal.context.revision,
             lock_id=lock["lock_id"],
             fencing_token=lock["fencing_token"],
-            acknowledged_risk_codes=[],
+            acknowledged_risk_codes=list(proposal.risk_flags),
         ),
         "demo-apply",
         "demo",

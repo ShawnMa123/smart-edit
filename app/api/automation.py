@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Request, Response
 
+from app.automation.run_schemas import AutomationResult, AutomationRun, RunCancel, RunCreate, RunPage
 from app.automation.schemas import (
     ApplyRequest,
-    FixtureProposalCreate,
     ProposalDecision,
     UndoRequest,
 )
@@ -22,6 +22,10 @@ router = APIRouter(prefix="/automation", tags=["automation"])
 
 def _service(request: Request) -> AutomationService:
     return request.app.state.host.automation
+
+
+def _runs(request: Request):
+    return request.app.state.host.runs
 
 
 def _request_id(request: Request) -> str:
@@ -82,22 +86,55 @@ def _headers(response: Response, etag: str) -> None:
     response.headers["Cache-Control"] = "no-store"
 
 
-@router.post("/proposals", status_code=201)
-def create_proposal(request: Request, response: Response, payload: FixtureProposalCreate) -> dict:
-    service = _service(request)
-    path = "/automation/proposals"
-    model = _idempotent(
-        request,
-        service,
-        path,
-        payload.model_dump(mode="json"),
-        lambda: service.create_fixture(service.principal(request), payload, _request_id(request)).model_dump(
-            mode="json"
-        ),
+@router.post("/runs", status_code=202)
+def create_run(
+    request: Request,
+    response: Response,
+    payload: RunCreate,
+    background_tasks: BackgroundTasks,
+) -> AutomationRun:
+    service = _runs(request)
+    run = service.create(
+        service.principal(request), payload, request.headers.get("idempotency-key"), _request_id(request)
     )
-    _headers(response, f"proposal-{model['revision']}")
-    response.headers["Location"] = f"/automation/proposals/{model['proposal_id']}"
-    return model
+    _headers(response, f"run-{run.revision}")
+    response.headers["Location"] = f"/automation/runs/{run.run_id}"
+    background_tasks.add_task(service.execute, run.run_id)
+    return run
+
+
+@router.get("/runs", response_model=RunPage)
+def list_runs(document_id: str, request: Request) -> RunPage:
+    service = _runs(request)
+    return RunPage(items=service.list(service.principal(request), document_id))
+
+
+@router.get("/runs/{run_id}", response_model=AutomationRun)
+def get_run(run_id: str, request: Request, response: Response) -> AutomationRun:
+    service = _runs(request)
+    run = service.get(service.principal(request), run_id)
+    _headers(response, f"run-{run.revision}")
+    return run
+
+
+@router.post("/runs/{run_id}/cancel", response_model=AutomationRun)
+def cancel_run(
+    run_id: str, request: Request, response: Response, payload: RunCancel
+) -> AutomationRun:
+    service = _runs(request)
+    run = service.cancel(
+        service.principal(request), run_id, _revision(request, "run"), payload.reason
+    )
+    _headers(response, f"run-{run.revision}")
+    return run
+
+
+@router.get("/results/{result_id}", response_model=AutomationResult)
+def get_result(result_id: str, request: Request, response: Response) -> AutomationResult:
+    service = _runs(request)
+    result = service.result(service.principal(request), result_id)
+    response.headers["Cache-Control"] = "no-store"
+    return result
 
 
 @router.get("/proposals/{proposal_id}")

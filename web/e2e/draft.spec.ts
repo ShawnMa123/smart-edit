@@ -2,7 +2,10 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 
 /**
  * Document host through a real browser (document-host-foundation):
- * autosave, 412 conflict that keeps local content, and the fixture apply/undo chain.
+ * autosave, 412 conflict that keeps local content, and the Automation tab entry point.
+ *
+ * The fixture run/apply/undo UI was replaced by the mock workbench (`automation-workbench-ui`);
+ * the run core keeps its coverage in `tests/test_automation_apply.py` and the API tests.
  */
 
 const API = 'http://127.0.0.1:8000';
@@ -103,19 +106,15 @@ test('keeps local content and shows the conflict panel on 412', async ({ page, r
   expect(recovery).toContain('[local-only]');
 });
 
-test('runs the fixture proposal through accept, apply and undo', async ({ page, request }) => {
+test('offers the Automation workbench, not the removed fixture run panel', async ({
+  page,
+  request,
+}) => {
   await resetDocument(request);
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Create fixture proposal' }).click();
-  await expect(page.getByText(/replace_text/).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Accept proposal' }).click();
-  await expect(page.getByText(/accepted/).first()).toBeVisible();
-
-  await page.getByRole('button', { name: 'Apply proposal' }).click();
-  await expect(page.getByTestId('automation-receipt')).toContainText('Receipt');
-  await expect(page.getByTestId('automation-receipt')).not.toContainText('reversed');
-
-  await page.getByRole('button', { name: 'Undo application' }).click();
-  await expect(page.getByTestId('automation-receipt')).toContainText('reversed');
+  await page.getByRole('tab', { name: /Automation · fixture only/ }).click();
+  await expect(page.getByTestId('automation-boundary')).toContainText('Fixture-backed workbench');
+  await expect(page.getByRole('tab', { name: 'Template' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create fixture run' })).toHaveCount(0);
 });

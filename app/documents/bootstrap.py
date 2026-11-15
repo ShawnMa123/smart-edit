@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.automation.run_service import AutomationRunService
 from app.automation.service import AutomationService
 from app.automation.store import AutomationStore
 from app.documents.service import DocumentService
@@ -26,6 +27,7 @@ class HostServices:
     store: HostStore
     documents: DocumentService
     automation: AutomationService
+    runs: AutomationRunService
     identity: FakeIdentity
     clock: SystemClock
     ids: SystemIds
@@ -42,10 +44,12 @@ def build_host_services(
     clock = SystemClock()
     ids = SystemIds()
     automation_store = AutomationStore(store)
+    automation_store.recover_runs()
     return HostServices(
         store=store,
         documents=DocumentService(store, identity, clock, ids),
         automation=AutomationService(store, automation_store, identity, clock, ids),
+        runs=AutomationRunService(store, automation_store, identity, clock, ids),
         identity=identity,
         clock=clock,
         ids=ids,

@@ -31,7 +31,12 @@ export interface DocumentCreateInput {
 export interface DraftSaveInput {
   content?: RichDocument;
   text?: string;
-  variables?: Record<string, unknown>;
+  lockId: string;
+  fencingToken: number;
+}
+
+export interface VariablesUpdateInput {
+  variables: Record<string, unknown>;
   lockId: string;
   fencingToken: number;
 }
@@ -147,7 +152,33 @@ export async function saveDraft(
         body: JSON.stringify({
           content: input.content,
           text: input.text,
-          variables: input.variables ?? {},
+          lock_id: input.lockId,
+          fencing_token: input.fencingToken,
+        }),
+      },
+      options,
+    )
+  ).data;
+}
+
+export async function updateVariables(
+  documentId: string,
+  draftId: string,
+  variablesVersion: number,
+  input: VariablesUpdateInput,
+  options: HostOptions = {},
+): Promise<DraftView> {
+  return (
+    await request<DraftView>(
+      `/${encodeURIComponent(documentId)}/drafts/${encodeURIComponent(draftId)}/variables`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'If-Match': `"variables-${variablesVersion}"`,
+        },
+        body: JSON.stringify({
+          variables: input.variables,
           lock_id: input.lockId,
           fencing_token: input.fencingToken,
         }),

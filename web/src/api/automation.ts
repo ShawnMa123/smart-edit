@@ -60,12 +60,63 @@ export interface ApplyReceipt {
   reversal_of_receipt_id: string | null;
 }
 
-export interface FixtureProposalInput {
+export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
+export type RunStage =
+  | 'queued'
+  | 'context'
+  | 'planning'
+  | 'processing'
+  | 'reviewing'
+  | 'publishing'
+  | 'done';
+export type RunCompletion = 'complete' | 'partial';
+export type RunOutcome =
+  | 'candidates_ready'
+  | 'proposal_ready'
+  | 'comparison_ready'
+  | 'mapping_ready'
+  | 'voice_plan_ready'
+  | 'no_changes'
+  | 'needs_clarification'
+  | 'insufficient_evidence'
+  | 'needs_handoff'
+  | 'unable_to_process';
+
+export interface AutomationRun {
+  run_id: string;
+  task_type: string;
   document_id: string;
   draft_id: string;
-  search_text?: string;
-  replacement_text?: string;
-  expires_in_seconds?: number;
+  status: RunStatus;
+  stage: RunStage;
+  revision: number;
+  created_at: string;
+  deadline_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  result_id: string | null;
+  error: Record<string, unknown> | null;
+}
+
+export interface AutomationResult {
+  result_id: string;
+  run_id: string;
+  completion: RunCompletion;
+  outcome: RunOutcome;
+  payload: Record<string, unknown>;
+  limitations: Array<Record<string, unknown>>;
+  created_at: string;
+}
+
+export interface RunCreateInput {
+  task_type: 'rewrite';
+  document_id: string;
+  draft_id: string;
+  input: {
+    intent: 'replace_text';
+    search_text?: string;
+    replacement_text?: string;
+  };
 }
 
 export interface ApplyInput {
@@ -139,23 +190,57 @@ async function request<T>(
   }
 }
 
-export function createFixtureProposal(
-  input: FixtureProposalInput,
+export function createRun(
+  input: RunCreateInput,
   options: AutomationOptions = {},
-): Promise<AutomationProposal> {
+): Promise<AutomationRun> {
   return request(
-    '/proposals',
+    '/runs',
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Idempotency-Key': options.idempotencyKey ?? newIdempotencyKey('proposal'),
+        'Idempotency-Key': options.idempotencyKey ?? newIdempotencyKey('run'),
       },
       body: JSON.stringify(input),
     },
     options,
   );
 }
+
+export function getRun(runId: string, options: AutomationOptions = {}): Promise<AutomationRun> {
+  return request(`/runs/${encodeURIComponent(runId)}`, { method: 'GET' }, options);
+}
+
+export function cancelRun(
+  runId: string,
+  revision: number,
+  options: AutomationOptions = {},
+): Promise<AutomationRun> {
+  return request(
+    `/runs/${encodeURIComponent(runId)}/cancel`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': options.idempotencyKey ?? newIdempotencyKey('cancel'),
+        ...(options.ifMatch ? { 'If-Match': options.ifMatch } : { 'If-Match': `"run-${revision}"` }),
+      },
+      body: JSON.stringify({ reason: 'cancelled by user' }),
+    },
+    options,
+  );
+}
+
+export function getResult(
+  resultId: string,
+  options: AutomationOptions = {},
+): Promise<AutomationResult> {
+  return request(`/results/${encodeURIComponent(resultId)}`, { method: 'GET' }, options);
+}
+
+export const isRunTerminal = (status: RunStatus): boolean =>
+  status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'timed_out';
 
 export function getProposal(
   proposalId: string,

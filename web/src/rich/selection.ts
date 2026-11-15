@@ -1,15 +1,15 @@
 /**
  * Maps a TipTap selection onto the shared plain-text projection (design D3).
  *
- * Offsets are Unicode code points, not UTF-16 units: the server slices Python strings by code point.
- * A selection is still limited to one paragraph/heading block in this build; other selections return
- * `null` rather than guessing a range.
+ * Offsets are Unicode code points, not UTF-16 units. Variable-reference atoms occupy one ProseMirror
+ * position but contribute their display value/placeholder to the projection, so the mapping walks the
+ * block's inline nodes instead of using `textContent` alone.
  */
 
 import type { Editor } from '@tiptap/react';
 
 import type { AssistantSelection } from '../api/assistantTypes';
-import type { RichDocument } from './richDocument';
+import type { InlineNode, RichDocument, VariableReferenceNode } from './richDocument';
 import { codePointLength, projectDocument } from './projection';
 
 interface ProjectableNode {
@@ -30,6 +30,41 @@ const headingPrefixLength = (node: ProjectableNode): number => {
   return codePointLength(`${'#'.repeat(level)} `);
 };
 
+const variableText = (node: VariableReferenceNode): string =>
+  node.attrs.displayValue ?? `{{${node.attrs.label}}}`;
+
+/** ProseMirror offset inside a block -> code-point offset in that block's projection. */
+function pmToCodePoint(nodes: InlineNode[], target: number): number {
+  let pm = 0;
+  let cp = 0;
+  for (const node of nodes) {
+    if (node.type === 'text') {
+      const value = node.text ?? '';
+      if (target <= pm + value.length) {
+        return cp + codePointLength(value.slice(0, Math.max(0, target - pm)));
+      }
+      pm += value.length;
+      cp += codePointLength(value);
+      continue;
+    }
+    if (node.type === 'variableReference') {
+      const value = variableText(node);
+      if (target <= pm) return cp;
+      if (target <= pm + 1) return cp + codePointLength(value);
+      pm += 1;
+      cp += codePointLength(value);
+      continue;
+    }
+    const value = (node.content ?? []).map((child) => child.text ?? '').join('');
+    if (target <= pm + value.length) {
+      return cp + codePointLength(value.slice(0, Math.max(0, target - pm)));
+    }
+    pm += value.length;
+    cp += codePointLength(value);
+  }
+  return cp;
+}
+
 export function selectionFromEditor(editor: Editor): AssistantSelection | null {
   const { from, to } = editor.state.selection;
   if (from === to) return null;
@@ -46,21 +81,32 @@ export function selectionFromEditor(editor: Editor): AssistantSelection | null {
       return;
     }
     const span = spans.get(`b${blockIndex}`);
+    const block = node.toJSON();
     blockIndex += 1;
-    if (!span) return;
+    if (!span || !('content' in block)) return;
 
     const contentStart = offset + 1;
-    const contentEnd = contentStart + node.textContent.length;
-    if (from < contentStart || to > contentEnd) return;
+    const inlineContent = (block.content ?? []) as InlineNode[];
+    const pmLength = inlineContent.reduce((total, item) => {
+      if (item.type === 'text') return total + (item.text ?? '').length;
+      if (item.type === 'variableReference') return total + 1;
+      return total + (item.content ?? []).map((child) => child.text ?? '').join('').length;
+    }, 0);
+    if (from < contentStart || to > contentStart + pmLength) return;
 
-    const textBefore = node.textContent.slice(0, from - contentStart);
-    const selectedText = node.textContent.slice(from - contentStart, to - contentStart);
+    const relativeStart = pmToCodePoint(inlineContent, from - contentStart);
+    const relativeEnd = pmToCodePoint(inlineContent, to - contentStart);
+    const prefix = headingPrefixLength(node);
+    // Offsets are code points, so slice the projection by characters, not UTF-16 units.
+    const projected = Array.from(projection.text);
+    const selectedText = projected
+      .slice(span.start + prefix + relativeStart, span.start + prefix + relativeEnd)
+      .join('');
     if (!selectedText) return;
-    const startOffset = span.start + headingPrefixLength(node) + codePointLength(textBefore);
     result = {
       nodeId: span.nodeId,
-      startOffset,
-      endOffset: startOffset + codePointLength(selectedText),
+      startOffset: span.start + prefix + relativeStart,
+      endOffset: span.start + prefix + relativeEnd,
       selectedText,
     };
   });

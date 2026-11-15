@@ -1,0 +1,47 @@
+{
+  "document": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Amount: " },
+          {
+            "type": "variableReference",
+            "attrs": {
+              "variableId": "var_amount",
+              "label": "amount",
+              "valueType": "amount",
+              "required": true,
+              "displayValue": "USD 500,000.00",
+              "occurrenceId": "occ_amount_1"
+            }
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Beneficiary: " },
+          {
+            "type": "variableReference",
+            "attrs": {
+              "variableId": "var_beneficiary",
+              "label": "beneficiary",
+              "valueType": "string",
+              "required": true,
+              "displayValue": null,
+              "occurrenceId": "occ_beneficiary_1"
+            }
+          },
+          { "type": "text", "text": " \ud83d\ude00 \u4fdd\u51fd" }
+        ]
+      }
+    ]
+  },
+  "expected_text": "Amount: USD 500,000.00\n\nBeneficiary: {{beneficiary}} \ud83d\ude00 \u4fdd\u51fd",
+  "expected_blocks": [
+    { "nodeId": "b0", "start": 0, "end": 22 },
+    { "nodeId": "b1", "start": 24, "end": 57 }
+  ]
+}

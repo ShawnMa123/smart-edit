@@ -12,9 +12,11 @@
 | 规范审计（`agent4`：`stages/audit`） | 能跑 | 每份保函 **51** 个计划单元，干净文档评估 **33** 项（ratio 0.647），引擎模型调用 **0** |
 | 三栏界面 + 右栏「Rule audit」 | 能跑 | `npm --prefix web run dev` → http://localhost:5173 |
 | 右栏「Knowledge Q&A」知识助手（fixture 语料） | 能跑 | `/api/assistant/*`：202 + 轮询、Claim 级引用、support_level、澄清/弃答/转交、反馈 |
-| 后端 / 前端测试 | 509 后端 / 194 前端全绿 | `.venv/bin/python -m pytest -q`、`npm --prefix web run test` |
+| 后端 / 前端测试 | 539 后端 / 321 前端全绿 | `.venv/bin/python -m pytest -q`、`npm --prefix web run test` |
 
-还没做（跑的时候会看到"未实现"而不是假成功）：审批流、自动化/法规 tab、语义检查、法规覆盖；
+还没做（跑的时候会看到"未实现"而不是假成功）：审批流、法规 tab、语义检查、法规覆盖；Automation tab 只有
+前端工作台（template 为浏览器本地快照并支持 apply/更新，variable 与 synthetic mapping 为 mock，OpenAPI JSON
+在本地解析并只生成下载文件），服务端 template 持久化、真实模型匹配与 payload 发送未实现；
 知识助手的 PostgreSQL / Worker / 真实身份与快照 / 真实模型与向量检索 / 联网、语音、管理端 UI 都不在 A 里，
 界面用 `Fixture-backed` 横幅明确标注。
 
@@ -227,22 +229,55 @@ DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**�
   `localStorage["smart-edit:recovery:demo-document"]`，冲突面板显示服务端 revision/摘要，并提供
   `Use server version` / `Overwrite with local content` / `Keep local as recovery draft`。
 - 恢复本地版本会通过正常自动保存写成**新的服务端 revision**，不会改写历史。
+- 变量独立于正文版本：正文 autosave 不再携带 `variables`，不会清空变量或推进 `variables_version`；变量更新走
+  `PATCH /documents/{id}/drafts/{draft_id}/variables`，带 `If-Match: "variables-<version>"`。本 build 的变量编辑
+  UI 只存在于 Automation 工作台 mock 层（`variableReference` 是正文节点），不会写服务端 variable table。
 - 这是 local/test 的本地宿主：单进程、单 writer、fake 身份；production 会失败关闭。不能据此声称支持多用户或生产部署。
 
-## 7.2 Automation fixture（仅演示 apply/undo 合同）
+## 7.2 Automation tab（fixture-backed 三块工作台）
 
-版本栏底部有一个小的 **Automation fixture** 面板：
+右栏 **AI assistant → Automation · fixture only** 现在是前端先行工作台，同一页面内有三块区域：
 
-1. `Create fixture proposal`：用确定性 `replace_text`（不接模型）生成提案。
-2. `Accept proposal`：只改 disposition，**不改正文**。
-3. `Apply proposal`：创建新 revision + checkpoint + 回执；幂等键保证重复点击不产生第二个 revision。
-4. `Undo application`：只在回执仍是当前头时成功；之后有人改过就返回 `undo_conflict`。
+1. **Template**：把当前**导入或本地编辑**的文档存为 template。保存前有 live preview：来源
+   （`Imported · deterministic/heuristic/fallback`，含 provenance note，或 `Edited in this browser`）、draft
+   revision（无 draft 显示 `No server draft`）、字符数、variable 摘要、下一个版本；同名时提示“另存为新版本 vN”，
+   不会覆盖。保存后生成卡片列表，可选中查看详情（来源、捕获时间、字符数、variables、240 字内容摘录）、
+   inline 重命名（空值拒绝）和两步确认删除；模板是**快照**，之后编辑正文不会改变已保存内容。
+   模板保存在浏览器 `localStorage`（key `smart-edit:automation-templates`，最多 20 个，最旧淘汰），刷新/重开
+   仍在；UI 明确写 `Saved in this browser — not on the server`，不是服务端持久化，也不能跨设备。
+   模板详情可 `Apply to editor`：当前文档有内容时两步确认，空文档直接应用；保留模板里的变量值/provenance，
+   应用后走 editor 的 autosave，模板本身不变。Variables 区域的 `Save to template` 用当前文档更新某个已有模板：
+   同一 id/name，version+1，旧快照被替换（两步确认；本 build 没有版本历史/回滚）。
+2. **Variables & Fill**：在正文选中一个 paragraph/heading 内的非空文本 → 右键 `Mark as variable`、工具栏按钮或
+   `Alt+Shift+V` → 填写 label/type/required → 选区变成一个 `variableReference` chip（初始值是选中文本）。
+   变量列表显示 value/type/required 与每个 occurrence；`Fill all occurrences` 会先显示每个 occurrence 的
+   before/after，确认后只改同一 `variableId` 的节点，不改变同名普通文本。同名变量被删除时，required 变量会显示
+   “reported as missing”，不会静默消失。
+3. **Downstream Mapping**：`Downstream source` 可选 `Synthetic fixture` 或 `OpenAPI JSON`。
+   - `Synthetic fixture`：选择一个 synthetic 下游 API template（`application_type` enum
+     `[guarantee, standby_dc]`），`Match document` 做确定性关键词匹配并给出 evidence；每个字段必须显式
+     `Confirm` 后才进入 payload；冲突显示 `ambiguous`，没有依据显示 `missing`。JSON preview 绑定 mock template
+     version + 当前文档 digest，缺口时状态是 `mapping_not_ready`。
+   - `OpenAPI JSON`：上传 `.json` 或粘贴 OpenAPI 3.x JSON（仅本地解析、不联网、不保存，刷新丢失）；选择带
+     `application/json` requestBody 的 operation，schema 的 object properties 会展开成 dotted path；变量按 label
+     自动建议、可手动改；required 缺失、enum 不匹配、number/integer/boolean 转换失败都会 `not_ready` 并指出字段。
+     就绪后可 `Download JSON` 下载请求文件，界面固定 `Not sent`，没有 send/execute，也不调用下游 API。
+     支持本地 `$ref`（含循环检测）；YAML、Swagger 2.0、URL 拉取、外部 `$ref`、`oneOf`/`anyOf` 明确不支持。
 
-右栏 assistant 的 `Automation` tab 仍然是 `not implemented`；这个面板只演示宿主写入合同，不是完整自动化 UI。
+边界与未实现：
+
+- Synthetic fixture mapping 是 **mock**；OpenAPI JSON 在浏览器内**真实解析**但只生成下载文件；template 是**浏览器本地存储**（非服务端）。都不调用真实解析服务、模型或下游系统。
+- **payload 永不发送**：两个 mapping 模式都只显示 `Not sent`，没有 send/execute 按钮，也不发外部请求；OpenAPI 下载的是本地生成的 `.json`。
+- 未实现：template 服务端持久化/跨设备/版本库 API、用模板新建新文档、Swagger 2.0/YAML/URL 拉取/外部 `$ref`/`oneOf`·`anyOf`、真实 API 调用、真实 extract/confirm、真实语义匹配/模型、payload delivery、compare、rewrite、voice。
+- 浏览器存储失败（配额、隐私模式）或数据损坏时：界面显示可读提示，条目标记 `Session only — browser storage failed`
+  或忽略无效数据；不会伪造“已保存”。
+- 旧的 `rewrite/replace_text` fixture run 面板不再占据 Automation 主视图；run/result/apply/undo 合同仍由
+  API 与 `tests/test_automation_apply.py` 覆盖。
+- rich editor 无法启动时（textarea fallback），正文只显示 `{{label}}`，变量动作被禁用并说明需要 rich editor。
 
 ## 8. 知识助手（Knowledge Q&A）
 
-右栏除了 **Rule audit**，还有 **Knowledge Q&A**（Automation / Legal 仍明确标 `not implemented`）。它只做
+右栏除了 **Rule audit**，还有 **Knowledge Q&A**（Legal 仍明确标 `not implemented`；Automation 为 `fixture only`）。它只做
 "解释 + 引用 + 弃答/澄清/转交"，**不改正文、不审批、不提交、不联网**。
 
 当前演示语料为 **8 个 synthetic source / 72 chunks**（中文 36 + 英文 36：产品 12、规则 12、内部政策 8、帮助指南 4，各一份英文镜像），全部标
@@ -332,7 +367,7 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
   && npm --prefix web run test \
   && npm --prefix web run typecheck \
   && npm --prefix web run build
-# 实测：509 passed（含知识助手 HTTP/真实 socket e2e、document host、automation apply/undo）· 194 前端测试通过 · typecheck/build clean
+# 实测：539 passed（知识助手 HTTP、document host、automation run/result/apply/undo、protected facts、variable projection parity）· 321 前端测试通过（含 template store / capture preview / apply / template 更新 / OpenAPI 解析与下载） · typecheck/build clean
 
 # 5) 真浏览器里的知识助手与草稿/冲突/apply（Playwright 会自己起 8000/8010/5173/5174）
 PW_CHANNEL=chrome npm --prefix web run e2e -- e2e/knowledge.spec.ts --project=desktop

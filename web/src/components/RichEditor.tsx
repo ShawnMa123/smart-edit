@@ -8,7 +8,7 @@
  */
 
 import { EditorContent, useEditorState, type Editor } from '@tiptap/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 
 import type { AssistantSelection } from '../api/assistantTypes';
 import { richToPlainText } from '../rich/plainText';
@@ -30,6 +30,10 @@ export interface RichEditorProps {
   onUseServer?: () => void;
   onOverwriteLocal?: () => void;
   onKeepLocal?: () => void;
+  /** Right-click action for turning the current selection into a variable. */
+  onMarkVariable?: (selection: AssistantSelection) => void;
+  /** Reports whether the rich surface or the textarea fallback is active (variable actions depend on it). */
+  onModeChange?: (mode: 'rich' | 'fallback') => void;
   /** Test seam: a throwing implementation exercises the fallback path. */
   useEditorImpl?: (typeof defaultUseRichEditor);
 }
@@ -64,16 +68,23 @@ export const TABLE_TOOLS: Tool[] = [
 ];
 
 function FallbackEditor({ document, onChange, onSelection, reason }: RichEditorProps & { reason: string }) {
+  const text = richToPlainText(document);
+  const hasVariables = /\{\{[^{}]+\}\}/.test(text);
   return (
     <div>
       <p className="notice notice--warn tiny" role="status">
         Rich text is unavailable in this session ({reason}); editing plain text instead.
       </p>
+      <p className="notice tiny" data-testid="fallback-variable-notice">
+        Variable editing needs the rich editor. {hasVariables
+          ? 'Variable placeholders are shown as {{label}}; mark-as-variable and fill are disabled.'
+          : 'Mark-as-variable and fill are disabled here.'}
+      </p>
       <textarea
         className="editor-page"
         aria-label="Document text"
         data-testid="editor-text"
-        value={richToPlainText(document)}
+        value={text}
         spellCheck={false}
         onChange={(event) => onChange(plainTextToDocument(event.target.value))}
         onSelect={(event) => {
@@ -91,6 +102,11 @@ function FallbackEditor({ document, onChange, onSelection, reason }: RichEditorP
 export function RichEditor(props: RichEditorProps) {
   const [failure, setFailure] = useState<string | null>(null);
   let editor: Editor | null = null;
+
+  // The workbench needs to know whether variable actions are possible at all.
+  useEffect(() => {
+    props.onModeChange?.(failure ? 'fallback' : 'rich');
+  }, [failure, props.onModeChange]);
 
   try {
     editor = (props.useEditorImpl ?? defaultUseRichEditor)({
@@ -116,6 +132,7 @@ export function RichEditor(props: RichEditorProps) {
       onUseServer={props.onUseServer}
       onOverwriteLocal={props.onOverwriteLocal}
       onKeepLocal={props.onKeepLocal}
+      onMarkVariable={props.onMarkVariable}
     />
   );
 }
@@ -131,6 +148,7 @@ function Surface({
   onUseServer,
   onOverwriteLocal,
   onKeepLocal,
+  onMarkVariable,
 }: {
   editor: Editor;
   document: RichDocument;
@@ -142,8 +160,14 @@ function Surface({
   onUseServer?: () => void;
   onOverwriteLocal?: () => void;
   onKeepLocal?: () => void;
+  onMarkVariable?: (selection: AssistantSelection) => void;
 }) {
   const [findOpen, setFindOpen] = useState(false);
+  const [variableMenu, setVariableMenu] = useState<{
+    x: number;
+    y: number;
+    selection: AssistantSelection;
+  } | null>(null);
 
   // Selection capture is a read-only projection: it never changes the document or the run.
   useEffect(() => {
@@ -199,6 +223,20 @@ function Surface({
         >
           ⌕
         </button>
+        {onMarkVariable ? (
+          <button
+            type="button"
+            title="Mark selection as variable (Alt+Shift+V)"
+            aria-label="Mark selection as variable"
+            disabled={!selectionFromEditor(editor)}
+            onClick={() => {
+              const selection = selectionFromEditor(editor);
+              if (selection) onMarkVariable(selection);
+            }}
+          >
+            {'⟨var⟩'}
+          </button>
+        ) : null}
       </div>
 
       {findOpen ? <FindPanel editor={editor} total={total} current={current} onClose={() => setFindOpen(false)} /> : null}
@@ -223,7 +261,46 @@ function Surface({
         </div>
       ) : null}
 
-      <EditorContent editor={editor} className="editor-page" data-testid="editor-rich" />
+      <div
+        onContextMenu={(event: MouseEvent<HTMLDivElement>) => {
+          if (!onMarkVariable) return;
+          const selection = selectionFromEditor(editor);
+          if (!selection) return;
+          event.preventDefault();
+          setVariableMenu({ x: event.clientX, y: event.clientY, selection });
+        }}
+        onKeyDown={(event) => {
+          if (!onMarkVariable) return;
+          if (!event.altKey || !event.shiftKey || event.key.toLowerCase() !== 'v') return;
+          const selection = selectionFromEditor(editor);
+          if (!selection) return;
+          event.preventDefault();
+          onMarkVariable(selection);
+        }}
+      >
+        <EditorContent editor={editor} className="editor-page" data-testid="editor-rich" />
+        {variableMenu ? (
+          <div
+            className="variable-context-menu"
+            role="menu"
+            style={{ position: 'fixed', left: variableMenu.x, top: variableMenu.y, zIndex: 20 }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onMarkVariable?.(variableMenu.selection);
+                setVariableMenu(null);
+              }}
+            >
+              Mark as variable
+            </button>
+            <button type="button" role="menuitem" onClick={() => setVariableMenu(null)}>
+              Cancel
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       <div className="editor-footer">
         <span>{richToPlainText(document).length} characters in the audit text</span>

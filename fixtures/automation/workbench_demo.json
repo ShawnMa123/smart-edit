@@ -1,0 +1,50 @@
+{
+  "defaultTemplateName": "Demand guarantee template",
+  "variables": [
+    { "label": "amount", "valueType": "amount", "required": true },
+    { "label": "beneficiary", "valueType": "string", "required": true },
+    { "label": "expiry date", "valueType": "date", "required": false }
+  ],
+  "downstreamTemplates": [
+    {
+      "id": "api_template_demo",
+      "name": "Trade intake (synthetic)",
+      "version": "v1",
+      "fields": [
+        {
+          "fieldId": "application_type",
+          "label": "Application type",
+          "type": "enum",
+          "required": true,
+          "options": ["guarantee", "standby_dc"]
+        },
+        {
+          "fieldId": "expiry_date",
+          "label": "Expiry date",
+          "type": "date",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "api_template_letter_of_credit",
+      "name": "Letter of credit intake (synthetic)",
+      "version": "v2",
+      "fields": [
+        {
+          "fieldId": "application_type",
+          "label": "Application type",
+          "type": "enum",
+          "required": true,
+          "options": ["guarantee", "standby_dc"]
+        },
+        {
+          "fieldId": "beneficiary_name",
+          "label": "Beneficiary name",
+          "type": "string",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

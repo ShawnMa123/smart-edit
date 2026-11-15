@@ -22,6 +22,10 @@ class DocumentService:
         return self.identity.resolve(request)
 
     # --- views ---------------------------------------------------------------------------------
+    def _require_capability(self, principal: Principal, capability: str) -> None:
+        if not principal.has(capability):
+            raise HostError(403, "capability_denied", f"the principal lacks {capability}")
+
     def _draft_view(self, draft: dict[str, Any], document: dict[str, Any]) -> dict[str, Any]:
         return {
             "document_id": draft["document_id"],
@@ -95,6 +99,7 @@ class DocumentService:
         request_id: str,
     ) -> dict[str, Any]:
         document, _ = self._draft(principal, document_id, draft_id)
+        self._require_capability(principal, "edit")
         self.store.validate_lock(
             draft_id=draft_id,
             lock_id=payload.lock_id,
@@ -106,6 +111,31 @@ class DocumentService:
             expected_revision=expected_revision,
             content=payload.content,
             text=payload.text,
+            actor=principal.user_id,
+            request_id=request_id,
+        )
+        return self._draft_view(draft, document)
+
+    def update_variables(
+        self,
+        principal: Principal,
+        document_id: str,
+        draft_id: str,
+        expected_variables_version: int,
+        payload: Any,
+        request_id: str,
+    ) -> dict[str, Any]:
+        document, _ = self._draft(principal, document_id, draft_id)
+        self._require_capability(principal, "edit")
+        self.store.validate_lock(
+            draft_id=draft_id,
+            lock_id=payload.lock_id,
+            owner_user_id=principal.user_id,
+            fencing_token=payload.fencing_token,
+        )
+        draft = self.store.update_variables(
+            draft_id=draft_id,
+            expected_variables_version=expected_variables_version,
             variables=payload.variables,
             actor=principal.user_id,
             request_id=request_id,

@@ -2,21 +2,33 @@ import { useState } from 'react';
 
 import type { AssistantClient, AssistantOptions } from '../api/assistant';
 import type { AssistantSelection } from '../api/assistantTypes';
+import type { DraftView } from '../api/documents';
+import type { TemplateStore } from '../automation/templateStore';
+import type { RichDocument } from '../rich/richDocument';
 import { AuditPanel, type AuditPanelProps } from './AuditPanel';
+import { AutomationPanel } from './AutomationPanel';
 import { KnowledgePanel } from './KnowledgePanel';
+
+type TabStatus = 'full' | 'fixture-only' | 'not-implemented';
 
 interface Tab {
   id: string;
   label: string;
-  implemented: boolean;
+  status: TabStatus;
 }
 
 const TABS: Tab[] = [
-  { id: 'audit', label: 'Rule audit', implemented: true },
-  { id: 'knowledge', label: 'Knowledge Q&A', implemented: true },
-  { id: 'automation', label: 'Automation', implemented: false },
-  { id: 'legal', label: 'Legal advice', implemented: false },
+  { id: 'audit', label: 'Rule audit', status: 'full' },
+  { id: 'knowledge', label: 'Knowledge Q&A', status: 'full' },
+  { id: 'automation', label: 'Automation', status: 'fixture-only' },
+  { id: 'legal', label: 'Legal advice', status: 'not-implemented' },
 ];
+
+const tabLabel = (tab: Tab): string => {
+  if (tab.status === 'fixture-only') return `${tab.label} · fixture only`;
+  if (tab.status === 'not-implemented') return `${tab.label} · not implemented`;
+  return tab.label;
+};
 
 export interface KnowledgePanelBinding {
   documentId: string;
@@ -29,15 +41,29 @@ export interface KnowledgePanelBinding {
   pollDelayMs?: number;
 }
 
+export interface AutomationPanelBinding {
+  draft: DraftView | null;
+  document: RichDocument;
+  selection: AssistantSelection | null;
+  pendingVariable: AssistantSelection | null;
+  digest?: string;
+  richEditorAvailable?: boolean;
+  templateStore?: TemplateStore;
+  onApplyTemplate?: (document: RichDocument) => void;
+  onChange: (document: RichDocument) => void;
+  onVariableHandled: () => void;
+}
+
 export interface AssistantPanelProps extends AuditPanelProps {
   knowledge: KnowledgePanelBinding;
+  automation: AutomationPanelBinding;
 }
 
 /**
- * Right pane: the prototype's four tabs. Audit and knowledge are wired to the backend; automation and
- * legal stay labelled as unimplemented and never render sample answers, findings or citations.
+ * Right pane: the prototype's four tabs. Audit, knowledge and the fixture-backed automation
+ * surface are available; legal stays labelled as unimplemented and never renders sample output.
  */
-export function AssistantPanel({ knowledge, ...auditProps }: AssistantPanelProps) {
+export function AssistantPanel({ knowledge, automation, ...auditProps }: AssistantPanelProps) {
   const [activeTab, setActiveTab] = useState<string>('audit');
   const active = TABS.find((tab) => tab.id === activeTab) ?? TABS[0];
 
@@ -57,7 +83,7 @@ export function AssistantPanel({ knowledge, ...auditProps }: AssistantPanelProps
             aria-selected={tab.id === activeTab}
             onClick={() => setActiveTab(tab.id)}
           >
-            {tab.implemented ? tab.label : `${tab.label} · not implemented`}
+            {tabLabel(tab)}
           </button>
         ))}
       </div>
@@ -67,12 +93,14 @@ export function AssistantPanel({ knowledge, ...auditProps }: AssistantPanelProps
           <AuditPanel {...auditProps} />
         ) : active.id === 'knowledge' ? (
           <KnowledgePanel {...knowledge} />
+        ) : active.id === 'automation' ? (
+          <AutomationPanel {...automation} />
         ) : (
           <div className="notice" role="status">
             <h3>{active.label} is not implemented in this build</h3>
             <p className="tiny">
-              No answers, findings or citations are produced for this capability. Only the rule audit
-              and knowledge tabs are wired to a backend in this build.
+              No answers, findings or citations are produced for this capability. The rule audit,
+              knowledge and fixture-backed automation tabs are wired to a backend in this build.
             </p>
           </div>
         )}

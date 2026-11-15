@@ -29,8 +29,9 @@ test('answers a product question with citations and keeps the honesty labels', a
   await page.getByRole('button', { name: 'Helpful', exact: true }).click();
   await expect(page.getByText(/Feedback saved: helpful/)).toBeVisible();
 
-  await page.getByRole('tab', { name: /Automation · not implemented/ }).click();
-  await expect(page.getByText(/Automation is not implemented in this build/)).toBeVisible();
+  await page.getByRole('tab', { name: /Automation · fixture only/ }).click();
+  await expect(page.getByTestId('automation-boundary')).toContainText('Fixture-backed workbench');
+  await expect(page.getByRole('tab', { name: 'Downstream Mapping' })).toBeVisible();
   await expect(page.getByLabel('Knowledge question')).toHaveCount(0);
 });
 
@@ -82,7 +83,8 @@ test('shows onboarding, fills a suggestion without running, and answers a capabi
   await page.getByRole('button', { name: 'Helpful', exact: true }).click();
   await expect(page.getByText(/Feedback saved: helpful/)).toBeVisible();
 
-  await page.getByRole('tab', { name: /Automation · not implemented/ }).click();
-  await expect(page.getByText(/Automation is not implemented in this build/)).toBeVisible();
+  await page.getByRole('tab', { name: /Automation · fixture only/ }).click();
+  await expect(page.getByTestId('automation-boundary')).toContainText('Fixture-backed workbench');
+  await expect(page.getByRole('tab', { name: 'Downstream Mapping' })).toBeVisible();
   await expect(page.getByLabel('Knowledge question')).toHaveCount(0);
 });

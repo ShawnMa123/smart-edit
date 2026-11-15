@@ -28,10 +28,8 @@ def _invalid(message: str, code: str = "invalid_operation") -> HostError:
     return HostError(422, code, message)
 
 
-def validate_operations(proposal: ChangeProposal, draft: dict[str, Any]) -> None:
-    """Reject anything that cannot be applied exactly to this draft head."""
-    if proposal.review_receipt.verdict != "pass":
-        raise HostError(409, "review_required", "the proposal has no passing review receipt")
+def validate_structure(proposal: ChangeProposal, draft: dict[str, Any]) -> None:
+    """Reject anything that cannot be applied exactly to this draft head (no review check)."""
     if proposal.context.content_sha256 != draft["text_sha256"]:
         raise HostError(409, "stale_context", "the proposal was generated from another head")
 
@@ -60,6 +58,13 @@ def validate_operations(proposal: ChangeProposal, draft: dict[str, Any]) -> None
     for previous, current in zip(ordered, ordered[1:]):
         if current[0] < previous[1]:
             raise _invalid("operations overlap", "overlapping_operations")
+
+
+def validate_operations(proposal: ChangeProposal, draft: dict[str, Any]) -> None:
+    """Reject anything that cannot be applied exactly to this draft head."""
+    if proposal.review_receipt.verdict != "pass":
+        raise HostError(409, "review_required", "the proposal has no passing review receipt")
+    validate_structure(proposal, draft)
 
 
 def apply_operations(
@@ -135,6 +140,7 @@ def build_fixture_proposal(
     *,
     proposal_id: str,
     now: datetime | None = None,
+    risk_flags: list[str] | None = None,
 ) -> ChangeProposal:
     """Deterministic fixture proposal: no model, no hidden content."""
     document = json.loads(draft["content_json"])
@@ -172,7 +178,7 @@ def build_fixture_proposal(
             after_text=payload.replacement_text,
             summary="fixture replace_text — deterministic demo only",
         ),
-        risk_flags=[],
+        risk_flags=list(risk_flags or []),
         review_receipt=ReviewReceipt(
             receipt_id="review_fixture_01",
             verdict="pass",

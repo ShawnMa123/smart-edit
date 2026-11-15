@@ -105,6 +105,7 @@ class FixtureProposalCreate(Strict):
     draft_id: str
     search_text: str | None = Field(default=None, max_length=4000)
     replacement_text: str = Field(default="This clause has been reviewed.", max_length=4000)
+    intent: Literal["polish", "clarify", "replace_clause", "replace_text"] = "replace_text"
     expires_in_seconds: int = Field(default=3600, ge=60, le=86_400)
 
 

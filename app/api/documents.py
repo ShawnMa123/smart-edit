@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, Response
 
 from app.documents.errors import PreconditionRequired
-from app.documents.schemas import DocumentCreate, DraftSave, Heartbeat, LockCreate
+from app.documents.schemas import DocumentCreate, DraftSave, Heartbeat, LockCreate, VariablesUpdate
 from app.documents.service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -39,6 +39,10 @@ def _revision(request: Request, prefix: str = "draft") -> int:
 def _headers(response: Response, etag: str) -> None:
     response.headers["ETag"] = f'"{etag}"'
     response.headers["Cache-Control"] = "no-store"
+
+
+def _variables_revision(request: Request) -> int:
+    return _revision(request, "variables")
 
 
 @router.post("", status_code=201)
@@ -80,6 +84,28 @@ def save_draft(
         _request_id(request),
     )
     _headers(response, view["etag"])
+    return view
+
+
+@router.patch("/{document_id}/drafts/{draft_id}/variables")
+def update_variables(
+    document_id: str,
+    draft_id: str,
+    request: Request,
+    response: Response,
+    payload: VariablesUpdate,
+) -> dict:
+    service = _service(request)
+    view = service.update_variables(
+        service.principal(request),
+        document_id,
+        draft_id,
+        _variables_revision(request),
+        payload,
+        _request_id(request),
+    )
+    response.headers["ETag"] = f'"variables-{view["variables_version"]}"'
+    response.headers["Cache-Control"] = "no-store"
     return view
 
 

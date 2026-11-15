@@ -52,16 +52,56 @@ load it reads the draft, acquires an edit lock and autosaves 2 seconds after typ
 
 A `412 stale_draft` **does not replace the editor**. The local content stays, a recovery draft is
 written to `localStorage` (`smart-edit:recovery:demo-document`), and the conflict panel offers
-`Use server version`, `Overwrite with local content` or `Keep local as recovery draft`. Automation
-apply/undo are rejected when the head moved; they never auto-rebase.
+`Use server version`, `Overwrite with local content` or `Keep local as recovery draft`. The host
+still rejects automation apply/undo when the draft head moved; they never auto-rebase (the run core is
+covered by API tests, not by the Automation tab UI).
 
-### Automation fixture (demo only)
+Variables are versioned separately from content: `PUT draft` no longer carries variables, and a
+text-only save preserves the existing variables and `variables_version`. Variable updates use
+`PATCH /documents/{id}/drafts/{draft_id}/variables` with `If-Match: "variables-<version>"`.
 
-The version pane contains a deliberately small **Automation fixture** panel. It creates a
-deterministic `replace_text` proposal (no model), lets you accept it, apply it, and undo it. Accept
-is not apply; apply creates a new draft revision and an application receipt; undo only works while
-that receipt is still the current head. The assistant's `Automation` tab remains labelled
-`not implemented`; this panel is the host/apply contract demo, not a general automation UI.
+### Automation tab (fixture-backed workbench)
+
+The assistant's **Automation · fixture only** tab is a frontend-first workbench with three areas:
+
+- **Template** captures the current imported or edited document as a template snapshot. Before saving,
+  a live preview shows the source (`Imported · deterministic/heuristic/fallback` with its note, or
+  `Edited in this browser`), the draft revision (or `No server draft`), character count, variable
+  summary and the next version; a duplicate name warns that a new version is added instead of
+  overwriting. Captured templates appear as cards with a detail view (source, captured time,
+  character count, variables, 240-character content excerpt), inline rename with validation, and a
+  Two-step delete. Templates are snapshots: later edits to the working document never change them.
+  `Apply to editor` replaces the current document with a template (confirmation when it has content;
+  empty documents apply directly), keeping captured variable values and provenance, then uses the
+  normal autosave path. `Save to template` in Variables & Fill updates an existing template in place
+  (same id/name, version+1, previous snapshot replaced; no history in this build).
+  Storage is browser-local (`localStorage`, `smart-edit:automation-templates`, at most 20, oldest
+  evicted), so the UI says `Saved in this browser — not on the server`; quota/corrupt/unavailable
+  storage degrades to a readable message and, for failed writes, a visibly session-only record.
+- **Variables & Fill** marks a non-empty paragraph/heading selection as a `variableReference` node
+  (right-click, the toolbar button or `Alt+Shift+V`), lists every occurrence and previews the
+  before/after value for each one. Filling updates only nodes with the same `variableId` and never
+  same-named ordinary text; deleting a required variable reports it as missing.
+- **Downstream Mapping** has two sources. `Synthetic fixture` matches a synthetic downstream API
+  template deterministically (for example `application_type = guarantee` with an evidence excerpt),
+  requires an explicit per-field `Confirm`, and renders a JSON payload preview bound to the mock
+  template version and the document digest. `OpenAPI JSON` accepts an uploaded or pasted OpenAPI 3.x
+  JSON document (parsed locally, never uploaded or saved), resolves local `$ref`, lists operations
+  with an `application/json` request body, flattens object properties into dotted paths, suggests
+  variable mappings by label with manual override, and blocks readiness on missing required fields,
+  enum mismatches and number/integer/boolean conversion failures. Ready payloads can be downloaded
+  as `.json`; the UI always says `Not sent` and exposes no send/execute action. YAML, Swagger 2.0,
+  URL fetching, external `$ref`, `oneOf` and `anyOf` are explicitly unsupported.
+
+Synthetic variable fill and fixture mapping are mock-backed (`web/src/automation/mockWorkbench.ts` +
+`fixtures/automation/workbench_demo.json`); template snapshots use the browser-local
+`web/src/automation/templateStore.ts`; OpenAPI JSON is parsed locally by
+`web/src/automation/openapi.ts` and exported by `payloadExport.ts`. There is no server template
+registry, no extract/confirm model, no real API template import and no delivery. Both mapping
+previews say `Not sent` and there is no send/execute button. The previous `rewrite/replace_text`
+fixture run panel no longer owns the tab; the run/result/apply/undo contract stays covered by API
+tests and `tests/test_automation_apply.py`. When the editor falls back to a textarea, `{{label}}`
+placeholders are shown and variable actions are disabled.
 
 `Import file` (header) uploads a PDF / DOCX / PNG / JPEG and fills the editor with the text the server
 read out of it: `POST /api/runs` (multipart) → `POST /api/runs/{id}/stages/parse` → read
@@ -70,8 +110,8 @@ read out of it: `POST /api/runs` (multipart) → `POST /api/runs/{id}/stages/par
 
 ### Knowledge Q&A (right pane)
 
-The `Knowledge Q&A` tab is wired to `/api/assistant/*`; `Automation` and `Legal advice` remain labelled
-`not implemented`. The panel registers an immutable snapshot + session on the first question, sends
+The `Knowledge Q&A` tab is wired to `/api/assistant/*`; `Legal advice` remains labelled
+`not implemented`, while `Automation` is an available fixture-backed workbench. The panel registers an immutable snapshot + session on the first question, sends
 `POST /api/assistant/sessions/{id}/runs` (202), polls `GET /api/assistant/runs/{id}`, and renders the
 reviewed answer: outcome, support level, claims, citations, limitations, clarification questions or the
 handoff target. Citation cards read `GET /api/assistant/messages/{id}/citations/{cid}` (allowed excerpt +
@@ -159,7 +199,7 @@ for p in 8000 8010 5173 5174; do lsof -nP -iTCP:$p -sTCP:LISTEN -t | xargs -r ki
 
 | Project | Backend | Frontend | Viewport | Covers |
 |---|---|---|---|---|
-| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, knowledge Q&A, unimplemented automation/legal tabs, three-pane layout |
+| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, knowledge Q&A, fixture-backed automation workbench, unimplemented legal tab, three-pane layout |
 | `honesty` | `:8010` with `SMART_EDIT_LLM=''` | `:5174` (`VITE_PROXY_TARGET`) | 1440×900 | "checks did not run", and **no** `/stages/audit` request |
 | `narrow` | `:8000` | `:5173` | iPhone 13 | one pane + tabs below 1366px, audit still reachable |
 
@@ -205,7 +245,9 @@ The document host is a **local/test** adapter only: one process, one writer, fak
 PostgreSQL/Worker/multi-tenant host, and no production deployment. There is still no structural diff,
 real semantic automation model, regulatory coverage, approved production identity/snapshot/model
 adapters, real models/embeddings/reranking, controlled web access, voice/screenshot or export.
-Automation and Legal remain labelled "not implemented in this build"; the version-pane
-**Automation fixture** panel only demonstrates the `replace_text` host/apply/undo contract, and the
-knowledge tab is explicitly `Fixture-backed` — see `openspec/changes/document-host-foundation/`,
+Automation is available only as a fixture-backed frontend workbench (template capture, variable fill
+and downstream mapping/payload preview) and is labelled `fixture only`; the real run core still exists
+behind the API but no longer owns the tab. Legal remains labelled "not implemented in this build". The
+workbench demonstrates the interaction structure, not a general semantic automation assistant.
+The knowledge tab is explicitly `Fixture-backed` — see `openspec/changes/document-host-foundation/`,
 `openspec/changes/agent-knowledge/` and the `Requirements.md` §14 gap table.

@@ -1,7 +1,7 @@
 /** Tasks 2.1-2.4 — the rich editor: formats, toolbar state, tables, find/replace, fallback. */
 
 import { Editor } from '@tiptap/core';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,7 @@ import { RichEditor } from './RichEditor';
 import { richToPlainText } from '../rich/plainText';
 import { plainTextToDocument, type RichDocument } from '../rich/richDocument';
 import { extensions, toEditorContent, toRichDocument } from '../rich/tiptap';
+import { useRichEditor as realUseRichEditor } from '../rich/useRichEditor';
 
 const headless = (document: RichDocument = plainTextToDocument('DEMAND GUARANTEE')) =>
   new Editor({ extensions, content: toEditorContent(document) });
@@ -377,5 +378,179 @@ describe('fallback (2.4)', () => {
     expect(onChange).toHaveBeenCalled();
     const latest = onChange.mock.calls[onChange.mock.calls.length - 1][0] as RichDocument;
     expect(richToPlainText(latest)).toContain('DEMAND GUARANTEE!');
+  });
+describe('variable references (1.2, 1.5)', () => {
+  const variableDoc = (displayValue: string | null): RichDocument => ({
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Amount: ' },
+          {
+            type: 'variableReference',
+            attrs: {
+              variableId: 'var_amount',
+              label: 'amount',
+              valueType: 'amount',
+              required: true,
+              displayValue,
+              occurrenceId: 'occ_1',
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  it('round-trips a variable through the editor schema and projects its value', () => {
+    const editor = headless(variableDoc('USD 500,000.00'));
+
+    const roundTripped = toRichDocument(editor.getJSON());
+
+    expect(JSON.stringify(roundTripped)).toContain('"variableReference"');
+    expect(richToPlainText(roundTripped)).toBe('Amount: USD 500,000.00');
+    editor.destroy();
+  });
+
+  it('renders a non-editable chip with the variable id', () => {
+    const editor = headless(variableDoc('USD 500,000.00'));
+
+    const html = editor.getHTML();
+
+    expect(html).toContain('data-variable-id="var_amount"');
+    expect(html).toContain('variable-chip');
+    expect(html).toContain('USD 500,000.00');
+    editor.destroy();
+  });
+
+  it('shows the explicit {{label}} placeholder when empty', () => {
+    const editor = headless(variableDoc(null));
+
+    expect(editor.getHTML()).toContain('{{amount}}');
+    expect(richToPlainText(toRichDocument(editor.getJSON()))).toBe('Amount: {{amount}}');
+    editor.destroy();
+  });
+
+  it('does not destroy the node when ordinary text is appended', () => {
+    const editor = headless(variableDoc('USD 500,000.00'));
+
+    editor.chain().focus('end').insertContent('!').run();
+    const next = toRichDocument(editor.getJSON());
+
+    expect(JSON.stringify(next)).toContain('"variableReference"');
+    expect(richToPlainText(next)).toContain('USD 500,000.00');
+    editor.destroy();
+  });
+
+  it('offers a toolbar entry that is disabled without a selection', () => {
+    render(
+      <RichEditor document={doc('Amount')} onChange={vi.fn()} onMarkVariable={vi.fn()} />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Mark selection as variable' });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('offers a keyboard entry for the same action', async () => {
+    const onMarkVariable = vi.fn();
+    let instance: Editor | null = null;
+    const captureEditor = (options: Parameters<typeof realUseRichEditor>[0]) => {
+      const editor = realUseRichEditor(options);
+      instance = editor;
+      return editor;
+    };
+    render(
+      <RichEditor
+        document={doc('Amount')}
+        onChange={vi.fn()}
+        onMarkVariable={onMarkVariable}
+        useEditorImpl={captureEditor}
+      />,
+    );
+
+    act(() => {
+      instance?.commands.setTextSelection({ from: 1, to: 1 + 'Amount'.length });
+    });
+    fireEvent.keyDown(screen.getByTestId('editor-rich'), {
+      key: 'v',
+      altKey: true,
+      shiftKey: true,
+    });
+
+    expect(onMarkVariable).toHaveBeenCalledTimes(1);
+    expect(onMarkVariable.mock.calls[0][0]).toMatchObject({ selectedText: 'Amount' });
+  });
+
+  it('undoes an external whole-document replacement', () => {
+    const captured: { editor: Editor | null } = { editor: null };
+    const captureEditor = (options: Parameters<typeof realUseRichEditor>[0]) => {
+      const editor = realUseRichEditor(options);
+      captured.editor = editor;
+      return editor;
+    };
+    const { rerender } = render(
+      <RichEditor document={doc('Original')} onChange={vi.fn()} useEditorImpl={captureEditor} />,
+    );
+
+    rerender(
+      <RichEditor document={doc('Replaced')} onChange={vi.fn()} useEditorImpl={captureEditor} />,
+    );
+    act(() => {
+      captured.editor?.commands.undo();
+    });
+
+    const current = toRichDocument(captured.editor?.getJSON());
+    expect(richToPlainText(current)).toBe('Original');
+  });
+
+  it('keeps import provenance when an imported document is edited', () => {
+    const onChange = vi.fn();
+    let instance: Editor | null = null;
+    const captureEditor = (options: Parameters<typeof realUseRichEditor>[0]) => {
+      const editor = realUseRichEditor(options);
+      instance = editor;
+      return editor;
+    };
+    const imported: RichDocument = {
+      ...plainTextToDocument('Amount'),
+      provenance: 'heuristic',
+      provenanceNote: 'font_size_1.42x',
+    };
+    render(
+      <RichEditor document={imported} onChange={onChange} useEditorImpl={captureEditor} />,
+    );
+
+    act(() => {
+      instance?.chain().focus('end').insertContent('!').run();
+    });
+
+    const latest = onChange.mock.calls[onChange.mock.calls.length - 1][0] as RichDocument;
+    expect(latest.provenance).toBe('heuristic');
+    expect(latest.provenanceNote).toBe('font_size_1.42x');
+  });
+
+  it('fallback shows {{label}} and explains that variable editing needs the rich editor', () => {
+    const broken = () => {
+      throw new Error('schema exploded');
+    };
+
+    render(
+      <RichEditor
+        document={variableDoc(null)}
+        onChange={vi.fn()}
+        useEditorImpl={broken}
+        onMarkVariable={vi.fn()}
+      />,
+    );
+
+    const textarea = screen.getByTestId('editor-text') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('Amount: {{amount}}');
+    expect(screen.getByTestId('fallback-variable-notice').textContent).toContain(
+      'Variable editing needs the rich editor',
+    );
+    expect(screen.getByTestId('fallback-variable-notice').textContent).toContain('{{label}}');
+    expect(screen.queryByRole('button', { name: 'Mark selection as variable' })).toBeNull();
+    });
   });
 });
