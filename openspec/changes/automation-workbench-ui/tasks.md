@@ -1,6 +1,6 @@
 # Tasks
 
-> 依据：`proposal.md`、`specs/automation-workbench/spec.md`、`specs/downstream-api-contract/spec.md`、`specs/editor-variables/spec.md`、`design.md`（D1–D21）。
+> 依据：`proposal.md`、`specs/automation-workbench/spec.md`、`specs/downstream-api-contract/spec.md`、`specs/editor-variables/spec.md`、`design.md`（D1–D23）。
 > 边界：前端工作台 + mock；template 与下游系统配置保存在浏览器本地（非服务端），template 可 apply/更新；OpenAPI JSON 在浏览器内解析，支持下载与不触网的 mock send；variable/mapping 的 synthetic 模式仍为 mock；不改后端 API/schema/run/apply 合同。唯一后端兼容修改是 variable node 的 projection parity。
 
 ## 1. VariableReferenceNode 与投影
@@ -85,13 +85,21 @@
 
 ## 11. 下游系统配置 + mock send
 
-- [ ] 11.1 `fixtures/automation/downstream_systems.json` + `web/src/automation/downstreamSystemStore.ts`：schemaVersion、首次 seed 预设、`list/get/create/update/remove`、name/baseUrl(http(s)) 校验、最多 10 个、单 spec ≤ 512 KB、auth type/hint（不含 token）、损坏条目忽略、写失败 session-only。Verify: 单测覆盖 seed/CRUD/重载/全删不重种/上限/corrupt/quota/invalid URL。
-- [ ] 11.2 `Manage systems` UI：系统列表 + 新建/编辑/删除（两步确认）、name/baseUrl/environment/enabled/auth type+hint、spec 文件/粘贴 + Save、错误提示、`Saved in this browser — not on the server`；键盘与 aria-live。Verify: 组件测试覆盖 CRUD/空态/非法 URL/非法 spec/删除确认/写失败。
-- [ ] 11.3 Mapping 集成：system selector（显示 env/enabled）、选择系统自动 parse 绑定 spec、切换系统清空 operation/mapping 但保留 variables、删除选中系统清空 operation/mapping/receipt、无系统时 OpenAPI/mock send 不可用并说明。Verify: 组件测试。
-- [ ] 11.4 `web/src/automation/mockDownstreamSend.ts`：纯函数 200 `mock_success` / 500 `MOCK_DOWNSTREAM_ERROR`、endpoint=`baseUrl+path`、requestId、`now` 注入；无 fetch/token/history。Verify: 单测。
-- [ ] 11.5 `Send (mock)` UI：ready + enabled + operation 才可用；`Simulate failure` 默认关；receipt 显示 endpoint/status/requestId/payload 与 `Simulated — no network request`；不保存历史；Download 独立。Verify: 组件测试覆盖成功/失败/gating/label。
-- [ ] 11.6 e2e：创建/编辑系统并保存 spec → 选择系统 → 映射变量 → mock success → 打开 Simulate failure → mock 500 → reload 后系统仍在 → 删除确认。Verify: `PW_CHANNEL=chrome npm --prefix web run e2e -- e2e/automation-workbench.spec.ts --project=desktop`。
-- [ ] 11.7 文档与全量回归：更新 `how_to_use.md` / `web/README.md`（系统配置、浏览器本地、mock send 非真实）；pytest/vitest/typecheck/build/desktop e2e 全绿并记录数量。Verify: 全绿。
+- [x] 11.1 `fixtures/automation/downstream_systems.json` + `web/src/automation/downstreamSystemStore.ts`：schemaVersion、首次 seed 预设、`list/get/create/update/remove`、name/baseUrl(http(s)) 校验、最多 10 个、单 spec ≤ 512 KB、auth type/hint（不含 token）、损坏条目忽略、写失败 session-only。Verify: 单测覆盖 seed/CRUD/重载/全删不重种/上限/corrupt/quota/invalid URL。
+- [x] 11.2 `Manage systems` UI：系统列表 + 新建/编辑/删除（两步确认）、name/baseUrl/environment/enabled/auth type+hint、spec 文件/粘贴 + Save、错误提示、`Saved in this browser — not on the server`；键盘与 aria-live。Verify: 组件测试覆盖 CRUD/空态/非法 URL/非法 spec/删除确认/写失败。
+- [x] 11.3 Mapping 集成：system selector（显示 env/enabled）、选择系统自动 parse 绑定 spec、切换系统清空 operation/mapping 但保留 variables、删除选中系统清空 operation/mapping/receipt、无系统时 OpenAPI/mock send 不可用并说明。Verify: 组件测试。
+- [x] 11.4 `web/src/automation/mockDownstreamSend.ts`：纯函数 200 `mock_success` / 500 `MOCK_DOWNSTREAM_ERROR`、endpoint=`baseUrl+path`、requestId、`now` 注入；无 fetch/token/history。Verify: 单测。
+- [x] 11.5 `Send (mock)` UI：ready + enabled + operation 才可用；`Simulate failure` 默认关；receipt 显示 endpoint/status/requestId/payload 与 `Simulated — no network request`；不保存历史；Download 独立。Verify: 组件测试覆盖成功/失败/gating/label。
+- [x] 11.6 e2e：创建/编辑系统并保存 spec → 选择系统 → 映射变量 → mock success → 打开 Simulate failure → mock 500 → reload 后系统仍在 → 删除确认。Verify: `PW_CHANNEL=chrome npm --prefix web run e2e -- e2e/automation-workbench.spec.ts --project=desktop`。
+- [x] 11.7 文档与全量回归：更新 `how_to_use.md` / `web/README.md`（系统配置、浏览器本地、mock send 非真实）；pytest/vitest/typecheck/build/desktop e2e 全绿并记录数量。Verify: 全绿。
+
+## 12. Beneficiary matcher 修复
+
+- [x] 12.1 `web/src/automation/mockWorkbench.ts` 的 `matchBeneficiary` 与 evidence 改为接受 `Beneficiary:` / `Beneficiary name:`（大小写、空白、全/半角冒号）；仍要求冒号+非空值，`{{...}}` 继续 missing。Verify: 单测覆盖 label variants、占位符、无冒号、普通提及。
+- [x] 12.2 组件测试：选择 v2 mock template，正文 `Beneficiary name: aabbcc` → `beneficiary_name` 为 `matched`/`aabbcc` + evidence；confirm 后进入 payload。Verify: AutomationPanel 测试。
+- [x] 12.3 全量回归：pytest / vitest / typecheck / build / desktop e2e 全绿并记录数量。Verify: 全绿。
+- [x] 12.4 `matchExpiryDate` 日期规范化：接受 ISO、`YYYY/MM/DD`、`DD/MM/YYYY`、`DD/MM/YY`、`YYYY年MM月DD日`、英文月份名；统一输出 `YYYY-MM-DD`；DD/MM 默认、MM/DD 仅在第二段 >12；无效日历日期 missing。Verify: 单测覆盖 `12/03/27`→`2027-03-12`、各格式、无效日期。
+- [x] 12.5 组件测试 + 文档 + 回归：v1 `Expiry date` 显示 `Confirm 2027-03-12`，confirm 后 payload 为 `"expiry_date": "2027-03-12"`；更新 `how_to_use.md` / `web/README.md` 的日期规范化说明；pytest/vitest/typecheck/build/e2e 全绿。Verify: 全绿。
 
 ## Workflow follow-up
 

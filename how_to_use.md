@@ -12,11 +12,10 @@
 | 规范审计（`agent4`：`stages/audit`） | 能跑 | 每份保函 **51** 个计划单元，干净文档评估 **33** 项（ratio 0.647），引擎模型调用 **0** |
 | 三栏界面 + 右栏「Rule audit」 | 能跑 | `npm --prefix web run dev` → http://localhost:5173 |
 | 右栏「Knowledge Q&A」知识助手（fixture 语料） | 能跑 | `/api/assistant/*`：202 + 轮询、Claim 级引用、support_level、澄清/弃答/转交、反馈 |
-| 后端 / 前端测试 | 539 后端 / 321 前端全绿 | `.venv/bin/python -m pytest -q`、`npm --prefix web run test` |
+| 后端 / 前端测试 | 539 后端 / 345 前端全绿 | `.venv/bin/python -m pytest -q`、`npm --prefix web run test` |
 
 还没做（跑的时候会看到"未实现"而不是假成功）：审批流、法规 tab、语义检查、法规覆盖；Automation tab 只有
-前端工作台（template 为浏览器本地快照并支持 apply/更新，variable 与 synthetic mapping 为 mock，OpenAPI JSON
-在本地解析并只生成下载文件），服务端 template 持久化、真实模型匹配与 payload 发送未实现；
+前端工作台（template 为浏览器本地快照并支持 apply/更新；下游系统 browser-local + 绑定 spec；variable 与 synthetic mapping 为 mock；OpenAPI JSON 在本地解析、下载，并可用不触网的 mock send 模拟 200/500），服务端 template/系统持久化、真实模型匹配与真实发送未实现；
 知识助手的 PostgreSQL / Worker / 真实身份与快照 / 真实模型与向量检索 / 联网、语音、管理端 UI 都不在 A 里，
 界面用 `Fixture-backed` 横幅明确标注。
 
@@ -258,17 +257,19 @@ DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**�
      `[guarantee, standby_dc]`），`Match document` 做确定性关键词匹配并给出 evidence；每个字段必须显式
      `Confirm` 后才进入 payload；冲突显示 `ambiguous`，没有依据显示 `missing`。JSON preview 绑定 mock template
      version + 当前文档 digest，缺口时状态是 `mapping_not_ready`。
-   - `OpenAPI JSON`：上传 `.json` 或粘贴 OpenAPI 3.x JSON（仅本地解析、不联网、不保存，刷新丢失）；选择带
-     `application/json` requestBody 的 operation，schema 的 object properties 会展开成 dotted path；变量按 label
-     自动建议、可手动改；required 缺失、enum 不匹配、number/integer/boolean 转换失败都会 `not_ready` 并指出字段。
-     就绪后可 `Download JSON` 下载请求文件，界面固定 `Not sent`，没有 send/execute，也不调用下游 API。
-     支持本地 `$ref`（含循环检测）；YAML、Swagger 2.0、URL 拉取、外部 `$ref`、`oneOf`/`anyOf` 明确不支持。
+     日期字段（如 `Expiry date`）支持 ISO、`YYYY/MM/DD`、`DD/MM/YYYY`、`DD/MM/YY`、`YYYY年MM月DD日`
+     和英文月份名，统一规范化成 `YYYY-MM-DD` 后再进入 payload；`12/03/27` → `2027-03-12`（DD/MM 默认，
+     MM/DD 仅在第二段 >12 时使用）；无效日历日期保持 `missing`。
+   - `OpenAPI JSON`：先选择/创建一个**下游系统**（`Downstream system`）；系统包含 name、baseUrl、environment、enabled、auth type/hint 与绑定的 OpenAPI 3.x JSON，存浏览器 `localStorage`（首次从 mock 预设种入，最多 10 个，单 spec ≤ 512 KB；不存真实 token）。`Manage systems` 里新增/编辑/删除系统并上传或粘贴 spec；选择系统后自动解析其 spec，切换系统会清空 operation/mapping（变量保留）。
+   - 选择带 `application/json` requestBody 的 operation，schema 的 object properties 会展开成 dotted path；变量按 label 自动建议、可手动改；required 缺失、enum 不匹配、number/integer/boolean 转换失败都会 `not_ready` 并指出字段。就绪后可 `Download JSON` 下载请求文件；界面固定 `Not sent`。
+   - `Send (mock)`：只有 payload ready 且 system enabled 时可用；默认返回 200 `mock_success`，勾选 `Simulate failure` 返回 500 `MOCK_DOWNSTREAM_ERROR`。receipt 显示 method + endpoint、status、requestId、payload 与 `Simulated — no network request`；不触网、不保存发送历史。
+   - 支持本地 `$ref`（含循环检测）；YAML、Swagger 2.0、URL 拉取、外部 `$ref`、`oneOf`/`anyOf` 明确不支持。
 
 边界与未实现：
 
-- Synthetic fixture mapping 是 **mock**；OpenAPI JSON 在浏览器内**真实解析**但只生成下载文件；template 是**浏览器本地存储**（非服务端）。都不调用真实解析服务、模型或下游系统。
-- **payload 永不发送**：两个 mapping 模式都只显示 `Not sent`，没有 send/execute 按钮，也不发外部请求；OpenAPI 下载的是本地生成的 `.json`。
-- 未实现：template 服务端持久化/跨设备/版本库 API、用模板新建新文档、Swagger 2.0/YAML/URL 拉取/外部 `$ref`/`oneOf`·`anyOf`、真实 API 调用、真实 extract/confirm、真实语义匹配/模型、payload delivery、compare、rewrite、voice。
+- Synthetic fixture mapping 是 **mock**；OpenAPI JSON 在浏览器内**真实解析**并支持不触网的 mock send；template 与下游系统配置是**浏览器本地存储**（非服务端）。都不调用真实解析服务、模型或下游系统。
+- **真实发送未实现**：`Send (mock)` 只生成模拟 receipt，固定 `Simulated — no network request`；`Download JSON` 只下载本地生成的文件。没有真实 HTTP 请求、代理、token 读取或发送历史。
+- 未实现：template/下游系统的服务端持久化与凭据 DB、用模板新建新文档、真实 HTTP 发送/后端代理/审计/幂等、Swagger 2.0/YAML/URL 拉取/外部 `$ref`/`oneOf`·`anyOf`、真实 extract/confirm、真实语义匹配/模型、compare、rewrite、voice。
 - 浏览器存储失败（配额、隐私模式）或数据损坏时：界面显示可读提示，条目标记 `Session only — browser storage failed`
   或忽略无效数据；不会伪造“已保存”。
 - 旧的 `rewrite/replace_text` fixture run 面板不再占据 Automation 主视图；run/result/apply/undo 合同仍由
@@ -367,7 +368,7 @@ VITE_E2E_HONESTY=1 VITE_API_BASE=http://127.0.0.1:8011 \
   && npm --prefix web run test \
   && npm --prefix web run typecheck \
   && npm --prefix web run build
-# 实测：539 passed（知识助手 HTTP、document host、automation run/result/apply/undo、protected facts、variable projection parity）· 321 前端测试通过（含 template store / capture preview / apply / template 更新 / OpenAPI 解析与下载） · typecheck/build clean
+# 实测：539 passed（知识助手 HTTP、document host、automation run/result/apply/undo、protected facts、variable projection parity）· 345 前端测试通过（含 template store / apply / template 更新 / 下游系统 store / OpenAPI 解析与下载 / mock send / beneficiary label variants / date normalisation） · typecheck/build clean
 
 # 5) 真浏览器里的知识助手与草稿/冲突/apply（Playwright 会自己起 8000/8010/5173/5174）
 PW_CHANNEL=chrome npm --prefix web run e2e -- e2e/knowledge.spec.ts --project=desktop

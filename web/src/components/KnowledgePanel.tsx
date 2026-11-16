@@ -25,6 +25,7 @@ import {
   type Session,
 } from '../api/assistantTypes';
 import { ApiError, explainError } from '../api/errors';
+import { EmptyState } from './EmptyState';
 import { onboardingCopy, suggestionsFor } from './knowledgeSuggestions';
 
 export interface KnowledgePanelProps {
@@ -244,13 +245,25 @@ export function KnowledgePanel({
   return (
     <div className="knowledge-panel">
       <p className="notice notice--warn tiny" role="status">
-        Fixture-backed: answers use synthetic demo sources, not official legal texts. The assistant
-        never edits the document, approves, submits, or browses the web.
+        Fixture-backed: answers use synthetic demo sources, not official legal texts.
       </p>
       {notice ? (
         <p className="notice notice--warn tiny" role="status">
           {notice}
         </p>
+      ) : null}
+
+      {!session && !answer && !run ? (
+        <EmptyState
+          icon="◎"
+          title="Ask about the product, a rule or this passage"
+          hint="Pick a suggested question or write your own below. Every answer cites the source it came from."
+          action={
+            <button type="button" onClick={() => questionRef.current?.focus()}>
+              Write a question
+            </button>
+          }
+        />
       ) : null}
 
       <details

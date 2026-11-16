@@ -40,6 +40,25 @@ describe('AssistantPanel', () => {
     expect(screen.queryByRole('tab', { name: /Knowledge Q&A · not implemented/ })).toBeNull();
   });
 
+  it('shows short visible labels with the build status as a separate tag', () => {
+    renderPanel();
+
+    const automation = screen.getByRole('tab', { name: /Automation · fixture only/ });
+    expect(automation.textContent).toContain('Automation');
+    expect(automation.textContent).toContain('Fixture only');
+    // The visible label is short: no dotted status suffix inside the label itself.
+    expect(automation.textContent).not.toContain('·');
+    expect(automation.querySelector('.tab-status')?.getAttribute('aria-hidden')).toBe('true');
+
+    const legal = screen.getByRole('tab', { name: /Legal advice · not implemented/ });
+    expect(legal.textContent).toContain('Legal');
+    expect(legal.textContent).toContain('Not implemented');
+
+    const audit = screen.getByRole('tab', { name: 'Rule audit' });
+    expect(audit.textContent).toContain('Audit');
+    expect(audit.textContent).toContain('Full');
+  });
+
   it('renders the audit panel by default', () => {
     renderPanel();
 

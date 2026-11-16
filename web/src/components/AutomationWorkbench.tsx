@@ -24,6 +24,13 @@ import { parseOpenApi, type OpenApiContract } from '../automation/openapi';
 import { buildOpenApiPayload, suggestMappings } from '../automation/openapiPayload';
 import { downloadJson } from '../automation/payloadExport';
 import {
+  downstreamSystemStore,
+  type DownstreamSystem,
+  type DownstreamSystemInput,
+  type DownstreamSystemStore,
+} from '../automation/downstreamSystemStore';
+import { mockSend, type MockReceipt } from '../automation/mockDownstreamSend';
+import {
   MAX_TEMPLATES,
   automationTemplateStore,
   type TemplateRecord,
@@ -70,6 +77,25 @@ const recordSourceLabel = (template: TemplateRecord): string =>
     ? `Imported · ${template.source.provenance}${template.source.note ? ` · ${template.source.note}` : ''}`
     : 'Edited in this browser';
 
+const systemFailureMessage = (reason: string): string => {
+  switch (reason) {
+    case 'invalid_name':
+      return 'Enter a downstream system name.';
+    case 'invalid_url':
+      return 'Enter an http(s) base URL.';
+    case 'invalid_auth':
+      return 'Choose a supported auth type.';
+    case 'spec_too_large':
+      return 'The OpenAPI spec is larger than 512 KB.';
+    case 'limit':
+      return 'At most 10 downstream systems are supported.';
+    case 'not_found':
+      return 'That downstream system no longer exists.';
+    default:
+      return 'The downstream system could not be saved.';
+  }
+};
+
 export interface AutomationWorkbenchProps {
   draft: DraftView | null;
   document: RichDocument;
@@ -83,6 +109,8 @@ export interface AutomationWorkbenchProps {
   richEditorAvailable?: boolean;
   /** Test seam: a store backed by a specific `Storage` (reload/persistence tests). */
   templateStore?: TemplateStore;
+  /** Test seam for downstream systems. */
+  downstreamStore?: DownstreamSystemStore;
   /** Apply a template snapshot to the editor (App owns the replacement/autosave path). */
   onApplyTemplate?: (document: RichDocument) => void;
   onChange: (document: RichDocument) => void;
@@ -97,6 +125,7 @@ export function AutomationWorkbench({
   digest,
   richEditorAvailable = true,
   templateStore = automationTemplateStore,
+  downstreamStore = downstreamSystemStore,
   onApplyTemplate,
   onChange,
   onVariableHandled,
@@ -129,11 +158,21 @@ export function AutomationWorkbench({
   const [candidates, setCandidates] = useState<MappingCandidate[]>([]);
   const [decisions, setDecisions] = useState<Record<string, string>>({});
   const [mappingSource, setMappingSource] = useState<MappingSource>('fixture');
-  const [openApiText, setOpenApiText] = useState('');
-  const [openApiContract, setOpenApiContract] = useState<OpenApiContract | null>(null);
-  const [openApiError, setOpenApiError] = useState<string | null>(null);
+  const [systems, setSystems] = useState<DownstreamSystem[]>(() => downstreamStore.list());
+  const [systemIssue, setSystemIssue] = useState<ReturnType<DownstreamSystemStore['issue']>>(() =>
+    downstreamStore.issue(),
+  );
+  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
+  const [systemsOpen, setSystemsOpen] = useState(false);
+  const [systemDraft, setSystemDraft] = useState<
+    (DownstreamSystemInput & { id?: string }) | null
+  >(null);
+  const [systemError, setSystemError] = useState<string | null>(null);
+  const [deletingSystemId, setDeletingSystemId] = useState<string | null>(null);
   const [openApiOperationId, setOpenApiOperationId] = useState<string | null>(null);
   const [openApiMappings, setOpenApiMappings] = useState<Record<string, string>>({});
+  const [simulateFailure, setSimulateFailure] = useState(false);
+  const [receipt, setReceipt] = useState<MockReceipt | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const labelRef = useRef<HTMLInputElement | null>(null);
 
@@ -367,33 +406,118 @@ export function AutomationWorkbench({
     setDecisions((current) => ({ ...current, [fieldId]: value }));
   };
 
-  const loadOpenApi = (text: string) => {
-    setOpenApiText(text);
-    const result = parseOpenApi(text);
+  const refreshSystems = () => {
+    setSystems(downstreamStore.list());
+    setSystemIssue(downstreamStore.issue());
+  };
+
+  const startNewSystem = () => {
+    setSystemDraft({
+      name: '',
+      baseUrl: '',
+      environment: 'sandbox',
+      enabled: true,
+      auth: { type: 'bearer' },
+      specText: '',
+    });
+    setSystemError(null);
+    setDeletingSystemId(null);
+    setSystemsOpen(true);
+  };
+
+  const startEditSystem = (system: DownstreamSystem) => {
+    setSystemDraft({
+      id: system.id,
+      name: system.name,
+      baseUrl: system.baseUrl,
+      environment: system.environment,
+      enabled: system.enabled,
+      auth: { ...system.auth },
+      specText: system.specText,
+    });
+    setSystemError(null);
+    setDeletingSystemId(null);
+    setSystemsOpen(true);
+  };
+
+  const cancelSystemForm = () => {
+    setSystemDraft(null);
+    setSystemError(null);
+  };
+
+  const saveSystem = () => {
+    if (!systemDraft) return;
+    if (systemDraft.specText.trim()) {
+      const parsed = parseOpenApi(systemDraft.specText);
+      if (!parsed.ok) {
+        setSystemError(parsed.error);
+        return;
+      }
+    }
+    const input: DownstreamSystemInput = {
+      name: systemDraft.name,
+      baseUrl: systemDraft.baseUrl,
+      environment: systemDraft.environment,
+      enabled: systemDraft.enabled,
+      auth: systemDraft.auth,
+      specText: systemDraft.specText,
+    };
+    const result = systemDraft.id
+      ? downstreamStore.update(systemDraft.id, input)
+      : downstreamStore.create(input);
     if (!result.ok) {
-      setOpenApiError(result.error);
-      setOpenApiContract(null);
-      setOpenApiOperationId(null);
-      setOpenApiMappings({});
+      setSystemError(systemFailureMessage(result.reason));
       return;
     }
-    setOpenApiError(null);
-    setOpenApiContract(result.contract);
-    const first = result.contract.operations.find((operation) => operation.available) ?? null;
-    setOpenApiOperationId(first?.id ?? null);
-    setOpenApiMappings(first ? suggestMappings(first.fields, mappingVariables) : {});
+    refreshSystems();
+    setSelectedSystemId(result.record.id);
+    setSystemDraft(null);
+    setSystemError(null);
+    setNotice(
+      result.persisted
+        ? `Saved "${result.record.name}" in this browser.`
+        : `"${result.record.name}" is session only — browser storage failed.`,
+    );
+  };
+
+  const confirmDeleteSystem = (system: DownstreamSystem) => {
+    const removed = downstreamStore.remove(system.id);
+    refreshSystems();
+    if (selectedSystemId === system.id) {
+      setSelectedSystemId(null);
+      setOpenApiOperationId(null);
+      setOpenApiMappings({});
+      setReceipt(null);
+    }
+    setDeletingSystemId(null);
+    setNotice(
+      removed ? `Deleted "${system.name}" from this browser.` : 'That system no longer exists.',
+    );
   };
 
   const selectOpenApiOperation = (id: string) => {
     const operation = openApiContract?.operations.find((item) => item.id === id) ?? null;
     setOpenApiOperationId(operation?.id ?? null);
     setOpenApiMappings(operation ? suggestMappings(operation.fields, mappingVariables) : {});
+    setReceipt(null);
   };
 
   const downloadOpenApiPayload = () => {
     if (!openApiOperation || !openApiPayload?.ready) return;
     const filename = downloadJson(openApiOperation, openApiPayload.payload);
     setNotice(`Downloaded ${filename} — not sent to the downstream API.`);
+  };
+
+  const sendMockPayload = () => {
+    if (!canSend || !selectedSystem || !openApiOperation || !openApiPayload) return;
+    const next = mockSend({
+      system: selectedSystem,
+      operation: openApiOperation,
+      payload: openApiPayload.payload,
+      simulateFailure,
+    });
+    setReceipt(next);
+    setNotice(`Mock send ${next.status} — simulated, no network request.`);
   };
 
   const payload = mappingTemplate
@@ -408,11 +532,44 @@ export function AutomationWorkbench({
     label: variable.label,
     displayValue: variable.displayValue,
   }));
+  const selectedSystem = systems.find((system) => system.id === selectedSystemId) ?? null;
+  const parsedSystemSpec = selectedSystem ? parseOpenApi(selectedSystem.specText) : null;
+  const openApiContract: OpenApiContract | null = parsedSystemSpec?.ok
+    ? parsedSystemSpec.contract
+    : null;
+  const openApiError =
+    selectedSystem && parsedSystemSpec && !parsedSystemSpec.ok
+      ? parsedSystemSpec.error
+      : selectedSystem && !selectedSystem.specText.trim()
+        ? 'No OpenAPI spec attached. Edit the system to add one.'
+        : null;
   const openApiOperation =
     openApiContract?.operations.find((operation) => operation.id === openApiOperationId) ?? null;
   const openApiPayload = openApiOperation
     ? buildOpenApiPayload(openApiOperation.fields, openApiMappings, mappingVariables)
     : null;
+  const canSend = Boolean(selectedSystem?.enabled && openApiOperation && openApiPayload?.ready);
+
+  useEffect(() => {
+    if (selectedSystemId && systems.some((system) => system.id === selectedSystemId)) return;
+    const initial =
+      systems.find((system) => system.enabled && system.specText.trim()) ?? systems[0] ?? null;
+    setSelectedSystemId(initial?.id ?? null);
+  }, [systems, selectedSystemId]);
+
+  useEffect(() => {
+    const system = systems.find((item) => item.id === selectedSystemId) ?? null;
+    const parsed = system ? parseOpenApi(system.specText) : null;
+    const first = parsed?.ok
+      ? parsed.contract.operations.find((operation) => operation.available) ?? null
+      : null;
+    setOpenApiOperationId(first?.id ?? null);
+    setOpenApiMappings(first ? suggestMappings(first.fields, mappingVariables) : {});
+    setReceipt(null);
+    // `mappingVariables` is intentionally read at selection time; depending on it would reset
+    // mappings whenever a variable value changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSystemId, systems]);
 
   const confirmedRequired =
     mappingTemplate?.fields.filter(
@@ -1071,34 +1228,227 @@ export function AutomationWorkbench({
           ) : (
             <div data-testid="openapi-mapping">
               <p className="muted tiny">
-                Only OpenAPI 3.x JSON with local <code>$ref</code> is supported. YAML, Swagger 2.0,
-                external refs and oneOf/anyOf are not. The spec is parsed locally, never uploaded,
-                and not saved — a reload loses it.
+                OpenAPI 3.x JSON is parsed locally from the selected system. YAML, Swagger 2.0,
+                external refs and oneOf/anyOf are not supported.
               </p>
               <label className="tiny">
-                OpenAPI JSON file
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  aria-label="OpenAPI JSON file"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void file.text().then(loadOpenApi);
+                Downstream system
+                <select
+                  aria-label="Downstream system"
+                  value={selectedSystemId ?? ''}
+                  onChange={(event) => setSelectedSystemId(event.target.value || null)}
+                >
+                  <option value="">Choose a system</option>
+                  {systems.map((system) => (
+                    <option key={system.id} value={system.id}>
+                      {system.name} · {system.environment}
+                      {system.enabled ? '' : ' · disabled'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="version-actions">
+                <button type="button" onClick={() => setSystemsOpen((open) => !open)}>
+                  {systemsOpen ? 'Hide systems' : 'Manage systems'}
+                </button>
+                <span className="muted tiny">Saved in this browser — not on the server.</span>
+              </div>
+              {systemIssue ? (
+                <p className="notice notice--warn tiny" data-testid="system-issue">
+                  {systemIssue === 'unreadable'
+                    ? 'Stored downstream systems could not be read; only valid entries are shown.'
+                    : 'Browser storage is unavailable; system changes stay in this session only.'}
+                </p>
+              ) : null}
+              {selectedSystem ? (
+                <p className="tiny" data-testid="system-detail">
+                  {selectedSystem.baseUrl} · {selectedSystem.environment} ·{' '}
+                  {selectedSystem.enabled ? 'enabled' : 'disabled'} · auth{' '}
+                  {selectedSystem.auth.type}
+                  {selectedSystem.auth.hint ? ` (${selectedSystem.auth.hint})` : ''} · spec updated{' '}
+                  {formatCapturedAt(selectedSystem.specUpdatedAt)}
+                </p>
+              ) : (
+                <p className="muted tiny" data-testid="no-system">
+                  No downstream system selected; create or select one first.
+                </p>
+              )}
+              {systemsOpen ? (
+                <div
+                  className="notice tiny"
+                  data-testid="system-manager"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Escape') return;
+                    if (systemDraft) {
+                      event.preventDefault();
+                      cancelSystemForm();
+                    } else if (deletingSystemId) {
+                      event.preventDefault();
+                      setDeletingSystemId(null);
+                    }
                   }}
-                />
-              </label>
-              <label className="tiny">
-                OpenAPI JSON
-                <textarea
-                  aria-label="OpenAPI JSON"
-                  rows={6}
-                  value={openApiText}
-                  onChange={(event) => setOpenApiText(event.target.value)}
-                />
-              </label>
-              <button type="button" onClick={() => loadOpenApi(openApiText)}>
-                Parse OpenAPI
-              </button>
+                >
+                  <h3>Downstream systems</h3>
+                  <ul className="tiny" data-testid="system-list">
+                    {systems.length === 0 ? <li>No systems yet.</li> : null}
+                    {systems.map((system) => (
+                      <li key={system.id}>
+                        <strong>{system.name}</strong> · {system.environment} ·{' '}
+                        {system.enabled ? 'enabled' : 'disabled'} · {system.baseUrl}
+                        <button type="button" onClick={() => startEditSystem(system)}>
+                          Edit
+                        </button>
+                        {deletingSystemId === system.id ? (
+                          <>
+                            <span role="status" aria-live="polite">
+                              Delete “{system.name}” from this browser?
+                            </span>
+                            <button type="button" onClick={() => confirmDeleteSystem(system)}>
+                              Confirm delete
+                            </button>
+                            <button type="button" onClick={() => setDeletingSystemId(null)}>
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" onClick={() => setDeletingSystemId(system.id)}>
+                            Delete
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="button" onClick={startNewSystem}>
+                    New system
+                  </button>
+                  {systemDraft ? (
+                    <div data-testid="system-form">
+                      <label className="tiny">
+                        Name
+                        <input
+                          aria-label="System name"
+                          value={systemDraft.name}
+                          onChange={(event) =>
+                            setSystemDraft({ ...systemDraft, name: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="tiny">
+                        Base URL
+                        <input
+                          aria-label="Base URL"
+                          value={systemDraft.baseUrl}
+                          onChange={(event) =>
+                            setSystemDraft({ ...systemDraft, baseUrl: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="tiny">
+                        Environment
+                        <select
+                          aria-label="Environment"
+                          value={systemDraft.environment}
+                          onChange={(event) =>
+                            setSystemDraft({
+                              ...systemDraft,
+                              environment: event.target.value as DownstreamSystem['environment'],
+                            })
+                          }
+                        >
+                          <option value="sandbox">sandbox</option>
+                          <option value="production">production</option>
+                        </select>
+                      </label>
+                      <label className="tiny">
+                        <input
+                          type="checkbox"
+                          aria-label="Enabled"
+                          checked={systemDraft.enabled}
+                          onChange={(event) =>
+                            setSystemDraft({ ...systemDraft, enabled: event.target.checked })
+                          }
+                        />{' '}
+                        Enabled
+                      </label>
+                      <label className="tiny">
+                        Auth type
+                        <select
+                          aria-label="Auth type"
+                          value={systemDraft.auth.type}
+                          onChange={(event) =>
+                            setSystemDraft({
+                              ...systemDraft,
+                              auth: {
+                                ...systemDraft.auth,
+                                type: event.target.value as DownstreamSystem['auth']['type'],
+                              },
+                            })
+                          }
+                        >
+                          <option value="none">none</option>
+                          <option value="api_key">api_key</option>
+                          <option value="bearer">bearer</option>
+                        </select>
+                      </label>
+                      <label className="tiny">
+                        Auth hint (no secret)
+                        <input
+                          aria-label="Auth hint"
+                          maxLength={80}
+                          value={systemDraft.auth.hint ?? ''}
+                          onChange={(event) =>
+                            setSystemDraft({
+                              ...systemDraft,
+                              auth: { ...systemDraft.auth, hint: event.target.value },
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="tiny">
+                        System OpenAPI file
+                        <input
+                          type="file"
+                          accept=".json,application/json"
+                          aria-label="System OpenAPI file"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (!file) return;
+                            void file.text().then((text) =>
+                              setSystemDraft((current) =>
+                                current ? { ...current, specText: text } : current,
+                              ),
+                            );
+                          }}
+                        />
+                      </label>
+                      <label className="tiny">
+                        System OpenAPI JSON
+                        <textarea
+                          aria-label="System OpenAPI JSON"
+                          rows={6}
+                          value={systemDraft.specText}
+                          onChange={(event) =>
+                            setSystemDraft({ ...systemDraft, specText: event.target.value })
+                          }
+                        />
+                      </label>
+                      {systemError ? (
+                        <p className="notice notice--bad tiny" role="alert" data-testid="system-error">
+                          {systemError}
+                        </p>
+                      ) : null}
+                      <div className="version-actions">
+                        <button type="button" onClick={saveSystem}>
+                          Save system
+                        </button>
+                        <button type="button" onClick={cancelSystemForm}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {openApiError ? (
                 <p className="notice notice--bad tiny" role="alert" data-testid="openapi-error">
                   {openApiError}
@@ -1215,6 +1565,46 @@ export function AutomationWorkbench({
                       >
                         Download JSON
                       </button>
+                    </div>
+                  ) : null}
+                  <label className="tiny">
+                    <input
+                      type="checkbox"
+                      aria-label="Simulate failure"
+                      checked={simulateFailure}
+                      onChange={(event) => setSimulateFailure(event.target.checked)}
+                    />{' '}
+                    Simulate failure (mock 500)
+                  </label>
+                  <button type="button" disabled={!canSend} onClick={sendMockPayload}>
+                    Send (mock)
+                  </button>
+                  <p className="muted tiny">
+                    Simulated — no network request. No credential is read.
+                  </p>
+                  {!canSend ? (
+                    <p className="muted tiny" data-testid="send-unavailable">
+                      Select an enabled system, an operation and a ready payload to mock send.
+                    </p>
+                  ) : null}
+                  {receipt ? (
+                    <div
+                      className="notice tiny"
+                      data-testid="mock-receipt"
+                      data-status={receipt.status}
+                    >
+                      <div>
+                        <strong>{receipt.status}</strong> · {receipt.outcome} ·{' '}
+                        <strong>Simulated — no network request</strong>
+                      </div>
+                      <div>
+                        {receipt.method} {receipt.endpoint}
+                      </div>
+                      <div>
+                        requestId: {receipt.requestId} · {formatCapturedAt(receipt.sentAt)}
+                      </div>
+                      <pre>{JSON.stringify(receipt.payload, null, 2)}</pre>
+                      <p className="tiny">{receipt.message}</p>
                     </div>
                   ) : null}
                 </>

@@ -37,6 +37,18 @@ describe('wide viewport', () => {
     expect(screen.queryByRole('tablist', { name: 'Workspace panes' })).toBeNull();
   });
 
+  it('derives the header title from stored metadata, never from an example', () => {
+    setViewport(false);
+    render(<App />);
+
+    const header = document.querySelector('.document-head') as HTMLElement;
+    expect(header).toBeTruthy();
+    // No draft has loaded yet, so the English fallback is used.
+    expect(header.textContent).toContain('Untitled document');
+    expect(header.textContent).not.toContain('见索即付保函');
+    expect(header.textContent).not.toContain('DG-2026-00417');
+  });
+
   it('offers the audit action inside the assistant pane', () => {
     setViewport(false);
     render(<App />);

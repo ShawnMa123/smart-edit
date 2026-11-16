@@ -19,6 +19,8 @@
   - `Template` 存储：使用浏览器 `localStorage`（可注入 `Storage`、schema version、最多 20 个、最旧淘汰）跨刷新保留；明确标注 `Saved in this browser — not on the server`，损坏/不可用/配额失败时诚实降级，不伪造已保存。
   - `Variables & Fill`：选中正文文本后右键 `Mark as variable`；创建 variable 定义（label/type/required）；显示所有 occurrence 与 before/after fill 预览。
   - `Downstream Mapping`：导入/选择一个 mock API template；显示目标字段、语义匹配候选（如 `application_type = guarantee`）、原文依据、逐字段确认，以及 JSON payload 预览；不发送外部请求。
+- **Beneficiary matcher 修正**：synthetic Downstream Mapping 同时识别 `Beneficiary: aabbcc` 与 `Beneficiary name: aabbcc`（大小写/空白容忍），evidence 使用同一规则；`{{beneficiary}}` 占位符仍为 `missing`，不伪造值。
+- **Date normalisation**：synthetic Downstream Mapping 的 expiry date 接受 ISO、`YYYY/MM/DD`、`DD/MM/YYYY`、`DD/MM/YY`、`YYYY年MM月DD日`、英文月份名；统一输出 `YYYY-MM-DD` 后再进入 payload。`12/03/27` 按 DD/MM/YY → `2027-03-12`；MM/DD 只在第二段 >12 时使用；无效日历日期仍 `missing`。
 - **真实 TipTap `variableReference` 节点**：inline atom、chip 显示、不可直接编辑、右键标记、删除受控；textarea fallback 只显示 `{{label}}` 并禁用变量操作。
 - **投影 parity（唯一后端兼容修改）**：`app/documents/projection.py` 与前端 `projectDocument()` 对 variable node 使用同一规则（有值显示值，无值显示 `{{label}}`）；不新增 endpoint、schema 或运行合同。
 - **mock-first**：除 Template 与下游系统的浏览器本地存储外，其余 UI 在 `Fixture-backed` 标注下运行；mock send 明确是模拟，不调用真实解析/模型/下游系统。
@@ -42,4 +44,4 @@
 - **前端**：`AutomationWorkbench.tsx`（下游系统选择器 + 可折叠 Manage systems + mock send receipt；OpenAPI 只读系统绑定 spec）、新增 `web/src/automation/downstreamSystemStore.ts`（localStorage CRUD + mock 预设 seed）、`mockDownstreamSend.ts`（不触网 200/500）、`fixtures/automation/downstream_systems.json`、`templateStore.ts`、`templateCapture.ts`、`openapi.ts`、`payloadExport.ts`、`mockWorkbench.ts`、`styles.css`、Vitest/Playwright、`how_to_use.md`、`web/README.md`。
 - **后端**：仅 `app/documents/projection.py` 变量节点投影兼容；不改 API、SQLite schema、run/apply/undo，也不新增 template 或发送 endpoint。
 - **数据/依赖**：0 个新依赖；fixture 放在 `fixtures/automation/`；template 与下游系统配置存于浏览器 `localStorage`（系统 key `smart-edit:automation-downstream-systems`）；下游系统 spec 绑定该系统；不存真实 token。
-- **风险**：浏览器本地持久化被误认为服务端保存；必须标注 `Saved in this browser — not on the server`。下游系统 spec 可能较大或写入失败，需要上限与诚实降级。Mock send 可能被误认为真实发送；必须固定 `Simulated — no network request`、不调用 fetch/proxy、不读 token。Template 更新/Apply 的覆盖语义仍需确认。OpenAPI 子集（3.x JSON、本地 $ref、不支持 YAML/2.0/oneOf/anyOf/外部引用）必须明示。
+- **风险**：浏览器本地持久化被误认为服务端保存；必须标注 `Saved in this browser — not on the server`。下游系统 spec 可能较大或写入失败，需要上限与诚实降级。Mock send 可能被误认为真实发送；必须固定 `Simulated — no network request`、不调用 fetch/proxy、不读 token。Template 更新/Apply 的覆盖语义仍需确认。OpenAPI 子集（3.x JSON、本地 $ref、不支持 YAML/2.0/oneOf/anyOf/外部引用）必须明示。Beneficiary matcher 放宽后必须仍要求冒号与非空值，不能把普通提及误判为字段值。

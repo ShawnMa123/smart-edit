@@ -76,4 +76,55 @@ describe('VersionPanel', () => {
     expect(screen.getByText(/stored in/i)).toBeTruthy();
     expect(screen.getByText(/this browser only/i)).toBeTruthy();
   });
+describe('timeline and document info (4.1, 4.2)', () => {
+  it('marks the current version with a word as well as a highlight', () => {
+    const { rerender } = render(
+      <VersionPanel
+        versions={[version(), version({ id: 'v-2', label: 'Version 2' })]}
+        currentVersionId="v-1"
+        onCapture={vi.fn()}
+        onRestore={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(document.querySelector('[data-current="true"]')?.textContent).toContain('Version 1');
+    expect(document.querySelector('[data-current="true"]')?.textContent).toContain('current');
+
+    rerender(
+      <VersionPanel
+        versions={[version(), version({ id: 'v-2', label: 'Version 2' })]}
+        currentVersionId="v-2"
+        onCapture={vi.fn()}
+        onRestore={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    const current = document.querySelector('[data-current="true"]');
+    expect(current?.textContent).toContain('Version 2');
+    expect(current?.textContent).toContain('current');
+  });
+
+  it('lists only real metadata and never sample organisations', () => {
+    renderPanel();
+
+    const info = document.querySelector('.document-info');
+    expect(info).toBeTruthy();
+    expect(info!.textContent).toContain('Versions');
+    expect(info!.textContent).not.toMatch(
+      /organisation|organization|workspace|participants|Alpha Tech|HSBC/i,
+    );
+    // Without facts, no document id or draft row is invented.
+    expect(info!.textContent).not.toContain('demo-document');
+    expect(info!.textContent).not.toContain('revision');
+  });
+
+  it('shows the stored document id and draft revision when supplied', () => {
+    renderPanel({ facts: { documentId: 'demo-document', draftRevision: 12 } });
+
+    expect(screen.getByText('demo-document')).toBeTruthy();
+    expect(screen.getByText('revision 12')).toBeTruthy();
+  });
+});
 });

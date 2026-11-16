@@ -12,6 +12,7 @@ import { plainTextToDocument, type RichDocument } from './rich/richDocument';
 import { createSnapshot, digestText } from './snapshot';
 import { versionStore, type VersionEntry } from './versionStore';
 import { AssistantPanel } from './components/AssistantPanel';
+import { DocumentHead, EnvironmentStrip, TopBar } from './components/AppShell';
 import { DocumentActions } from './components/DocumentActions';
 import { ImportReport, initialImportState, type ImportState } from './components/ImportReport';
 import { RichEditor } from './components/RichEditor';
@@ -51,6 +52,8 @@ export function App() {
   /** Whether the rich editor started; variable actions are unavailable in the textarea fallback. */
   const [editorMode, setEditorMode] = useState<'rich' | 'fallback'>('rich');
   const [draft, setDraft] = useState<DraftView | null>(null);
+  /** Whether this session actually holds the edit lock (design D5: unknown is its own word). */
+  const [lockHeld, setLockHeld] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('local');
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
@@ -85,6 +88,7 @@ export function App() {
         draftRef.current = view;
         lockRef.current = lockView;
         setDraft(view);
+        setLockHeld(true);
         if (!userEditedRef.current) {
           setRichDoc(view.content);
           richDocRef.current = view.content;
@@ -381,6 +385,17 @@ export function App() {
   // run that finishes afterwards can never be rendered as if it were still current.
   const handleStopWaiting = () => dispatch({ type: 'reset' });
 
+  const facts = {
+    documentId: draft?.document_id ?? DOCUMENT_ID,
+    title: draft?.title ?? 'Untitled document',
+    versions: versions.length,
+    characters: text.length,
+    draftRevision: draft?.revision ?? null,
+    draftSha256: draft?.content_sha256 ?? null,
+    provenance: richDoc.provenance ?? null,
+    lockLabel: lockHeld ? 'held by this session' : 'unknown',
+  };
+
   const panes: Record<PaneId, JSX.Element> = {
     versions: (
       <VersionPanel
@@ -389,6 +404,7 @@ export function App() {
         onCapture={() => void handleCapture()}
         onRestore={handleRestore}
         onClear={handleClear}
+        facts={{ documentId: facts.documentId, draftRevision: facts.draftRevision }}
       />
     ),
     editor: (
@@ -405,6 +421,10 @@ export function App() {
         onUseServer={useServerVersion}
         onOverwriteLocal={() => void overwriteWithLocal()}
         onKeepLocal={keepLocalRecovery}
+        documentId={facts.documentId}
+        versions={facts.versions}
+        draftRevision={facts.draftRevision}
+        lockHeld={lockHeld}
       />
     ),
     assistant: (
@@ -421,6 +441,8 @@ export function App() {
           digest: currentDigest,
           text,
           selection: knowledgeSelection,
+          // English-only baseline (interface-language): the demo corpus and the UI speak English.
+          locale: 'en',
         }}
         automation={{
           draft,
@@ -445,19 +467,12 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="document-head">
-        <div>
-          <div className="crumb tiny">Trade documents / Guarantees / DG-2026-00417</div>
-          <h1>Demand Guarantee · 见索即付保函</h1>
-          <div className="meta tiny">
-            {versions.length} captured version{versions.length === 1 ? '' : 's'} ·{' '}
-            {text.length} characters ·{' '}
-            {draft ? `server draft rev ${draft.revision}` : 'server draft local-only'} ·{' '}
-            history stored in this browser
-          </div>
-        </div>
-        <DocumentActions onImport={(files) => void handleImport(files)} />
-      </header>
+      <TopBar />
+      <EnvironmentStrip />
+      <DocumentHead
+        facts={facts}
+        actions={<DocumentActions onImport={(files) => void handleImport(files)} />}
+      />
 
       <ImportReport
         state={importState}

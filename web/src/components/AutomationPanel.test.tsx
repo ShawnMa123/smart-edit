@@ -8,6 +8,7 @@ import { AutomationPanel } from './AutomationPanel';
 import type { AssistantSelection } from '../api/assistantTypes';
 import type { DraftView } from '../api/documents';
 import openapiFixture from '../../../fixtures/automation/openapi_sample.json';
+import { createDownstreamSystemStore } from '../automation/downstreamSystemStore';
 import {
   TEMPLATE_STORAGE_KEY,
   createTemplateStore,
@@ -108,6 +109,7 @@ beforeEach(() => {
     pendingVariable: null,
     digest: 'b'.repeat(64),
     templateStore,
+    downstreamStore: createDownstreamSystemStore(memoryStorage()),
     onChange: vi.fn(),
     onVariableHandled: vi.fn(),
   };
@@ -388,6 +390,53 @@ describe('AutomationWorkbench', () => {
     expect(preview.getAttribute('data-state')).toBe('mapping_not_ready');
     expect(preview.textContent).toContain('missing application_type');
     expect(preview.textContent).not.toContain('"application_type"');
+  });
+
+  it('matches Beneficiary name: against the v2 mock template', async () => {
+    const user = userEvent.setup();
+    render(
+      <AutomationPanel
+        {...props}
+        document={doc(paragraph('Beneficiary name: aabbcc'))}
+      />,
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await user.selectOptions(
+      screen.getByLabelText('Downstream template'),
+      'api_template_letter_of_credit',
+    );
+    await user.click(screen.getByRole('button', { name: 'Match document' }));
+
+    const fields = screen.getByTestId('mapping-fields');
+    expect(fields.textContent).toContain('Beneficiary name');
+    expect(fields.textContent).toContain('status: matched');
+    expect(fields.textContent).toContain('evidence: Beneficiary name: aabbcc');
+
+    await user.click(screen.getByRole('button', { name: 'Confirm aabbcc' }));
+    expect(screen.getByTestId('payload-preview').textContent).toContain(
+      '"beneficiary_name": "aabbcc"',
+    );
+  });
+
+  it('normalises a slash expiry date before it enters the payload', async () => {
+    const user = userEvent.setup();
+    render(
+      <AutomationPanel
+        {...props}
+        document={doc(paragraph('Expiry Date: 12/03/27'))}
+      />,
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await user.click(screen.getByRole('button', { name: 'Match document' }));
+
+    expect(screen.getByTestId('mapping-fields').textContent).toContain('Expiry date');
+    await user.click(screen.getByRole('button', { name: 'Confirm 2027-03-12' }));
+
+    expect(screen.getByTestId('payload-preview').textContent).toContain(
+      '"expiry_date": "2027-03-12"',
+    );
   });
 
   it('disables variable actions when the editor is in the textarea fallback', async () => {
@@ -864,7 +913,7 @@ describe('AutomationWorkbench', () => {
     expect(createTemplateStore(backing).list()[0].version).toBe('v1');
   });
 
-  it('parses an OpenAPI spec, maps variables and downloads a request JSON', async () => {
+  it('parses the selected system spec, maps variables, downloads and mock sends', async () => {
     const user = userEvent.setup();
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     Object.defineProperty(URL, 'createObjectURL', {
@@ -872,6 +921,8 @@ describe('AutomationWorkbench', () => {
       configurable: true,
     });
     Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
     const contractDocument = doc({
       type: 'paragraph',
       content: [
@@ -887,10 +938,7 @@ describe('AutomationWorkbench', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
-    fireEvent.change(screen.getByLabelText('OpenAPI JSON'), {
-      target: { value: JSON.stringify(openapiFixture) },
-    });
-    await user.click(screen.getByRole('button', { name: 'Parse OpenAPI' }));
+    await waitFor(() => expect(screen.getByTestId('openapi-title')).toBeTruthy());
 
     expect(screen.getByTestId('openapi-title').textContent).toContain('Trade Intake API');
     expect((screen.getByLabelText('OpenAPI operation') as HTMLSelectElement).value).toBe(
@@ -907,23 +955,36 @@ describe('AutomationWorkbench', () => {
     expect(payload.textContent).toContain('Not sent');
 
     await user.click(screen.getByRole('button', { name: 'Download JSON' }));
-
     expect(URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(click).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('workbench-status').textContent).toContain('Downloaded');
+
+    await user.click(screen.getByRole('button', { name: 'Send (mock)' }));
+    const success = screen.getByTestId('mock-receipt');
+    expect(success.getAttribute('data-status')).toBe('200');
+    expect(success.textContent).toContain('mock_success');
+    expect(success.textContent).toContain('Simulated — no network request');
+    expect(success.textContent).toContain('https://sandbox.trade.example/api/trade/applications');
+
+    await user.click(screen.getByLabelText('Simulate failure'));
+    await user.click(screen.getByRole('button', { name: 'Send (mock)' }));
+    const failure = screen.getByTestId('mock-receipt');
+    expect(failure.getAttribute('data-status')).toBe('500');
+    expect(failure.textContent).toContain('MOCK_DOWNSTREAM_ERROR');
+    expect(failure.textContent).toContain('Simulated');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
     click.mockRestore();
   });
 
-  it('keeps download disabled while required OpenAPI fields are missing', async () => {
+  it('keeps download and mock send disabled while required OpenAPI fields are missing', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
 
     await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
-    fireEvent.change(screen.getByLabelText('OpenAPI JSON'), {
-      target: { value: JSON.stringify(openapiFixture) },
-    });
-    await user.click(screen.getByRole('button', { name: 'Parse OpenAPI' }));
+    await waitFor(() => expect(screen.getByTestId('openapi-title')).toBeTruthy());
 
     const payload = screen.getByTestId('openapi-payload');
     expect(payload.getAttribute('data-state')).toBe('not_ready');
@@ -931,29 +992,41 @@ describe('AutomationWorkbench', () => {
     expect(
       (screen.getByRole('button', { name: 'Download JSON' }) as HTMLButtonElement).disabled,
     ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Send (mock)' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(screen.getByTestId('send-unavailable')).toBeTruthy();
   });
 
-  it('rejects unsupported OpenAPI input with a readable error', async () => {
+  it('rejects an invalid OpenAPI spec when saving a system', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
     await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
-    fireEvent.change(screen.getByLabelText('OpenAPI JSON'), {
+    await user.click(screen.getByRole('button', { name: 'Manage systems' }));
+    await user.click(screen.getByRole('button', { name: 'New system' }));
+
+    await user.type(screen.getByLabelText('System name'), 'Bad system');
+    await user.type(screen.getByLabelText('Base URL'), 'https://bad.example/api');
+    fireEvent.change(screen.getByLabelText('System OpenAPI JSON'), {
       target: { value: '{"swagger":"2.0","paths":{}}' },
     });
-    await user.click(screen.getByRole('button', { name: 'Parse OpenAPI' }));
+    await user.click(screen.getByRole('button', { name: 'Save system' }));
 
-    expect(screen.getByTestId('openapi-error').textContent).toContain(
+    expect(screen.getByTestId('system-error').textContent).toContain(
       'Swagger 2.0 is not supported',
     );
-    expect(screen.queryByTestId('openapi-title')).toBeNull();
   });
 
-  it('loads an OpenAPI file and switches operations', async () => {
+  it('creates a system from an uploaded spec and switches operations', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
     await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
+    await user.click(screen.getByRole('button', { name: 'Manage systems' }));
+    await user.click(screen.getByRole('button', { name: 'New system' }));
+    await user.type(screen.getByLabelText('System name'), 'Uploaded API');
+    await user.type(screen.getByLabelText('Base URL'), 'https://upload.example/api');
 
     const file = new File([JSON.stringify(openapiFixture)], 'openapi.json', {
       type: 'application/json',
@@ -963,16 +1036,186 @@ describe('AutomationWorkbench', () => {
         value: async () => JSON.stringify(openapiFixture),
       });
     }
-    await user.upload(screen.getByLabelText('OpenAPI JSON file'), file);
-
-    await waitFor(() => expect(screen.getByTestId('openapi-title')).toBeTruthy());
-    await user.selectOptions(
-      screen.getByLabelText('OpenAPI operation'),
-      'POST /trade/preview',
+    await user.upload(screen.getByLabelText('System OpenAPI file'), file);
+    await waitFor(() =>
+      expect((screen.getByLabelText('System OpenAPI JSON') as HTMLTextAreaElement).value).toContain(
+        'Trade Intake API',
+      ),
     );
+    await user.click(screen.getByRole('button', { name: 'Save system' }));
 
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('Downstream system') as HTMLSelectElement).selectedOptions[0]
+          .textContent,
+      ).toContain('Uploaded API'),
+    );
+    expect(screen.getByTestId('openapi-title').textContent).toContain('Trade Intake API');
+
+    await user.selectOptions(screen.getByLabelText('OpenAPI operation'), 'POST /trade/preview');
     expect(screen.getByTestId('openapi-fields').textContent).toContain('amount');
     expect(screen.getByTestId('openapi-fields').textContent).not.toContain('application_type');
     expect(screen.getByTestId('openapi-payload').getAttribute('data-state')).toBe('not_ready');
+  });
+
+  it('edits and deletes downstream systems with confirmation', async () => {
+    const user = userEvent.setup();
+    render(<AutomationPanel {...props} />);
+    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
+    await user.click(screen.getByRole('button', { name: 'Manage systems' }));
+
+    const list = screen.getByTestId('system-list');
+    const sandbox = within(list).getByText('Trade Intake sandbox').closest('li');
+    if (!sandbox) throw new Error('missing sandbox');
+    await user.click(within(sandbox).getByRole('button', { name: 'Edit' }));
+    const name = screen.getByLabelText('System name');
+    await user.clear(name);
+    await user.type(name, 'Renamed sandbox');
+    await user.click(screen.getByRole('button', { name: 'Save system' }));
+
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('Downstream system') as HTMLSelectElement).selectedOptions[0]
+          .textContent,
+      ).toContain('Renamed sandbox'),
+    );
+
+    const renamed = within(screen.getByTestId('system-list'))
+      .getByText('Renamed sandbox')
+      .closest('li');
+    if (!renamed) throw new Error('missing renamed system');
+    await user.click(within(renamed).getByRole('button', { name: 'Delete' }));
+    expect(screen.getByText(/Delete “Renamed sandbox” from this browser\?/)).toBeTruthy();
+    await user.click(within(renamed).getByRole('button', { name: 'Confirm delete' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('Renamed sandbox')).toBeNull(),
+    );
+    expect(screen.getByTestId('openapi-title')).toBeTruthy();
+  });
+
+  it('persists a created system across a remount with the same storage', async () => {
+    const user = userEvent.setup();
+    const storage = memoryStorage();
+    const first = render(
+      <AutomationPanel {...props} downstreamStore={createDownstreamSystemStore(storage)} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
+    await user.click(screen.getByRole('button', { name: 'Manage systems' }));
+    await user.click(screen.getByRole('button', { name: 'New system' }));
+    await user.type(screen.getByLabelText('System name'), 'Persistent API');
+    await user.type(screen.getByLabelText('Base URL'), 'https://persist.example/api');
+    await user.click(screen.getByRole('button', { name: 'Save system' }));
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('Downstream system') as HTMLSelectElement).selectedOptions[0]
+          .textContent,
+      ).toContain('Persistent API'),
+    );
+    first.unmount();
+
+    render(
+      <AutomationPanel {...props} downstreamStore={createDownstreamSystemStore(storage)} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
+    await waitFor(() =>
+      expect(
+        within(screen.getByLabelText('Downstream system')).getByRole('option', {
+          name: /Persistent API/,
+        }),
+      ).toBeTruthy(),
+    );
+  });
+
+  it('explains when no downstream system exists', async () => {
+    const user = userEvent.setup();
+    const store = createDownstreamSystemStore(memoryStorage());
+    for (const system of store.list()) store.remove(system.id);
+    render(<AutomationPanel {...props} downstreamStore={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
+
+    expect(screen.getByTestId('no-system').textContent).toContain('create or select one first');
+    expect(screen.queryByTestId('openapi-title')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send (mock)' })).toBeNull();
+  });
+
+  it('marks a failed system save as session-only', async () => {
+    const user = userEvent.setup();
+    const backing = memoryStorage();
+    createDownstreamSystemStore(backing).list();
+    const blocked = createDownstreamSystemStore({
+      ...backing,
+      setItem: () => {
+        throw new Error('quota');
+      },
+    } as Storage);
+    render(<AutomationPanel {...props} downstreamStore={blocked} />);
+    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
+    await user.click(screen.getByRole('button', { name: 'Manage systems' }));
+    await user.click(screen.getByRole('button', { name: 'New system' }));
+    await user.type(screen.getByLabelText('System name'), 'Session API');
+    await user.type(screen.getByLabelText('Base URL'), 'https://session.example/api');
+    await user.click(screen.getByRole('button', { name: 'Save system' }));
+
+    expect(screen.getByTestId('workbench-status').textContent).toContain('session only');
+    expect(
+      within(screen.getByLabelText('Downstream system')).getByRole('option', {
+        name: /Session API/,
+      }),
+    ).toBeTruthy();
+  });
+
+  it('reloads the bound spec when the selected system is edited', async () => {
+    const user = userEvent.setup();
+    render(<AutomationPanel {...props} />);
+    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
+    await user.click(screen.getByRole('button', { name: 'Manage systems' }));
+
+    const sandbox = within(screen.getByTestId('system-list'))
+      .getByText('Trade Intake sandbox')
+      .closest('li');
+    if (!sandbox) throw new Error('missing sandbox');
+    await user.click(within(sandbox).getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('System OpenAPI JSON'), {
+      target: {
+        value: JSON.stringify({
+          openapi: '3.0.0',
+          info: { title: 'Minimal API', version: '1' },
+          paths: {
+            '/minimal': {
+              post: {
+                operationId: 'minimalOp',
+                requestBody: {
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'object',
+                        required: ['amount'],
+                        properties: { amount: { type: 'number' } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }),
+      },
+    });
+    await user.click(screen.getByRole('button', { name: 'Save system' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('openapi-title').textContent).toContain('Minimal API'),
+    );
+    expect((screen.getByLabelText('OpenAPI operation') as HTMLSelectElement).value).toBe(
+      'POST /minimal',
+    );
+    expect(screen.getByTestId('openapi-fields').textContent).toContain('amount');
   });
 });

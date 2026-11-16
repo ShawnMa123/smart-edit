@@ -137,25 +137,146 @@ function matchApplicationType(text: string, field: ApiTemplateField): MappingCan
   };
 }
 
+const MONTH_NAMES: Record<string, number> = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12,
+};
+
+const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+const normalizeYear = (raw: string): number => {
+  const value = Number(raw);
+  if (raw.length === 2) return value < 70 ? 2000 + value : 1900 + value;
+  return value;
+};
+
+const isValidDate = (year: number, month: number, day: number): boolean => {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= days[month - 1];
+};
+
+const toIso = (yearRaw: string, monthRaw: string, dayRaw: string): string | null => {
+  const year = normalizeYear(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  return isValidDate(year, month, day) ? `${year}-${pad2(month)}-${pad2(day)}` : null;
+};
+
+/** Parse one date token and normalise it to `YYYY-MM-DD`; unknown/ambiguous shapes return null. */
+function normaliseDateToken(raw: string): string | null {
+  const trimmed = raw.trim();
+
+  const yearFirst =
+    /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(trimmed) ??
+    /^(\d{4})年(\d{1,2})月(\d{1,2})日$/.exec(trimmed);
+  if (yearFirst) return toIso(yearFirst[1], yearFirst[2], yearFirst[3]);
+
+  const dayFirst = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/.exec(trimmed);
+  if (dayFirst) {
+    const first = Number(dayFirst[1]);
+    const second = Number(dayFirst[2]);
+    // DD/MM is the default for contract dates; MM/DD is only used when it is unambiguous.
+    const monthFirst = second > 12 && first <= 12;
+    return monthFirst
+      ? toIso(dayFirst[3], dayFirst[1], dayFirst[2])
+      : toIso(dayFirst[3], dayFirst[2], dayFirst[1]);
+  }
+
+  const dayMonthName = /^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})[,\s]+(\d{2,4})$/i.exec(
+    trimmed,
+  );
+  if (dayMonthName) {
+    const month = MONTH_NAMES[dayMonthName[2].toLowerCase()];
+    return month ? toIso(dayMonthName[3], String(month), dayMonthName[1]) : null;
+  }
+
+  const monthNameDay = /^([A-Za-z]{3,9})\s+(\d{1,2})(?:st|nd|rd|th)?[,\s]+(\d{2,4})$/i.exec(
+    trimmed,
+  );
+  if (monthNameDay) {
+    const month = MONTH_NAMES[monthNameDay[1].toLowerCase()];
+    return month ? toIso(monthNameDay[3], String(month), monthNameDay[2]) : null;
+  }
+
+  return null;
+}
+
+const DATE_PATTERNS = [
+  /\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\b/g,
+  /\d{4}年\d{1,2}月\d{1,2}日/g,
+  /\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/g,
+  /\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}[,\s]+\d{2,4}\b/gi,
+  /\b[A-Za-z]{3,9}\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{2,4}\b/gi,
+];
+
+function findDate(text: string): { iso: string; index: number } | null {
+  const candidates: Array<{ raw: string; index: number }> = [];
+  for (const pattern of DATE_PATTERNS) {
+    for (const match of text.matchAll(pattern)) {
+      if (match.index !== undefined) candidates.push({ raw: match[0], index: match.index });
+    }
+  }
+  candidates.sort((left, right) => left.index - right.index);
+  for (const candidate of candidates) {
+    const iso = normaliseDateToken(candidate.raw);
+    if (iso) return { iso, index: candidate.index };
+  }
+  return null;
+}
+
+const lineWith = (text: string, index: number): string => {
+  const start = text.lastIndexOf('\n', Math.max(0, index - 1)) + 1;
+  const end = text.indexOf('\n', index);
+  return text.slice(start, end === -1 ? undefined : end).trim();
+};
+
 function matchExpiryDate(text: string, field: ApiTemplateField): MappingCandidate {
-  const date = /\b\d{4}-\d{2}-\d{2}\b/.exec(text)?.[0] ?? null;
+  const found = findDate(text);
   return {
     fieldId: field.fieldId,
-    status: date ? 'matched' : 'missing',
-    value: date,
-    evidence: date ? sentenceWith(text, /\b\d{4}-\d{2}-\d{2}\b/) : null,
-    reason: date ? 'Date found in the document.' : 'No unambiguous date found.',
+    status: found ? 'matched' : 'missing',
+    value: found?.iso ?? null,
+    evidence: found ? lineWith(text, found.index) : null,
+    reason: found ? 'Date found and normalised to YYYY-MM-DD.' : 'No unambiguous date found.',
   };
 }
 
+const BENEFICIARY_LINE = /beneficiary(?:\s+name)?\s*[：:]\s*([^\n.]+)/i;
+const BENEFICIARY_EVIDENCE = /beneficiary(?:\s+name)?\s*[：:]/i;
+
 function matchBeneficiary(text: string, field: ApiTemplateField): MappingCandidate {
-  const raw = /beneficiary\s*[::]\s*([^\n.]+)/i.exec(text)?.[1];
+  const raw = BENEFICIARY_LINE.exec(text)?.[1];
   const value = realValue(raw);
   return {
     fieldId: field.fieldId,
     status: value ? 'matched' : 'missing',
     value,
-    evidence: value ? sentenceWith(text, /beneficiary\s*[::]/i) : null,
+    evidence: value ? sentenceWith(text, BENEFICIARY_EVIDENCE) : null,
     reason: value
       ? 'Beneficiary line found in the document.'
       : 'No beneficiary value found (placeholders are not values).',

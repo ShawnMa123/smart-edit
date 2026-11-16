@@ -553,4 +553,49 @@ describe('variable references (1.2, 1.5)', () => {
     expect(screen.queryByRole('button', { name: 'Mark selection as variable' })).toBeNull();
     });
   });
+describe('page presentation (3.1, 3.2)', () => {
+  const renderEditor = (over: Partial<Parameters<typeof RichEditor>[0]> = {}) =>
+    render(
+      <RichEditor
+        document={plainTextToDocument('DEMAND GUARANTEE')}
+        onChange={() => undefined}
+        documentId="demo-document"
+        versions={2}
+        draftRevision={12}
+        lockHeld
+        {...over}
+      />,
+    );
+
+  it('renders the editing surface inside a page container', () => {
+    renderEditor();
+
+    const paper = document.querySelector('article.paper');
+    expect(paper).toBeTruthy();
+    expect(paper!.querySelector('[data-testid="editor-rich"]')).toBeTruthy();
+    expect(paper!.textContent).toContain('WORKING COPY');
+    expect(paper!.textContent).toContain('demo-document');
+    expect(paper!.textContent).not.toContain('DG-2026-00417');
+    expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeTruthy();
+  });
+
+  it('puts the save, snapshot and lock state in one band in words', () => {
+    renderEditor({ saveState: 'saved' });
+
+    const band = screen.getByTestId('editor-status');
+    expect(band.textContent).toContain('snapshot v2');
+    expect(band.textContent).toContain('draft rev 12');
+    expect(band.textContent).toContain('lock: this session');
+    expect(screen.getByTestId('save-state').textContent).toBe('Saved to server');
+  });
+
+  it('says unknown rather than inventing a lock holder', () => {
+    renderEditor({ lockHeld: false, draftRevision: null, versions: 0 });
+
+    const band = screen.getByTestId('editor-status');
+    expect(band.textContent).toContain('lock: unknown');
+    expect(band.textContent).toContain('no server draft');
+    expect(band.textContent).toContain('no captured version');
+  });
+});
 });

@@ -1,0 +1,22 @@
+{
+  "systems": [
+    {
+      "id": "sys_trade_sandbox",
+      "name": "Trade Intake sandbox",
+      "baseUrl": "https://sandbox.trade.example/api",
+      "environment": "sandbox",
+      "enabled": true,
+      "auth": { "type": "bearer", "hint": "mock token" },
+      "specFixture": "openapi_sample"
+    },
+    {
+      "id": "sys_trade_production",
+      "name": "Trade Intake production",
+      "baseUrl": "https://api.trade.example/v1",
+      "environment": "production",
+      "enabled": false,
+      "auth": { "type": "api_key", "hint": "mock key" },
+      "specFixture": "openapi_sample"
+    }
+  ]
+}

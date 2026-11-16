@@ -298,6 +298,20 @@ The Downstream Mapping area SHALL let the operator choose a mock downstream API 
 - **THEN** the workbench MUST show `guarantee` as a candidate with the supporting excerpt
 - **AND** the candidate MUST require explicit confirmation before it enters the payload
 
+#### Scenario: Beneficiary label variants
+
+- **WHEN** the document contains `Beneficiary name: aabbcc` or `Beneficiary: aabbcc` and the target template has a required `beneficiary_name`
+- **THEN** the workbench MUST show `matched` with value `aabbcc` and an evidence excerpt
+- **AND** case and whitespace around the label/colon MUST NOT prevent the match
+- **AND** `Beneficiary: {{beneficiary}}` MUST remain `missing` rather than using the placeholder as a value
+
+#### Scenario: Date normalisation
+
+- **WHEN** the document contains `Expiry Date: 12/03/27` or another supported date shape (ISO, `YYYY/MM/DD`, `DD/MM/YYYY`, `YYYY年MM月DD日`, English month name)
+- **THEN** the candidate MUST be `matched` with the value normalised to `YYYY-MM-DD` (`12/03/27` → `2027-03-12`) and an evidence line
+- **AND** every date accepted by the matcher MUST enter the payload as `YYYY-MM-DD`
+- **AND** an invalid calendar date (e.g. `31/02/2027`) or no date MUST remain `missing`
+
 #### Scenario: Ambiguous or missing mapping
 
 - **WHEN** a target field has no candidate, multiple conflicting candidates, or the document does not support the enum

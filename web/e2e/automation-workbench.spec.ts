@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
  * The frontend-first Automation workbench (change: automation-workbench-ui, task 5.4).
@@ -40,6 +40,37 @@ async function resetDocument(request: APIRequestContext) {
     },
   );
   expect(saved.ok()).toBeTruthy();
+}
+
+async function markAmountVariable(page: Page) {
+  await page.evaluate(() => {
+    const paragraph = globalThis.document.querySelector(
+      '[data-testid="editor-rich"] p',
+    ) as HTMLParagraphElement | null;
+    const first = paragraph?.firstChild;
+    if (!first || first.nodeType !== Node.TEXT_NODE) return;
+    const text = first.textContent ?? '';
+    const start = text.indexOf('USD');
+    const range = globalThis.document.createRange();
+    range.setStart(first, start);
+    range.setEnd(first, text.length);
+    const selection = globalThis.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    globalThis.document.dispatchEvent(new Event('selectionchange'));
+  });
+
+  await page.getByRole('tab', { name: /Automation · fixture only/ }).click();
+  await page.getByRole('tab', { name: 'Variables & Fill' }).click();
+  const variablesPanel = page.getByRole('tabpanel', { name: 'Variables & Fill' });
+  await variablesPanel.getByRole('button', { name: 'Mark selection as variable' }).click();
+  const dialog = page.getByTestId('variable-dialog');
+  await dialog.getByLabel('Variable label').fill('amount');
+  await dialog.getByLabel('Variable type').selectOption('amount');
+  await dialog.getByRole('button', { name: 'Create variable' }).click();
+  await page.getByRole('button', { name: /amount · amount/ }).click();
+  await page.getByLabel('Variable value').fill('500000');
+  await page.getByRole('button', { name: 'Fill all occurrences' }).click();
 }
 
 test('template capture/reload/rename/delete and the fixture-backed flows', async ({
@@ -222,50 +253,15 @@ test('updates an existing template and applies the new snapshot', async ({ page,
   await page.getByRole('button', { name: 'Replace document' }).click();
   await expect(page.getByTestId('editor-rich')).toContainText('UPDATED');
 });
-test('generates a downloadable JSON request from an uploaded OpenAPI spec', async ({
-  page,
-  request,
-}) => {
+test('downloads JSON from the preset system and mock sends', async ({ page, request }) => {
   await resetDocument(request);
   await page.goto('/');
   await expect(page.getByText(/server draft rev/)).toBeVisible();
 
-  // Mark the amount value as a variable and give it a numeric value.
-  await page.evaluate(() => {
-    const paragraph = globalThis.document.querySelector(
-      '[data-testid="editor-rich"] p',
-    ) as HTMLParagraphElement | null;
-    const first = paragraph?.firstChild;
-    if (!first || first.nodeType !== Node.TEXT_NODE) return;
-    const text = first.textContent ?? '';
-    const start = text.indexOf('USD');
-    const range = globalThis.document.createRange();
-    range.setStart(first, start);
-    range.setEnd(first, text.length);
-    const selection = globalThis.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    globalThis.document.dispatchEvent(new Event('selectionchange'));
-  });
+  await markAmountVariable(page);
 
-  await page.getByRole('tab', { name: /Automation · fixture only/ }).click();
-  await page.getByRole('tab', { name: 'Variables & Fill' }).click();
-  const variablesPanel = page.getByRole('tabpanel', { name: 'Variables & Fill' });
-  await variablesPanel.getByRole('button', { name: 'Mark selection as variable' }).click();
-  const dialog = page.getByTestId('variable-dialog');
-  await dialog.getByLabel('Variable label').fill('amount');
-  await dialog.getByLabel('Variable type').selectOption('amount');
-  await dialog.getByRole('button', { name: 'Create variable' }).click();
-  await page.getByRole('button', { name: /amount · amount/ }).click();
-  await page.getByLabel('Variable value').fill('500000');
-  await page.getByRole('button', { name: 'Fill all occurrences' }).click();
-
-  // OpenAPI mode: upload the sample contract and choose the simple preview operation.
   await page.getByRole('tab', { name: 'Downstream Mapping' }).click();
   await page.getByLabel('Downstream source').selectOption('openapi');
-  await page
-    .getByLabel('OpenAPI JSON file')
-    .setInputFiles(join(process.cwd(), '../fixtures/automation/openapi_sample.json'));
   await expect(page.getByTestId('openapi-title')).toContainText('Trade Intake API');
   await page.getByLabel('OpenAPI operation').selectOption('POST /trade/preview');
 
@@ -273,7 +269,18 @@ test('generates a downloadable JSON request from an uploaded OpenAPI spec', asyn
   await expect(payload).toHaveAttribute('data-state', 'ready');
   await expect(payload).toContainText('"amount": 500000');
   await expect(payload).toContainText('Not sent');
-  await expect(page.getByRole('button', { name: /send/i })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Send (mock)' }).click();
+  const receipt = page.getByTestId('mock-receipt');
+  await expect(receipt).toHaveAttribute('data-status', '200');
+  await expect(receipt).toContainText('mock_success');
+  await expect(receipt).toContainText('Simulated — no network request');
+  await expect(receipt).toContainText('https://sandbox.trade.example/api/trade/preview');
+
+  await page.getByLabel('Simulate failure').check();
+  await page.getByRole('button', { name: 'Send (mock)' }).click();
+  await expect(receipt).toHaveAttribute('data-status', '500');
+  await expect(receipt).toContainText('MOCK_DOWNSTREAM_ERROR');
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download JSON' }).click();
@@ -283,4 +290,51 @@ test('generates a downloadable JSON request from an uploaded OpenAPI spec', asyn
   const downloadedPath = await download.path();
   expect(downloadedPath).not.toBeNull();
   expect(readFileSync(downloadedPath!, 'utf8')).toContain('"amount": 500000');
+});
+
+test('creates a downstream system with a bound spec, persists it, mock sends and deletes it', async ({
+  page,
+  request,
+}) => {
+  await resetDocument(request);
+  await page.goto('/');
+  await expect(page.getByText(/server draft rev/)).toBeVisible();
+
+  await markAmountVariable(page);
+
+  await page.getByRole('tab', { name: 'Downstream Mapping' }).click();
+  await page.getByLabel('Downstream source').selectOption('openapi');
+  await page.getByRole('button', { name: 'Manage systems' }).click();
+  await page.getByRole('button', { name: 'New system' }).click();
+  await page.getByLabel('System name').fill('E2E system');
+  await page.getByLabel('Base URL').fill('https://e2e.example/api');
+  await page
+    .getByLabel('System OpenAPI file')
+    .setInputFiles(join(process.cwd(), '../fixtures/automation/openapi_sample.json'));
+  await expect(page.getByLabel('System OpenAPI JSON')).toHaveValue(/Trade Intake API/);
+  await page.getByRole('button', { name: 'Save system' }).click();
+
+  await expect(page.getByLabel('Downstream system').locator('option:checked')).toContainText(
+    'E2E system',
+  );
+  await page.getByLabel('OpenAPI operation').selectOption('POST /trade/preview');
+  await expect(page.getByTestId('openapi-payload')).toHaveAttribute('data-state', 'ready');
+  await page.getByRole('button', { name: 'Send (mock)' }).click();
+  await expect(page.getByTestId('mock-receipt')).toHaveAttribute('data-status', '200');
+
+  await page.reload();
+  await page.getByRole('tab', { name: /Automation · fixture only/ }).click();
+  await page.getByRole('tab', { name: 'Downstream Mapping' }).click();
+  await page.getByLabel('Downstream source').selectOption('openapi');
+  await page.getByRole('button', { name: 'Manage systems' }).click();
+  await expect(page.getByTestId('system-list')).toContainText('E2E system');
+
+  const option = page.getByRole('option', { name: /E2E system/ });
+  await page.getByLabel('Downstream system').selectOption((await option.getAttribute('value')) ?? '');
+  await expect(page.getByTestId('system-detail')).toContainText('https://e2e.example/api');
+
+  const item = page.getByTestId('system-list').locator('li', { hasText: 'E2E system' });
+  await item.getByRole('button', { name: 'Delete' }).click();
+  await item.getByRole('button', { name: 'Confirm delete' }).click();
+  await expect(page.getByTestId('system-list')).not.toContainText('E2E system');
 });

@@ -1,8 +1,9 @@
 /**
  * First-use copy and suggested questions (knowledge-onboarding 2A).
  *
- * The questions stay in Chinese because the demo corpus is zh-CN; keeping the exact question text
- * visible in the chip makes it clear what will be sent. Labels in the surrounding UI follow `locale`.
+ * The interface uses the `en` locale by default and in the app; the `zh-CN` variants stay valid for a
+ * future locale switch but must not be reachable while the app pins `locale="en"`. Suggested questions
+ * are sent verbatim, so the chip always shows exactly what will be asked.
  */
 
 import type { AssistantSelection } from '../api/assistantTypes';

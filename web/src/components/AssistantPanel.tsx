@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { AssistantClient, AssistantOptions } from '../api/assistant';
 import type { AssistantSelection } from '../api/assistantTypes';
 import type { DraftView } from '../api/documents';
+import type { DownstreamSystemStore } from '../automation/downstreamSystemStore';
 import type { TemplateStore } from '../automation/templateStore';
 import type { RichDocument } from '../rich/richDocument';
 import { AuditPanel, type AuditPanelProps } from './AuditPanel';
@@ -13,22 +14,56 @@ type TabStatus = 'full' | 'fixture-only' | 'not-implemented';
 
 interface Tab {
   id: string;
+  /** Accessible name; keeps the build status readable to assistive tech. */
   label: string;
+  /** Visible label; must stay short enough for four tabs on one row at 352px. */
+  shortLabel: string;
   status: TabStatus;
+  statusLabel: string;
+  statusTone: string;
 }
 
 const TABS: Tab[] = [
-  { id: 'audit', label: 'Rule audit', status: 'full' },
-  { id: 'knowledge', label: 'Knowledge Q&A', status: 'full' },
-  { id: 'automation', label: 'Automation', status: 'fixture-only' },
-  { id: 'legal', label: 'Legal advice', status: 'not-implemented' },
+  {
+    id: 'audit',
+    label: 'Rule audit',
+    shortLabel: 'Audit',
+    status: 'full',
+    statusLabel: 'Full',
+    statusTone: 'tag--ok',
+  },
+  {
+    id: 'knowledge',
+    label: 'Knowledge Q&A',
+    shortLabel: 'Knowledge',
+    status: 'full',
+    statusLabel: 'Full',
+    statusTone: 'tag--ok',
+  },
+  {
+    id: 'automation',
+    label: 'Automation',
+    shortLabel: 'Automation',
+    status: 'fixture-only',
+    statusLabel: 'Fixture only',
+    statusTone: 'tag--warn',
+  },
+  {
+    id: 'legal',
+    label: 'Legal advice',
+    shortLabel: 'Legal',
+    status: 'not-implemented',
+    statusLabel: 'Not implemented',
+    statusTone: 'tag--muted',
+  },
 ];
 
-const tabLabel = (tab: Tab): string => {
-  if (tab.status === 'fixture-only') return `${tab.label} · fixture only`;
-  if (tab.status === 'not-implemented') return `${tab.label} · not implemented`;
-  return tab.label;
-};
+/**
+ * Accessible name: base label plus the build status, so assistive tech hears the same caveat the
+ * visible tag shows. The visible label stays short (design D7).
+ */
+const tabLabel = (tab: Tab): string =>
+  tab.status === 'full' ? tab.label : `${tab.label} · ${tab.statusLabel.toLowerCase()}`;
 
 export interface KnowledgePanelBinding {
   documentId: string;
@@ -49,6 +84,7 @@ export interface AutomationPanelBinding {
   digest?: string;
   richEditorAvailable?: boolean;
   templateStore?: TemplateStore;
+  downstreamStore?: DownstreamSystemStore;
   onApplyTemplate?: (document: RichDocument) => void;
   onChange: (document: RichDocument) => void;
   onVariableHandled: () => void;
@@ -81,9 +117,15 @@ export function AssistantPanel({ knowledge, automation, ...auditProps }: Assista
             type="button"
             role="tab"
             aria-selected={tab.id === activeTab}
+            aria-label={tabLabel(tab)}
             onClick={() => setActiveTab(tab.id)}
           >
-            {tabLabel(tab)}
+            <span className="tab-label" aria-hidden="true">
+              {tab.shortLabel}
+            </span>
+            <span className={`tab-status tag ${tab.statusTone}`} aria-hidden="true">
+              {tab.statusLabel}
+            </span>
           </button>
         ))}
       </div>

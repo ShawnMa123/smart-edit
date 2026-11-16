@@ -412,6 +412,31 @@ interface MockReceipt {
 - `Download JSON` 保持独立且不受 mock send 影响。
 - 未来真实发送：后端 endpoint + allowlist/timeout + 服务端凭据 + audit；不在本 change。
 
+### D22 Beneficiary matcher label variants
+
+`synthetic Downstream Mapping` 的 beneficiary matcher 当前只接受 `Beneficiary:`，因此 `Beneficiary name: aabbcc` 会落入 missing。修正为：
+
+```text
+/beneficiary(?:\s+name)?\s*[：:]\s*([^\n.]+)/i
+```
+
+- 接受 `Beneficiary:` / `Beneficiary :` / `Beneficiary name:` / `Beneficiary Name :`（大小写、空白、全角/半角冒号）。
+- evidence 使用同一规则（`sentenceWith`），确保候选与依据一致。
+- 仍必须有冒号和非空值；普通提及 “Beneficiary name is ...” 不匹配。
+- `realValue()` 继续拒绝 `{{...}}` 占位符，占位符仍是 `missing`。
+- 单元测试覆盖：`Beneficiary name: aabbcc`、`Beneficiary: aabbcc`、大小写/空白、占位符 missing、无冒号 missing；组件测试覆盖 v2 template 的 `beneficiary_name` 变成 `matched`，确认后进入 payload。
+
+### D23 Expiry date normalisation
+
+`synthetic Downstream Mapping` 接受多种日期写法，但**统一输出 ISO `YYYY-MM-DD`** 后才进入 payload：
+
+- 支持：`2027-03-12` / `2027/03/12` / `2027.03.12`、`12/03/2027`、`12/03/27`、`2027年3月12日`、`12 March 2027`、`March 12, 2027`（月份名大小写不敏感）。
+- 两位年份：`00–69` → `2000–2069`；`70–99` → `1970–1999`（合同日期通常在未来，27 → 2027）。
+- 分隔日期默认 **DD/MM**：`12/03/27` → `2027-03-12`。只有当第二段 >12 且第一段 ≤12 时按 MM/DD 解释（如 `12/31/2027`），避免把无歧义的美式日期误读。
+- 只接受真实日历日期（闰年/月份天数）；`31/02/2027` 保持 `missing`。
+- 选择文档中最早出现且可解析的日期 token；evidence 使用包含该 token 的整行。
+- 该 policy 是 mock matcher 的确定性规则，不做 locale 推断；真实后端可替换为更完整的解析/确认流程。
+
 ## Risks / Trade-offs
 
 - [mock 被误认为真实 template/映射] → UI banner、fixture limitation、文档、测试同时声明。
@@ -431,6 +456,7 @@ interface MockReceipt {
 - [删除/切换系统导致状态错位] → 切换清空 operation/mapping 但保留 variables；删除选中系统清空 operation/mapping/receipt。
 - [template 更新覆盖旧快照] → 两步确认并明示“previous snapshot will be replaced”；本 build 不提供历史/回滚。
 - [未保存 spec 被用于 mapping] → OpenAPI mode 只使用选中系统已保存的 spec；spec 编辑仅在 Manage systems 保存。
+- [日期 DD/MM 与 MM/DD 误读] → 默认 DD/MM；MM/DD 仅在第二段 >12 时使用；所有输出统一 `YYYY-MM-DD`；无效/歧义日期保持 missing；文档与测试同时声明。
 - [variable node 与 projection/selection 偏移不一致] → 单一 projection + 测试；本 change 只做 parity，不做服务端 apply 校验。
 - [工作台范围过大] → 三块 UI 都以 mock 为主；每块独立组件与测试，后端后续替换 adapter。
 - [fixture run 入口被移除导致 e2e 失效] → 保留 debug 入口或更新 e2e 到新工作台；不隐藏已有 run core。

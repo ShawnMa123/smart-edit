@@ -15,6 +15,19 @@ describe('DocumentActions', () => {
     }
   });
 
+  it('keeps the unavailable actions visible but quiet', () => {
+    render(<DocumentActions />);
+
+    for (const action of UNAVAILABLE_ACTIONS) {
+      const button = screen.getByRole('button', {
+        name: new RegExp(`${action.label} · not implemented`),
+      });
+      expect(button.className).toContain('quiet');
+      expect(button.textContent).toContain('Not available');
+      expect(button.textContent).not.toContain('not implemented');
+    }
+  });
+
   it('reports unavailability instead of appearing to succeed', async () => {
     render(<DocumentActions />);
 

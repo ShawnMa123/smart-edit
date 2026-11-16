@@ -34,6 +34,14 @@ export interface RichEditorProps {
   onMarkVariable?: (selection: AssistantSelection) => void;
   /** Reports whether the rich surface or the textarea fallback is active (variable actions depend on it). */
   onModeChange?: (mode: 'rich' | 'fallback') => void;
+  /** Document identity for the page header; never an example reference (design D4). */
+  documentId?: string;
+  /** Captured version count; 0 means no version captured yet. */
+  versions?: number;
+  /** Server draft revision; `null` means there is no server draft. */
+  draftRevision?: number | null;
+  /** Whether this session holds the edit lock (unknown is its own word). */
+  lockHeld?: boolean;
   /** Test seam: a throwing implementation exercises the fallback path. */
   useEditorImpl?: (typeof defaultUseRichEditor);
 }
@@ -133,6 +141,10 @@ export function RichEditor(props: RichEditorProps) {
       onOverwriteLocal={props.onOverwriteLocal}
       onKeepLocal={props.onKeepLocal}
       onMarkVariable={props.onMarkVariable}
+      documentId={props.documentId}
+      versions={props.versions ?? 0}
+      draftRevision={props.draftRevision ?? null}
+      lockHeld={props.lockHeld ?? false}
     />
   );
 }
@@ -149,6 +161,10 @@ function Surface({
   onOverwriteLocal,
   onKeepLocal,
   onMarkVariable,
+  documentId,
+  versions,
+  draftRevision,
+  lockHeld,
 }: {
   editor: Editor;
   document: RichDocument;
@@ -161,6 +177,10 @@ function Surface({
   onOverwriteLocal?: () => void;
   onKeepLocal?: () => void;
   onMarkVariable?: (selection: AssistantSelection) => void;
+  documentId?: string;
+  versions: number;
+  draftRevision: number | null;
+  lockHeld: boolean;
 }) {
   const [findOpen, setFindOpen] = useState(false);
   const [variableMenu, setVariableMenu] = useState<{
@@ -195,6 +215,37 @@ function Surface({
         <span className="tiny muted">
           Rich text · the audit reads a plain-text projection
           {document.provenance ? ` · imported (${document.provenance})` : ''}
+        </span>
+      </div>
+
+      {/* One status band, one source of truth (design D5). */}
+      <div className="editor-status" data-testid="editor-status">
+        <strong>{versions > 0 ? `snapshot v${versions}` : 'no captured version'}</strong>
+        <span>{draftRevision === null ? 'no server draft' : `draft rev ${draftRevision}`}</span>
+        <span>{lockHeld ? 'lock: this session' : 'lock: unknown'}</span>
+        <span
+          aria-live="polite"
+          data-testid="save-state"
+          style={{
+            color:
+              saveState === 'conflict' || saveState === 'error'
+                ? 'var(--unsaved)'
+                : saveState === 'saved'
+                  ? 'var(--muted)'
+                  : 'var(--unsaved)',
+          }}
+        >
+          {saveState === 'conflict'
+            ? 'Save conflict — local content is not saved to the server'
+            : saveState === 'saving'
+              ? 'Saving…'
+              : saveState === 'saved'
+                ? 'Saved to server'
+                : saveState === 'error'
+                  ? 'Save failed — local content is still in the editor'
+                  : dirty
+                    ? 'Unsaved changes (local only)'
+                    : 'No server draft available — local only'}
         </span>
       </div>
 
@@ -261,8 +312,19 @@ function Surface({
         </div>
       ) : null}
 
-      <div
-        onContextMenu={(event: MouseEvent<HTMLDivElement>) => {
+      <div className="paper-wrap">
+        <article className="paper" aria-label="Document page">
+          <header className="paper-head">
+            <span className="paper-brand">smart-edit / TRADE</span>
+            <span className="paper-ref">
+              DOCUMENT WORKING COPY
+              <br />
+              {documentId ?? 'untitled document'}
+            </span>
+          </header>
+
+          <div
+            onContextMenu={(event: MouseEvent<HTMLDivElement>) => {
           if (!onMarkVariable) return;
           const selection = selectionFromEditor(editor);
           if (!selection) return;
@@ -300,34 +362,18 @@ function Surface({
             </button>
           </div>
         ) : null}
+          </div>
+
+          <footer className="paper-foot">
+            <span>Working copy · not an executed document</span>
+            <span>{versions > 0 ? `v${versions} captured` : 'no captured version'}</span>
+          </footer>
+        </article>
       </div>
 
       <div className="editor-footer">
         <span>{richToPlainText(document).length} characters in the audit text</span>
-        <span
-          aria-live="polite"
-          data-testid="save-state"
-          style={{
-            color:
-              saveState === 'conflict' || saveState === 'error'
-                ? 'var(--unsaved)'
-                : saveState === 'saved'
-                  ? 'var(--muted)'
-                  : 'var(--unsaved)',
-          }}
-        >
-          {saveState === 'conflict'
-            ? 'Save conflict — local content is not saved to the server'
-            : saveState === 'saving'
-              ? 'Saving…'
-              : saveState === 'saved'
-                ? 'Saved to server'
-                : saveState === 'error'
-                  ? 'Save failed — local content is still in the editor'
-                  : dirty
-                    ? 'Unsaved changes (local only)'
-                    : 'No server draft available — local only'}
-        </span>
+        <span className="muted">Paper view · the projection above is unchanged</span>
       </div>
     </section>
   );

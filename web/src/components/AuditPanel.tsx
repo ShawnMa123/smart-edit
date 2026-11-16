@@ -19,6 +19,7 @@ import {
   stageStatusToken,
 } from '../tokens';
 import { StatusChip } from './StatusChip';
+import { EmptyState } from './EmptyState';
 
 export interface AuditPanelProps {
   state: AuditState;
@@ -221,11 +222,16 @@ export function AuditPanel({
   if (state.phase === 'idle') {
     return (
       <div>
-        <h3>Run a spec audit</h3>
-        <p className="muted tiny">
-          The audit sends a frozen snapshot of the current text to the normalization stage and reports
-          what those checks found.
-        </p>
+        <EmptyState
+          icon="▤"
+          title="Run a spec audit"
+          hint="A frozen snapshot of the current text is normalized first; the panel then reports the checks that actually ran and names the ones that did not."
+          action={
+            <button type="button" className="primary" onClick={onRun} data-testid="audit-run">
+              Run spec audit
+            </button>
+          }
+        />
         <label className="tiny muted" htmlFor="template-id">
           Customer template (optional — narrows which published pack applies)
         </label>
@@ -237,10 +243,10 @@ export function AuditPanel({
           value={templateId}
           onChange={(event) => onTemplateChange?.(event.target.value)}
         />
-        <button type="button" className="primary" onClick={onRun} data-testid="audit-run">
-          Run spec audit
-        </button>
-        <ScopeBlock />
+        <details className="audit-scope">
+          <summary className="tiny muted">Scope and limits</summary>
+          <ScopeBlock />
+        </details>
       </div>
     );
   }

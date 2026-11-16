@@ -59,11 +59,16 @@ export function DocumentActions({ onImport }: DocumentActionsProps) {
           <button
             key={action.id}
             type="button"
+            className="quiet"
             data-unavailable="true"
+            aria-label={`${action.label} · not implemented`}
             title={action.reason}
             onClick={() => setMessage(action.reason)}
           >
-            {action.label} · not implemented
+            {action.label}
+            <span className="tag tag--muted" aria-hidden="true">
+              Not available
+            </span>
           </button>
         ))}
       </div>

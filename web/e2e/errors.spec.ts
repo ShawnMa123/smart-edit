@@ -33,11 +33,16 @@ test('unimplemented assistant tabs are labelled and render no sample output', as
   await page.goto('/');
 
   const tab = page.getByRole('tab', { name: /Legal advice/ });
-  await expect(tab).toContainText('not implemented');
+  // The status sits in its own tag under the short label (workspace-shell / design D7).
+  await expect(tab.locator('.tab-status')).toHaveText('Not implemented');
+  await expect(tab).toHaveAttribute('aria-label', 'Legal advice · not implemented');
   await tab.click();
 
-  await expect(page.getByRole('status')).toContainText('Legal advice is not implemented in this build');
-  await expect(page.getByRole('status')).toContainText('fixture-backed automation tabs');
+  const legalPane = page.locator('aside[aria-label="AI assistant"]');
+  await expect(legalPane.getByRole('status')).toContainText(
+    'Legal advice is not implemented in this build',
+  );
+  await expect(legalPane.getByRole('status')).toContainText('fixture-backed automation tabs');
   // No fabricated output for a capability this build lacks: no run control, no audit result block.
   await expect(page.locator('[data-testid="audit-run"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="rule-audit"]')).toHaveCount(0);

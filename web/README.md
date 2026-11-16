@@ -25,6 +25,34 @@ npm --prefix web install
 npm --prefix web run dev        # http://localhost:5173
 ```
 
+### Shell layers
+
+Above the three-pane grid the workspace renders three layers (`web/src/components/AppShell.tsx`):
+
+| Layer | Content | Rule |
+|---|---|---|
+| Top bar (`.topbar`) | product mark, `PRODUCT_NAME` (configurable), `Local demo session` | shows **no** person, avatar, organisation or member entry |
+| Environment strip (`.environment-strip`) | synthetic data, fixed snapshot, assistant does not approve, history/templates in this browser | one standing summary; panels keep their own specific statements |
+| Document header (`.document-head`) | breadcrumb `{document section} / {documentId}`, stored title, `Draft` tag, meta line | meta lists only facts the client holds; digest, lock and storage sit behind `Technical details` |
+
+The build has no authentication, so the shell must never look like a signed-in session. Copy that
+lacks a data source is omitted rather than filled with a sample value — for example, the header does
+not show counterparties, a template number or participating organisations, and the breadcrumb uses
+`draft.document_id`.
+
+### Interface language
+
+The interface is **English only** (`interface-language`):
+
+- `web/index.html` declares `lang="en"`, and the document `<title>` is English.
+- Chrome copy — shell, panes, assistant tabs, status band, empty states, notices — is English. The
+  header title comes from `draft.title` (fallback `Untitled document`) and the breadcrumb from
+  `draft.document_id`; no translation gloss and no example reference such as `DG-2026-00417`.
+- `App.tsx` pins the knowledge binding to `locale="en"`, so assistant sessions request `en` and only
+  the English corpus (`fixtures/knowledge/*_en.json`) supplies citations.
+- Document **content** may be any language. `e2e/interface-language.spec.ts` scans the named chrome
+  roots only — never the editor body or citation excerpts — and fails if Chinese characters appear there.
+
 ### Editing the document
 
 The centre pane is a **rich-text editor** (TipTap/ProseMirror), not a textarea: headings, bold/italic/
@@ -43,11 +71,21 @@ golden tests; formatting-only edits therefore leave the snapshot digest and the 
 Selection offsets are Unicode code points, not UTF-16 units. If the editor cannot start at all,
 `RichEditor` falls back to a textarea and says why — a blank pane is never the failure mode.
 
+The document is rendered as a **page** (`.paper-wrap > article.paper`): a centred sheet with a page
+header (`DOCUMENT WORKING COPY` plus the stored document id), a serif body and a page footer with the
+captured version count. The page is a container only — `richToPlainText` receives exactly the same
+document, so the projection, character count and digest are unchanged by the presentation.
+
+Above the toolbar, `.editor-status` is the single status band. It shows the snapshot (`snapshot vN` or
+`no captured version`), the server draft (`draft rev N` or `no server draft`), the edit lock
+(`lock: this session` / `lock: unknown`) and the `data-testid="save-state"` message. The band and the
+conflict panel read the same `saveState` value, so they cannot disagree.
+
 ### Server draft, autosave and conflicts
 
 The centre pane now has a server-authoritative draft (`/api/documents/*`, local/test only). On first
 load it reads the draft, acquires an edit lock and autosaves 2 seconds after typing with
-`If-Match: "draft-<revision>"`. The footer says `Saving…`, `Saved to server`, `Save failed` or
+`If-Match: "draft-<revision>"`. The status band says `Saving…`, `Saved to server`, `Save failed` or
 `Save conflict`; it never reports `Saved` before the host accepted the write.
 
 A `412 stale_draft` **does not replace the editor**. The local content stays, a recovery draft is
@@ -89,24 +127,43 @@ The assistant's **Automation · fixture only** tab is a frontend-first workbench
   JSON document (parsed locally, never uploaded or saved), resolves local `$ref`, lists operations
   with an `application/json` request body, flattens object properties into dotted paths, suggests
   variable mappings by label with manual override, and blocks readiness on missing required fields,
-  enum mismatches and number/integer/boolean conversion failures. Ready payloads can be downloaded
-  as `.json`; the UI always says `Not sent` and exposes no send/execute action. YAML, Swagger 2.0,
-  URL fetching, external `$ref`, `oneOf` and `anyOf` are explicitly unsupported.
+  enum mismatches and number/integer/boolean conversion failures. Synthetic date fields are normalised
+  to `YYYY-MM-DD` before entering the payload: ISO, `YYYY/MM/DD`, `DD/MM/YYYY`, `DD/MM/YY`,
+  `YYYY年MM月DD日` and English month names are accepted; `12/03/27` becomes `2027-03-12` (DD/MM is the
+  default, MM/DD only when the second segment is >12), and invalid calendar dates stay missing. Downstream systems are managed in a
+  collapsible `Manage systems` surface (name, base URL, environment, enabled, non-secret auth
+  type/hint, bound spec) and stored in browser-local `localStorage`, seeded once from mock presets
+  (max 10 systems, spec ≤ 512 KB). Ready payloads can be downloaded as `.json`; `Send (mock)` returns
+  a deterministic 200 `mock_success` or, with `Simulate failure`, a 500 `MOCK_DOWNSTREAM_ERROR`.
+  Receipts always say `Simulated — no network request`; no real send/execute, fetch, credential read
+  or send history exists. YAML, Swagger 2.0, URL fetching, external `$ref`, `oneOf` and `anyOf` are
+  explicitly unsupported.
 
 Synthetic variable fill and fixture mapping are mock-backed (`web/src/automation/mockWorkbench.ts` +
 `fixtures/automation/workbench_demo.json`); template snapshots use the browser-local
-`web/src/automation/templateStore.ts`; OpenAPI JSON is parsed locally by
-`web/src/automation/openapi.ts` and exported by `payloadExport.ts`. There is no server template
-registry, no extract/confirm model, no real API template import and no delivery. Both mapping
-previews say `Not sent` and there is no send/execute button. The previous `rewrite/replace_text`
-fixture run panel no longer owns the tab; the run/result/apply/undo contract stays covered by API
-tests and `tests/test_automation_apply.py`. When the editor falls back to a textarea, `{{label}}`
-placeholders are shown and variable actions are disabled.
+`web/src/automation/templateStore.ts`; downstream systems use
+`web/src/automation/downstreamSystemStore.ts` and `fixtures/automation/downstream_systems.json`;
+OpenAPI JSON is parsed locally by `web/src/automation/openapi.ts`, exported by `payloadExport.ts`,
+and mock-sent by `mockDownstreamSend.ts` without any network request. There is no server template or
+system registry (and no stored credentials), no extract/confirm model, no real API template import
+and no real delivery. Synthetic previews say `Not sent`; mock receipts say
+`Simulated — no network request`. The previous `rewrite/replace_text` fixture run panel no longer owns
+the tab; the run/result/apply/undo contract stays covered by API tests and
+`tests/test_automation_apply.py`. When the editor falls back to a textarea, `{{label}}` placeholders
+are shown and variable actions are disabled.
 
 `Import file` (header) uploads a PDF / DOCX / PNG / JPEG and fills the editor with the text the server
 read out of it: `POST /api/runs` (multipart) → `POST /api/runs/{id}/stages/parse` → read
 `documents[]` from the envelope. Images and scanned PDFs need a local OCR engine
 (`brew install tesseract tesseract-lang`); text-layer PDFs and DOCX do not.
+
+### Assistant tabs
+
+The assistant keeps the reference tab set on one row. Each tab shows a short visible label plus a
+separate capability tag, while its accessible name carries both: `Rule audit`, `Knowledge Q&A`,
+`Automation · fixture only`, `Legal advice · not implemented`. The pattern is `tabLabel()` in
+`AssistantPanel.tsx`; the visible label must stay short enough for four tabs at the 352px pane width,
+and a non-`Full` tag must be accompanied by a limitation statement inside the panel.
 
 ### Knowledge Q&A (right pane)
 
