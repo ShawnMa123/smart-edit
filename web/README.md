@@ -40,6 +40,84 @@ lacks a data source is omitted rather than filled with a sample value — for ex
 not show counterparties, a template number or participating organisations, and the breadcrumb uses
 `draft.document_id`.
 
+### Workspace modules
+
+A 58px desktop rail exposes Document, Versions, Approval, Comments, People and Developer. The top
+bar exposes Activity, People, Inbox, Developer and the neutral `Local demo session` entry. The rail
+disappears below the three-pane breakpoint; the same entries remain reachable through the pane
+switcher's `More` menu.
+
+| Entry | Behavior |
+|---|---|
+| Document / Versions | switch the existing content panes; no new backend |
+| Activity | browser-local activity list from `smart-edit:activity:<documentId>`; clear requires confirmation |
+| Inbox | derived from `notifiable` activity; unread count; Mark all read stays local |
+| Developer | read-only implementation map (Available / Partial / Unavailable) |
+| Version compare | select exactly two captured versions; read-only block diff |
+| People / Identity / Approval / Comments | explicit placeholders that name the missing backend capability and render no sample members, organisations, approvers or comments |
+
+The placeholder dialogs make no network request and write no data. `People` and `Identity` must keep
+the shell's no-unauthenticated-identity rule; do not add sample names, avatars or organisations.
+
+The document header exposes `Import file` (real file chooser), `Comments` (explicit placeholder for
+the missing comment service), and `Export` / `Start approval` with a `Not available` tag. Formatting
+is available through the editor toolbar and keyboard shortcuts; the header must not show a stale
+`Formatting · Not available` action.
+
+The editor footer exposes `Release lock`, `Start editing` and `Submit new version`. The lock controls
+call the real document lock APIs; `Submit new version` is a visual placeholder that states shared
+submission is not available, and offers a real `Capture browser-local version` action instead. It
+never claims the document was sent, submitted or approved.
+
+### Demo data mode
+
+`Demo data` is an explicit, default-off switch in the environment strip. It is stored under
+`smart-edit:demo-mode`; when on, the first-batch collaboration surfaces use a separate browser-local
+store at `smart-edit:demo:collaboration:v1`. The banner states that sample users, organisations and
+approvals are demo data, **not real authentication or a real workflow**.
+
+Demo state is isolated from the real activity/version/draft stores. `Reset demo data` restores the
+seeded sample state only; it does not touch real activity, version history or the server draft.
+Turning the switch off restores the honest mode: neutral `Local demo session`, unavailable
+People/Approval/Comments placeholders and the real activity log.
+
+### Activity and notifications
+
+The `Activity` and `Inbox` entries are backed by a browser-local log, not a server audit trail.
+Entries live under `smart-edit:activity:<documentId>` in `localStorage`, are capped at 100, and
+only describe real operations the operator performed in this workspace (import, save, version
+capture/restore, audit, knowledge answer, template apply, export attempt). The log never stores the
+question, document text, citation text, identities or credentials. Clearing the log only removes
+this browser key; it does not touch version history, the draft or any audit result.
+
+Notifications are a derived view of `notifiable` activity entries; opening Inbox marks the local
+entries read and never sends a read receipt to the backend. When storage is unavailable or corrupt,
+the UI says the log is session-only instead of claiming it was saved.
+
+| Kind | Recorded when | Notifiable |
+|---|---|---|
+| `import` | a file import succeeds or fails | yes |
+| `save` | a user-edited draft is saved | no |
+| `conflict` | the server rejects a save with a conflict | yes |
+| `capture` | a version is captured | yes |
+| `restore` | a captured version is loaded as a draft | no |
+| `audit` | an audit starts, completes or fails | start no; result yes |
+| `knowledge` | a knowledge answer completes or fails | yes |
+| `template` | a template is applied to the editor | yes |
+| `export-attempt` | the unavailable Export action is activated | no |
+
+The activity record never stores the question, document text, citation text, identities or
+credentials; it only stores the action label, a short result detail, the timestamp and the local
+read/notification flags.
+
+### Version comparison
+
+`Version compare` selects exactly two browser-local captured versions and renders a read-only block
+diff of their projected text. The dialog shows both labels, capture times and short digests; it
+never creates a version, rewrites history, changes the current draft or asks an AI model for a
+summary. Adjacent removed/added blocks are shown as `changed`. With fewer than two captured
+versions the Compare action explains that two are required.
+
 ### Interface language
 
 The interface is **English only** (`interface-language`):
@@ -164,6 +242,68 @@ separate capability tag, while its accessible name carries both: `Rule audit`, `
 `Automation · fixture only`, `Legal advice · not implemented`. The pattern is `tabLabel()` in
 `AssistantPanel.tsx`; the visible label must stay short enough for four tabs at the 352px pane width,
 and a non-`Full` tag must be accompanied by a limitation statement inside the panel.
+
+### Web search, local RAG and outbound screening
+
+The assistant can combine three evidence layers, and every external call is gated **before** it is
+made. Nothing is enabled by default: with no configuration the assistant still answers from the
+published corpus and the bound snapshot and makes no outbound request.
+
+| Setting | Env | Default | Effect |
+|---|---|---|---|
+| Model provider | `SMART_EDIT_ASSISTANT_MODEL=doubao:<model>` + `SMART_EDIT_ASSISTANT_API_KEY` | empty (fixture composer) | Ark **Responses API** (`POST /responses`, `stream:false`, no tools); output must validate against the Answer schema |
+| Approved processor | `SMART_EDIT_ASSISTANT_PROCESSOR_APPROVED=1` | off | only an approved processor may receive the question + evidence bundle; anything else is refused |
+| General web channel | `SMART_EDIT_ASSISTANT_GENERAL_WEB=1` | off | answers **out-of-scope, non-handoff** questions with exactly one read-only `web_search` tool; results are `general_web`, capped at `qualified` |
+| Web search keywords | `SMART_EDIT_ASSISTANT_WEB_SEARCH_MAX_KEYWORD` | 3 (1–5) | `max_keyword` sent to the provider's search tool |
+| Hidden reasoning | `SMART_EDIT_ASSISTANT_THINKING` | off | Ark `thinking` is disabled for latency; set `1` to let the model reason (10–60s per call) |
+| Web layer | `SMART_EDIT_ASSISTANT_WEB=off\|fixture\|http` (+ `…_WEB_ENDPOINT`) | off | per-run opt-in; only allow-listed domains survive |
+| Local RAG | `SMART_EDIT_ASSISTANT_RAG_ENDPOINT` (+ `…_RAG_API_KEY`) | empty (lexical corpus) | second layer; failures degrade visibly |
+| Egress policy | `SMART_EDIT_ASSISTANT_EGRESS_POLICY` | `app/configs/egress.yaml` | missing/broken file denies every web request |
+
+Rules the implementation keeps:
+
+- **Opt-in per run**: `POST /assistant/sessions/{id}/runs` accepts `web_search: true`; the panel
+  checkbox defaults to off and describes exactly what will and will not leave the service.
+- **Search traffic never carries document content**: selection text, amounts, references,
+  counterparties and identity are denied or redacted (`EgressPolicy`), and every decision is audited
+  (`egress_allowed` / `egress_blocked{reason}`).
+- **Approved processors are the only exception**: an external model may receive the question and the
+  evidence bundle only when it is registered as an approved processor; otherwise the run fails with
+  `EGRESS_BLOCKED` instead of silently falling back to the fixture composer.
+- **Web evidence is bounded**: `approved_web` citations carry `{url, domain, retrieved_at, provider,
+  rank}`, web-only claims cap `support_level` at `qualified`, rule version/applicability cannot come
+  from the web, and conflicts are kept rather than auto-resolved.
+- **Failures are stated**: a blocked or failed web layer adds a limitation and the UI shows
+  `Web search blocked (<reason>)` or `Web search did not complete`; it never implies live verification.
+- **Fallback to general web**: when an in-scope question ends with `insufficient_evidence` and no
+  published citation, and the operator enabled web search, the assistant falls back to the general
+  channel. The answer is marked `general_web`, carries both "published corpus could not answer" and
+  "unverified third-party content", and is capped at `qualified`.
+- **Two separate model calls**: composing never carries tools; only the general channel attaches
+  `tools: [{type: "web_search", max_keyword: N}]` and only for out-of-scope, non-handoff questions.
+  General citations are grouped under `General web (n)` and always shown with an unverified banner.
+
+Tests: `tests/test_egress_policy.py`, `tests/test_assistant_retrieval_layers.py`,
+`tests/test_assistant_gateway.py`, `tests/test_assistant_settings.py`, plus the panel cases in
+`web/src/components/KnowledgePanel.test.tsx`.
+
+#### Why didn't it search?
+
+`GET /assistant/capabilities` answers that without guessing:
+
+| Field | Meaning |
+|---|---|
+| `model.configured` / `model.label` | a real provider is wired; `false` means the answer is `processor: fixture` |
+| `model.approved_processor` | outbound content may be sent to that provider (`PROCESSOR_APPROVED`) |
+| `layers.approved_web` | the allow-listed web provider is wired (`WEB=fixture\|http`) |
+| `layers.general_web` | the provider's read-only `web_search` tool may run (`GENERAL_WEB=1` + approved processor) |
+| `egress.loaded` / `allowed_domains` | the outbound policy is usable and how many domains it allows |
+| `web.provider` | `off`, `fixture` or `http` |
+
+The panel disables the toggle when both web layers are `false`, and every answer carries
+`route` (`published \| document \| general_web \| handoff \| none`) plus a `web` summary
+(`requested / status / reason / hint`) so “skipped because the server has no provider” is stated in
+the answer instead of being inferred from logs.
 
 ### Knowledge Q&A (right pane)
 

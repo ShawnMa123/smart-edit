@@ -18,6 +18,7 @@ import {
   isTerminal,
   type Answer,
   type AssistantSelection,
+  type Capabilities,
   type Citation,
   type EvidenceDetail,
   type FeedbackRating,
@@ -25,6 +26,7 @@ import {
   type Session,
 } from '../api/assistantTypes';
 import { ApiError, explainError } from '../api/errors';
+import type { ActivityKind } from '../workspace/activityStore';
 import { EmptyState } from './EmptyState';
 import { onboardingCopy, suggestionsFor } from './knowledgeSuggestions';
 
@@ -40,6 +42,8 @@ export interface KnowledgePanelProps {
   options?: AssistantOptions;
   /** 0 in tests, the server's `poll_after_ms` in the app. */
   pollDelayMs?: number;
+  /** Reports a completed or failed knowledge operation to the workspace activity log. */
+  onActivity?: (kind: ActivityKind, action: string, detail: string) => void;
 }
 
 const delay = (ms: number): Promise<void> =>
@@ -63,6 +67,7 @@ export function KnowledgePanel({
   client = assistantClient,
   options = {},
   pollDelayMs = 500,
+  onActivity,
 }: KnowledgePanelProps) {
   const [question, setQuestion] = useState('');
   const [session, setSession] = useState<Session | null>(null);
@@ -76,8 +81,30 @@ export function KnowledgePanel({
   const [feedback, setFeedback] = useState<FeedbackRating | null>(null);
   const [showExamples, setShowExamples] = useState(true);
   const [helpOpen, setHelpOpen] = useState(true);
+  /** Per-run opt-in for the web layer; defaults to off and never persists (design D9). */
+  const [webSearch, setWebSearch] = useState(false);
+  /** Deployment capability view; null means "not loaded / unavailable" (keep the toggle usable). */
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
   const alive = useRef(true);
+  // Capability discovery: keep the toggle honest about what this server can actually do.
+  useEffect(() => {
+    let aliveLoad = true;
+    const load = client.getCapabilities;
+    if (typeof load !== 'function') return undefined;
+    load.call(client, options)
+      .then((value) => {
+        if (aliveLoad) setCapabilities(value);
+      })
+      .catch(() => {
+        if (aliveLoad) setCapabilities(null);
+      });
+    return () => {
+      aliveLoad = false;
+    };
+    // `options` is a stable-in-practice object; depending on it would refetch on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client]);
   const cancelled = useRef(false);
 
   useEffect(() => {
@@ -156,7 +183,7 @@ export function KnowledgePanel({
 
       const accepted = await client.createRun(
         active.id,
-        { question: trimmed, selection },
+        { question: trimmed, selection, web_search: webSearch },
         newIdempotencyKey('run'),
         options,
       );
@@ -182,6 +209,11 @@ export function KnowledgePanel({
         setAnswer(latest.result);
         setMessageId(latest.assistant_message_id);
         setShowExamples(false);
+        onActivity?.(
+          'knowledge',
+          'Knowledge answer',
+          `Knowledge answer: ${latest.result.outcome}`,
+        );
         try {
           const refreshed = await client.getSession(active.id, options);
           if (alive.current && refreshed.context_stale) {
@@ -194,12 +226,14 @@ export function KnowledgePanel({
         }
       } else if (latest.status === 'failed' || latest.status === 'timed_out') {
         setError(explainError(latest.error?.code ?? 'ASSISTANT_FAILED'));
+        onActivity?.('knowledge', 'Knowledge failed', 'Knowledge run did not complete');
       } else if (latest.status === 'cancelled') {
         setNotice('Run cancelled — no answer was published.');
       }
     } catch (failure) {
       if (!alive.current) return;
       setError(failure instanceof ApiError ? explainError(failure.code) : String(failure));
+      onActivity?.('knowledge', 'Knowledge failed', 'Knowledge request failed');
       if (failure instanceof ApiError && failure.code === 'ANCHOR_MISMATCH') {
         setNotice('The passage no longer matches the snapshot. Select it again to ask about it.');
       }
@@ -241,6 +275,19 @@ export function KnowledgePanel({
 
   const busy = phase !== 'idle';
   const activeRun = run && !isTerminal(run.status);
+  const webLayer = answer?.retrieval?.find((layer) => layer.layer === 'web');
+  const webSummary = answer?.web ?? null;
+  const generalWebAnswer = Boolean(
+    answer?.citations?.some((citation) => citation.source_type === 'general_web'),
+  );
+  const webAvailable = capabilities
+    ? capabilities.layers.approved_web || capabilities.layers.general_web
+    : true;
+  const generalOnly = capabilities
+    ? !capabilities.layers.approved_web && capabilities.layers.general_web
+    : false;
+  const webSkippedNotice =
+    webSummary?.requested && webSummary.status !== 'ok' && webSummary.status !== 'off';
 
   return (
     <div className="knowledge-panel">
@@ -307,6 +354,36 @@ export function KnowledgePanel({
           : 'A conversation and snapshot are created with your first question.'}
       </div>
 
+      <div className="knowledge-web-toggle">
+        <label>
+          <input
+            type="checkbox"
+            checked={webSearch}
+            disabled={busy || !webAvailable}
+            onChange={(event) => setWebSearch(event.target.checked)}
+          />
+          <span>
+            {generalOnly ? 'Ask general web (unverified)' : 'Search the web for the latest'}
+          </span>
+        </label>
+        {!webAvailable ? (
+          <p className="tiny muted">
+            Web is not available on this server (no provider configured).
+          </p>
+        ) : (
+          <p className="tiny muted">
+            {webSearch
+              ? 'Will send: the screened question only. Questions outside the published knowledge base may be answered from the web (unverified). Will not send: document text, selected passage, amounts, counterparties or your identity.'
+              : 'Off: only published sources and the bound document snapshot are searched.'}
+          </p>
+        )}
+        {capabilities && !capabilities.model.configured ? (
+          <p className="tiny muted">
+            Model: fixture · no external model configured (answers use the local corpus only).
+          </p>
+        ) : null}
+      </div>
+
       <label className="tiny muted" htmlFor="knowledge-question">
         Question
       </label>
@@ -352,6 +429,47 @@ export function KnowledgePanel({
         </p>
       ) : null}
 
+      {webSkippedNotice ? (
+        <p className="notice notice--warn tiny" role="status">
+          Web search {webSummary!.status}
+          {webSummary!.reason ? ` (${webSummary!.reason})` : ''}. {webSummary!.hint ?? ''}
+        </p>
+      ) : null}
+      {webSummary?.requested && webSummary.status === 'ok' ? (
+        <p className="tiny muted">
+          Stored question: redacted — the outbound query differed from what you typed.
+        </p>
+      ) : null}
+      {webSummary?.requested &&
+      webSummary.status !== 'ok' &&
+      (answer?.route === 'published' || answer?.route === 'document') ? (
+        <p className="tiny muted">Answered from published sources · web not needed.</p>
+      ) : null}
+
+      {/* Older answers carry no `web` summary; fall back to the layer report. */}
+      {!webSummary && webLayer?.status === 'blocked' ? (
+        <p className="notice notice--warn tiny" role="status">
+          Web search blocked ({webLayer.detail ?? 'policy'}). Remove document text or ask without web
+          search.
+        </p>
+      ) : null}
+      {!webSummary && webLayer?.status === 'failed' ? (
+        <p className="notice notice--warn tiny" role="status">
+          Web search did not complete; no live results were used.
+        </p>
+      ) : null}
+      {!webSummary && webLayer?.status === 'ok' ? (
+        <p className="tiny muted">
+          Stored question: redacted — the outbound query differed from what you typed.
+        </p>
+      ) : null}
+
+      {generalWebAnswer ? (
+        <p className="notice notice--warn tiny" role="status">
+          General web answer — unverified third-party content, not a published source.
+        </p>
+      ) : null}
+
       {answer ? (
         <AnswerView
           answer={answer}
@@ -382,6 +500,22 @@ export function KnowledgePanel({
   );
 }
 
+const SOURCE_GROUPS = [
+  { id: 'published', label: 'Published corpus', types: ['product_manual', 'trade_rule', 'internal_policy'] },
+  { id: 'web', label: 'Web', types: ['approved_web'] },
+  { id: 'general', label: 'General web', types: ['general_web'] },
+  { id: 'document', label: 'Document', types: ['document_snapshot', 'attachment'] },
+] as const;
+
+function sourceGroups(citations: Citation[]) {
+  return SOURCE_GROUPS.map((group) => ({
+    ...group,
+    items: citations.filter((citation) =>
+      (group.types as readonly string[]).includes(citation.source_type),
+    ),
+  }));
+}
+
 function AnswerView({
   answer,
   feedback,
@@ -399,6 +533,7 @@ function AnswerView({
         <h3>Answer · {answer.outcome}</h3>
         <span className="tiny muted">Support: {answer.support_level}</span>
       </div>
+      <p className="tiny muted">Processor: {answer.processor ?? 'fixture'}</p>
       <p className="tiny muted">{SUPPORT_COPY[answer.support_level]}</p>
 
       {answer.claims.length ? (
@@ -446,17 +581,33 @@ function AnswerView({
       {answer.citations.length ? (
         <div>
           <h4>Citations</h4>
-          <div className="knowledge-citations">
-            {answer.citations.map((citation) => (
-              <button
-                key={citation.id}
-                type="button"
-                aria-label={`Open citation ${citation.title}`}
-                onClick={() => onCitation(citation)}
-              >
-                {citation.title} · {citation.source_version}
-              </button>
-            ))}
+          <div className="knowledge-source-groups">
+            {sourceGroups(answer.citations).map((group) =>
+              group.items.length ? (
+                <div className="knowledge-source-group" key={group.id}>
+                  <h5>
+                    {group.label} ({group.items.length})
+                  </h5>
+                  <div className="knowledge-citations">
+                    {group.items.map((citation) => (
+                      <button
+                        key={citation.id}
+                        type="button"
+                        aria-label={`Open citation ${citation.title}`}
+                        onClick={() => onCitation(citation)}
+                      >
+                        {citation.title} · {citation.source_version}
+                        {citation.source_type === 'approved_web'
+                          ? ` · ${String(citation.locator.domain ?? 'web')} · retrieved ${String(
+                              citation.locator.retrieved_at ?? 'unknown',
+                            )} · Unverified third-party`
+                          : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null,
+            )}
           </div>
           <p className="tiny muted">
             Each claim only cites evidence returned for this run; opening a citation shows the allowed

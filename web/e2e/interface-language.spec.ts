@@ -10,8 +10,10 @@ const CJK = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 const CHROME_ROOTS = [
   'header',
   '.topbar',
+  '.rail',
   '.environment-strip',
   '.pane-tabs',
+  '.pane-menu',
   '.document-head',
   '.assistant-tabs',
   '.editor-status',

@@ -1,9 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Maps to `editor-shell` / "Desktop viewport": ≥1366px shows the three panes side by side, and the
- * pane tablist does not exist. Runs in the `desktop` project (1440×900) — Playwright's default
- * 1280×720 is *narrow* in this app (`useViewport.ts` switches at ≤1365px).
+ * Maps to `editor-shell` / "Desktop viewport": ≥960px shows the three panes side by side with the
+ * navigation rail, and the pane tablist does not exist. Runs in the `desktop` project (1440×900).
  */
 test('three panes are visible together and no pane tabs are rendered', async ({ page }) => {
   await page.goto('/');

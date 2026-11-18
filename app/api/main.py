@@ -9,6 +9,8 @@ to `poc-skeleton` §8-§9 once the graph exists.
 
 from __future__ import annotations
 
+import logging
+import time
 import uuid
 from pathlib import Path
 
@@ -27,12 +29,14 @@ from app.assistant.service import AssistantService
 from app.documents.bootstrap import build_host_services
 from app.documents.errors import HostError
 from app.llm import resolve_llm
+from app.logging_setup import get_logger
 from app.runs import RunStore, UnknownRun
 from app.runtime import UnknownStage, execute_chain
 from app.standalone import plan_standalone
 from app.stages import AGENT_SPECS
 
 _UNSET = object()
+logger = get_logger("api")
 
 
 def _read_plan_refusal(plan: dict) -> ApiFailure:
@@ -101,7 +105,26 @@ def create_app(
     @app.middleware("http")
     async def _request_id(request: Request, call_next):
         request.state.request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:12]}"
-        response = await call_next(request)
+        started = time.monotonic()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception(
+                "request failed %s %s request=%s",
+                request.method, request.url.path, request.state.request_id,
+            )
+            raise
+        duration_ms = int((time.monotonic() - started) * 1000)
+        # Polling would drown the useful lines; keep reads at DEBUG unless they fail.
+        level = logging.INFO if request.method != "GET" else logging.DEBUG
+        if response.status_code >= 400:
+            level = logging.WARNING
+        logger.log(
+            level,
+            "%s %s -> %d %dms request=%s",
+            request.method, request.url.path, response.status_code, duration_ms,
+            request.state.request_id,
+        )
         response.headers["X-Request-ID"] = request.state.request_id
         return response
 

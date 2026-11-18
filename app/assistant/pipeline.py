@@ -129,7 +129,19 @@ class FixtureComposer:
                 {},
             )
 
-        selected = bundle.candidates[:3]
+        selected = list(bundle.candidates[:3])
+        # When approved web evidence exists, keep one slot for it: otherwise the assistant would
+        # silently answer from the local corpus while the UI says web search ran.
+        web_first = next(
+            (candidate for candidate in bundle.candidates if candidate.source_type == "approved_web"),
+            None,
+        )
+        if (
+            web_first is not None
+            and selected
+            and all(candidate.source_type != "approved_web" for candidate in selected)
+        ):
+            selected = [*selected[:2], web_first]
         claims: list[Claim] = []
         limitations: list[str] = []
         for index, candidate in enumerate(selected, start=1):
@@ -171,6 +183,189 @@ class FixtureComposer:
             limitations=limitations,
         )
         return Composition(answer, {candidate.citation_id: candidate for candidate in selected})
+
+
+WEB_ONLY_LIMITATION_ZH = "联网结果为未核验的第三方内容；执行前请以已发布来源为准。"
+WEB_ONLY_LIMITATION_EN = (
+    "Web results are unverified third-party content; rely on published sources before acting."
+)
+RULE_SOURCE_LIMITATION_ZH = (
+    "规则版本、生效日与适用范围必须由本地已发布语料支撑，联网结果不足以支持该结论。"
+)
+RULE_SOURCE_LIMITATION_EN = (
+    "Rule version, effective date and applicability require a published local source; web results "
+    "cannot support that conclusion."
+)
+WEB_INCOMPLETE_ZH = "联网检索未完成，本回答不包含实时网页结果。"
+WEB_INCOMPLETE_EN = "Web search did not complete; this answer does not include live web results."
+WEB_BLOCKED_ZH = "出站判定未通过，本次未执行联网检索。"
+WEB_BLOCKED_EN = "Web search was not run because outbound screening blocked the question."
+WEB_SKIPPED_ZH = "本次请求未执行联网检索。"
+WEB_SKIPPED_EN = "Web search was skipped for this request."
+
+GENERAL_WEB_LIMITATION_ZH = (
+    "该回答来自通用联网检索，属未核验第三方内容，不是已发布来源，也不构成法律意见。"
+)
+GENERAL_WEB_LIMITATION_EN = (
+    "This answer comes from general web search: unverified third-party content, not a published "
+    "source and not legal advice."
+)
+WEB_TOOL_NOT_OPEN_ZH = "当前模型账号未开通联网搜索插件，本次未使用实时网页结果。"
+WEB_TOOL_NOT_OPEN_EN = (
+    "Web search is not enabled for this account, so no live results were used. Activate the "
+    "web_search plugin in the Volcengine console first."
+)
+GENERAL_WEB_NO_SOURCE_ZH = "本次联网结果没有落在准入域名内，未生成任何可引用来源。"
+GENERAL_WEB_NO_SOURCE_EN = (
+    "None of the web results came from an approved domain, so no citation was produced."
+)
+GENERAL_WEB_FALLBACK_ZH = (
+    "已发布语料未能回答该问题；以下内容来自通用联网检索（未核验第三方内容），不构成规则依据。"
+)
+GENERAL_WEB_FALLBACK_EN = (
+    "The published corpus could not answer this question; the answer below comes from general web "
+    "search (unverified third-party content) and is not a rule source."
+)
+
+
+def review_general_answer(answer: Answer, known_ids: set[str]) -> tuple[Answer, int]:
+    """Minimal review for general-web answers: only citation identity, never full-text containment.
+
+    A claim that cites both approved and dropped sources keeps the approved references; it is dropped
+    only when nothing citable remains.
+    """
+    kept: list[Claim] = []
+    dropped = 0
+    for claim in answer.claims:
+        remaining = [citation_id for citation_id in claim.citation_ids if citation_id in known_ids]
+        if remaining:
+            kept.append(claim.model_copy(update={"citation_ids": remaining}))
+        else:
+            dropped += 1
+    used = {citation_id for claim in kept for citation_id in claim.citation_ids}
+    citations = [citation for citation in answer.citations if citation.id in used]
+    return answer.model_copy(update={"claims": kept, "citations": citations}), dropped
+
+
+def apply_general_web_policy(
+    answer: Answer, *, has_approved_citation: bool, language: str
+) -> Answer:
+    """General web answers are capped and always carry the unverified limitation."""
+    english = language == "en"
+    limitations = [
+        *answer.limitations,
+        GENERAL_WEB_LIMITATION_EN if english else GENERAL_WEB_LIMITATION_ZH,
+    ]
+    if not has_approved_citation or (answer.outcome == "answered" and not answer.claims):
+        return answer.model_copy(
+            update={
+                "outcome": "insufficient_evidence",
+                "support_level": "insufficient",
+                "claims": [],
+                "citations": [],
+                "limitations": [
+                    *limitations,
+                    GENERAL_WEB_NO_SOURCE_EN if english else GENERAL_WEB_NO_SOURCE_ZH,
+                ],
+            }
+        )
+    support = "qualified" if answer.support_level in ("strong", "qualified") else answer.support_level
+    return answer.model_copy(update={"support_level": support, "limitations": limitations})
+
+
+def apply_layer_policy(answer: Answer, plan: Any, bundle: EvidenceBundle) -> Answer:
+    """Cap evidence strength when web evidence participates (knowledge-retrieval-layers D8).
+
+    Web content may inform an answer but never becomes a published rule source: `strong` is capped
+    at `qualified`, and a rule question answered only by web evidence is refused rather than
+    presented as an authority.
+    """
+    web_ids = {
+        candidate.citation_id
+        for candidate in bundle.candidates
+        if candidate.source_type == "approved_web"
+    }
+    used = {citation_id for claim in answer.claims for citation_id in claim.citation_ids}
+    if not web_ids or not (used & web_ids):
+        return answer
+
+    english = getattr(plan, "language", "en") == "en"
+    limitation = WEB_ONLY_LIMITATION_EN if english else WEB_ONLY_LIMITATION_ZH
+    limitations = [*answer.limitations, limitation]
+
+    local_published = any(
+        candidate.source_type != "approved_web" for candidate in bundle.candidates
+    )
+    if getattr(plan, "intent", "") == "trade_rule_explanation" and not local_published:
+        return answer.model_copy(
+            update={
+                "outcome": "unable_to_assess",
+                "support_level": "insufficient",
+                "claims": [],
+                "citations": [],
+                "limitations": [
+                    *limitations,
+                    RULE_SOURCE_LIMITATION_EN if english else RULE_SOURCE_LIMITATION_ZH,
+                ],
+            }
+        )
+
+    support = "qualified" if answer.support_level == "strong" else answer.support_level
+    return answer.model_copy(update={"support_level": support, "limitations": limitations})
+
+
+def reconcile_answer(answer: Answer) -> Answer:
+    """Make the model's answer structurally publishable without publishing unsupported claims.
+
+    Real providers sometimes return an outcome that contradicts the payload (`answered` without
+    claims, `insufficient_evidence` with claims, clarification questions on another outcome). We
+    never invent content: claims that contradict the outcome are dropped, and missing prerequisites
+    downgrade the outcome instead of failing the whole run.
+    """
+    english = answer.language == "en"
+    updates: dict[str, Any] = {}
+    outcome = answer.outcome
+
+    if outcome == "answered":
+        if not answer.claims:
+            outcome = "insufficient_evidence"
+            updates["support_level"] = "insufficient"
+            updates["limitations"] = [
+                *answer.limitations,
+                "The model produced no claim supported by the retrieved evidence."
+                if english
+                else "模型没有给出可被检索证据支持的结论。",
+            ]
+        elif answer.support_level not in ("strong", "qualified"):
+            updates["support_level"] = "qualified"
+        if answer.handoff_target is not None:
+            updates["handoff_target"] = None
+    else:
+        if answer.claims:
+            updates["claims"] = []
+            updates["citations"] = []
+        if outcome == "needs_clarification":
+            if not answer.clarification_questions:
+                outcome = "unable_to_assess"
+            else:
+                updates["clarification_questions"] = answer.clarification_questions[:3]
+                updates["support_level"] = "not_applicable"
+        elif answer.clarification_questions:
+            updates["clarification_questions"] = []
+        if outcome == "needs_handoff" and answer.handoff_target is None:
+            outcome = "unable_to_assess"
+        if outcome in ("insufficient_evidence", "unable_to_assess"):
+            if answer.support_level != "insufficient":
+                updates["support_level"] = "insufficient"
+            if not (updates.get("limitations") or answer.limitations):
+                updates["limitations"] = [
+                    "No publishable conclusion was supported by the retrieved evidence."
+                    if english
+                    else "没有可发布的、被检索证据支持的结论。"
+                ]
+
+    updates["outcome"] = outcome
+    return answer.model_copy(update=updates)
 
 
 def review_answer(

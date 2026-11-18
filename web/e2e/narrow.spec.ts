@@ -47,3 +47,19 @@ test('narrow viewport shows one pane plus tabs, and the audit still runs', async
   await ws.runAudit();
   await expect(ws.result()).toHaveAttribute('data-field-checks', 'ran');
 });
+
+test('narrow viewport keeps module entries reachable from More without horizontal scrolling', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'More' }).click();
+  await expect(page.getByRole('menu', { name: 'More workspace modules' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Approval' }).click();
+  await expect(page.getByRole('dialog', { name: /Approval workflow/ })).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

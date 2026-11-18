@@ -77,6 +77,16 @@ describe('importing a document', () => {
     expect(surface()).toContain('USD 500,000.00');
   });
 
+  it('records a successful import in the activity log', async () => {
+    render(<App />);
+    await importOne();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
+    const dialog = screen.getByRole('dialog', { name: 'Activity' });
+    expect(dialog.textContent).toContain('Import complete');
+    expect(dialog.textContent).toContain('Parsed 1 file(s)');
+  });
+
   it('asks before replacing what the user already has in the editor', async () => {
     render(<App />);
     // A real structural edit through the toolbar marks the document unsaved (jsdom cannot type into

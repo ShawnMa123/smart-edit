@@ -63,11 +63,32 @@ describe('VersionPanel', () => {
     expect(props.onClear).toHaveBeenCalled();
   });
 
-  it('offers comparison as visibly unavailable', () => {
-    renderPanel();
+  it('requires exactly two versions and calls onCompare with their ids', async () => {
+    const props = renderPanel({
+      versions: [
+        version(),
+        version({ id: 'v-2', label: 'Version 2', text: 'A\n\nC' }),
+        version({ id: 'v-3', label: 'Version 3', text: 'A\n\nD' }),
+      ],
+      onCompare: vi.fn(),
+    });
 
-    const compare = screen.getByRole('button', { name: /Compare versions — not implemented/i });
+    const compare = screen.getByRole('button', { name: 'Compare versions' });
     expect((compare as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Select two versions to compare.')).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Version 1 for comparison' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Version 2 for comparison' }));
+
+    expect((compare as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (screen.getByRole('checkbox', { name: 'Select Version 3 for comparison' }) as HTMLInputElement)
+        .disabled,
+    ).toBe(true);
+    expect(screen.getByText('Two versions selected.')).toBeTruthy();
+
+    await userEvent.click(compare);
+    expect(props.onCompare).toHaveBeenCalledWith(['v-1', 'v-2']);
   });
 
   it('states that history is browser-local', () => {

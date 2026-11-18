@@ -233,9 +233,12 @@ describe('the component (2.1/2.3)', () => {
     expect(surface.textContent).toContain('DEMAND GUARANTEE');
     expect(surface.textContent).toContain('USD 500,000.00');
     expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeTruthy();
-    for (const name of ['Heading 1', 'Bold', 'Italic', 'Underline', 'Bullet list', 'Insert table']) {
+    expect(screen.getByLabelText('Paragraph style')).toBeTruthy();
+    for (const name of ['Bold', 'Italic', 'Underline', 'Bullet list']) {
       expect(screen.getByRole('button', { name })).toBeTruthy();
     }
+    await userEvent.click(screen.getByText('Table'));
+    expect(screen.getByRole('button', { name: 'Insert table' })).toBeTruthy();
 
     // A structural edit is the reliable way to prove the `onChange` wiring in jsdom (ProseMirror's
     // text input handling needs a real browser event pipeline).
@@ -243,6 +246,68 @@ describe('the component (2.1/2.3)', () => {
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     const latest = onChange.mock.calls[onChange.mock.calls.length - 1][0] as RichDocument;
     expect(JSON.stringify(latest)).toContain('table');
+  });
+
+  it('changes the block format through the grouped select', async () => {
+    const onChange = vi.fn();
+    render(<RichEditor document={doc('Plain text')} onChange={onChange} />);
+
+    const select = (await screen.findByLabelText('Paragraph style')) as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => option.value)).toEqual([
+      'paragraph',
+      'heading-1',
+      'heading-2',
+      'heading-3',
+    ]);
+    expect(select.value).toBe('paragraph');
+
+    await userEvent.selectOptions(select, 'heading-2');
+    await waitFor(() => {
+      const latest = onChange.mock.calls[onChange.mock.calls.length - 1][0] as RichDocument;
+      expect(JSON.stringify(latest)).toContain('"level":2');
+    });
+  });
+
+  it('switches footer lock actions with the lock state and reports submit', async () => {
+    const onReleaseLock = vi.fn();
+    const onStartEditing = vi.fn();
+    const onSubmitVersion = vi.fn();
+    const { rerender } = render(
+      <RichEditor
+        document={doc('Plain text')}
+        onChange={vi.fn()}
+        lockHeld
+        onReleaseLock={onReleaseLock}
+        onStartEditing={onStartEditing}
+        onSubmitVersion={onSubmitVersion}
+      />,
+    );
+
+    const release = screen.getByRole('button', { name: 'Release lock' }) as HTMLButtonElement;
+    const start = screen.getByRole('button', { name: 'Start editing' }) as HTMLButtonElement;
+    expect(release.disabled).toBe(false);
+    expect(start.disabled).toBe(true);
+
+    await userEvent.click(release);
+    await userEvent.click(screen.getByRole('button', { name: 'Submit new version' }));
+    expect(onReleaseLock).toHaveBeenCalledTimes(1);
+    expect(onSubmitVersion).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <RichEditor
+        document={doc('Plain text')}
+        onChange={vi.fn()}
+        lockHeld={false}
+        onReleaseLock={onReleaseLock}
+        onStartEditing={onStartEditing}
+        onSubmitVersion={onSubmitVersion}
+      />,
+    );
+    expect((screen.getByRole('button', { name: 'Release lock' }) as HTMLButtonElement).disabled).toBe(true);
+    const unlockedStart = screen.getByRole('button', { name: 'Start editing' }) as HTMLButtonElement;
+    expect(unlockedStart.disabled).toBe(false);
+    await userEvent.click(unlockedStart);
+    expect(onStartEditing).toHaveBeenCalledTimes(1);
   });
 
   it('opens and closes the find panel', async () => {

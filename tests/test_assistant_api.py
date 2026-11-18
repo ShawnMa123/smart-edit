@@ -367,6 +367,24 @@ def test_handoff_clarification_and_out_of_scope_outcomes(client):
     assert no_evidence["result"]["support_level"] == "insufficient"
 
 
+def test_definition_questions_are_answered_from_the_published_corpus(client):
+    cases = (("en", "what is guarantee"), ("zh-CN", "国际贸易里的guarantee是什么？"))
+    for index, (locale, question) in enumerate(cases):
+        session = _session(
+            client,
+            key=f"definition-session-{index}",
+            body={"workspace_id": WORKSPACE, "locale": locale},
+        )
+        accepted = _run(client, session["id"], question, key=f"definition-run-{index}")
+        assert accepted.status_code == 202, accepted.text
+        run = _poll(client, accepted.json()["id"])
+
+        assert run["status"] == "succeeded"
+        assert run["result"]["outcome"] == "answered"
+        assert run["result"]["claims"]
+        assert run["result"]["citations"]
+
+
 def test_publish_rechecks_source_status_and_writes_no_partial_message(tmp_path):
     services = make_services(tmp_path)
     inner = services.retriever

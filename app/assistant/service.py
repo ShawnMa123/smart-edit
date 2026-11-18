@@ -8,26 +8,63 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timedelta
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from app.assistant import audit_events
 from app.assistant.adapters import AssistantServices, FakeIdentity
 from app.assistant.domain.evidence import detect_conflicts, document_citation_id
-from app.assistant.domain.query import analyze
+from app.assistant.domain.query import QueryPlan, analyze
 from app.assistant.domain.state_machine import validate_answer
+from app.assistant.egress import EgressDecision, EgressInput, EgressPolicy
 from app.assistant.errors import AssistantError
-from app.assistant.pipeline import review_answer
-from app.assistant.ports import EvidenceBundle, EvidenceCandidate, Principal
+from app.assistant.gateway import DoubaoGateway, ModelGatewayError
+from app.assistant.pipeline import (
+    WEB_BLOCKED_EN,
+    WEB_BLOCKED_ZH,
+    WEB_INCOMPLETE_EN,
+    WEB_INCOMPLETE_ZH,
+    GENERAL_WEB_FALLBACK_EN,
+    GENERAL_WEB_FALLBACK_ZH,
+    WEB_SKIPPED_EN,
+    WEB_SKIPPED_ZH,
+    WEB_TOOL_NOT_OPEN_EN,
+    WEB_TOOL_NOT_OPEN_ZH,
+    FixtureComposer,
+    apply_general_web_policy,
+    apply_layer_policy,
+    reconcile_answer,
+    review_answer,
+    review_general_answer,
+)
+from app.assistant.ports import Composition, EvidenceBundle, EvidenceCandidate, Principal
+from app.assistant.retrieval import (
+    RetrievalError,
+    merge_layers,
+    web_candidates,
+)
 from app.assistant.schemas import (
     Answer,
     CancelDecision,
+    Capabilities,
+    Citation,
+    EgressCapability,
+    LayerCapability,
+    ModelCapability,
+    WebCapability,
+    WebSummary,
     ErrorBody,
     EvidenceDetail,
     Feedback,
     FeedbackInput,
     Message,
+    RetrievalLayer,
     Run,
     RunAccepted,
     RunCreate,
@@ -37,21 +74,46 @@ from app.assistant.schemas import (
     SnapshotCreate,
 )
 from app.assistant.store import SessionBusy
+from app.logging_setup import get_logger
+
+
+WEB_HINTS = {
+    "web_unavailable": "This server has no web provider configured.",
+    "tool_search_disabled": "General web is disabled on this server.",
+    "processor_not_approved": "The model provider is not approved for outbound content.",
+    "contains_selection": "Remove the document passage, then ask again.",
+    "query_too_long": "Shorten the question before retrying.",
+    "domain_not_allowed": "The web provider returned a domain outside the approved list.",
+    "query_empty_after_redaction": "The question only contained content that may not leave the service.",
+    "TOOL_NOT_OPEN": (
+        "Web search is not enabled for this model account; activate the web_search plugin in the "
+        "Volcengine console."
+    ),
+    "timeout": "Web search did not complete.",
+}
 
 
 class AssistantService:
     def __init__(self, services: AssistantServices, *, deadline_seconds: int = 120) -> None:
         self.store = services.store
         self.identity: FakeIdentity = services.identity
+        self.logger = get_logger("assistant")
         self.authorization = services.authorization
         self.snapshots = services.snapshots
         self.audit = services.audit
         self.clock = services.clock
         self.retriever = services.retriever
         self.gateway = services.gateway
+        self.fixture_composer = FixtureComposer()
         self.ids = services.ids
         self.mode = services.mode
         self.deadline_seconds = deadline_seconds
+        settings = getattr(services, "settings", None)
+        self.settings = settings
+        self.web = getattr(services, "web", None)
+        egress = getattr(services, "egress", None)
+        configured_policy = getattr(settings, "egress_policy", None) if settings else None
+        self.egress = egress if egress is not None else EgressPolicy.from_file(configured_policy)
 
     # --- helpers ----------------------------------------------------------------------------
     def principal(self, request) -> Principal:
@@ -225,6 +287,11 @@ class AssistantService:
             self.audit.append(
                 request_id, row["id"], "run_created", principal.user_id, {"session_id": session_id}
             )
+            self.logger.info(
+                "run queued run=%s session=%s chars=%d web_search=%s selection=%s",
+                row["id"], session_id, len(payload.question), payload.web_search,
+                bool(payload.selection),
+            )
             return RunAccepted(**self._run_model(row).model_dump(), poll_after_ms=500)
 
         return self._idempotent(
@@ -268,6 +335,597 @@ class AssistantService:
             key=idempotency_key, payload={}, action=action, model=CancelDecision,
         )  # type: ignore[return-value]
 
+    # --- retrieval layers and outbound gate (knowledge-retrieval-layers / egress) -------------
+    def _local_layer_name(self) -> str:
+        return "rag" if type(self.retriever).__name__.startswith("Rag") else "local"
+
+    def _audit_decision(self, run_id: str, purpose: str, decision: EgressDecision) -> None:
+        self.audit.append(
+            "",
+            run_id,
+            audit_events.EGRESS_ALLOWED if decision.allowed else audit_events.EGRESS_BLOCKED,
+            "",
+            {
+                "purpose": purpose,
+                "action": decision.action,
+                "reason": decision.reason_code,
+                "policy_version": decision.policy_version,
+                "query_digest": audit_events.query_digest(decision.outbound_query),
+            },
+        )
+
+    def _search_decision(
+        self, plan: QueryPlan, payload: RunCreate, run_id: str
+    ) -> EgressDecision:
+        selection = payload.selection.selected_text if payload.selection else None
+        decision = self.egress.check(
+            EgressInput(
+                purpose="search",
+                question=payload.question,
+                candidate_query=payload.question,
+                selection_text=selection,
+                entities=tuple(plan.entities),
+                provider=type(self.web).__name__ if self.web is not None else None,
+                provider_host=getattr(self.web, "host", None),
+            )
+        )
+        self._audit_decision(run_id, "search", decision)
+        return decision
+
+    def _compose(
+        self,
+        plan: QueryPlan,
+        bundle: EvidenceBundle,
+        snapshot: dict[str, Any] | None,
+        session: dict[str, Any],
+        run_id: str,
+        payload: RunCreate,
+    ) -> Composition:
+        external = bool(getattr(self.settings, "model", None)) and isinstance(
+            self.gateway, DoubaoGateway
+        )
+        context = {
+            "snapshot": snapshot,
+            "session": session,
+            "conflicts": detect_conflicts(bundle.candidates),
+        }
+        if not external:
+            self.logger.info(
+                "compose provider=fixture intent=%s evidence=%d",
+                plan.intent, len(bundle.candidates),
+            )
+            return self.gateway.compose(plan, bundle, context)
+        if plan.handoff_target or plan.needs_clarification or plan.intent == "out_of_scope":
+            # Routing outcomes are control flow, not knowledge: they must not depend on what an
+            # external model chooses to say. The deterministic composer owns handoff/clarification
+            # and the "no general channel" outcome even when a real provider is configured.
+            self.logger.info(
+                "compose provider=deterministic intent=%s handoff=%s clarify=%s",
+                plan.intent, plan.handoff_target, plan.needs_clarification,
+            )
+            return self.fixture_composer.compose(plan, bundle, context)
+        decision = self.egress.check(
+            EgressInput(
+                purpose="compose",
+                question=payload.question,
+                candidate_query=payload.question,
+                provider=getattr(self.settings, "model", None),
+                provider_approved=bool(getattr(self.settings, "approved_processor", False)),
+            )
+        )
+        self._audit_decision(run_id, "compose", decision)
+        if not decision.allowed:
+            self.logger.warning(
+                "compose blocked run=%s reason=%s", run_id, decision.reason_code
+            )
+            raise AssistantError(
+                403, "EGRESS_BLOCKED", f"model provider not approved: {decision.reason_code}"
+            )
+        self.logger.info(
+            "compose provider=doubao intent=%s evidence=%d",
+            plan.intent, len(bundle.candidates),
+        )
+        return self.gateway.compose(
+            plan, bundle, context
+        )
+
+    def _processor_label(self) -> str:
+        external = bool(getattr(self.settings, "model", None)) and isinstance(
+            self.gateway, DoubaoGateway
+        )
+        return getattr(self.settings, "processor_label", "fixture") if external else "fixture"
+
+    def _route_for(
+        self,
+        plan: QueryPlan,
+        general_route: bool,
+        snapshot: dict[str, Any] | None,
+        payload: RunCreate,
+        answer: Answer,
+    ) -> str:
+        """Where this answer came from (design D4). Never derived from the model's own claims."""
+        if plan.handoff_target or answer.outcome == "needs_handoff":
+            return "handoff"
+        if general_route:
+            return "general_web"
+        if answer.outcome != "answered":
+            return "none"
+        if plan.intent == "document_explanation" and payload.selection and snapshot:
+            return "document"
+        return "published"
+
+    @staticmethod
+    def _web_summary(payload: RunCreate, layers: list[RetrievalLayer]) -> WebSummary:
+        """Explain the web layer's outcome (design D5), including the reason and a UI hint."""
+        if not payload.web_search:
+            return WebSummary(requested=False, status="off")
+        layer = next((item for item in layers if item.layer == "web"), None)
+        if layer is None:
+            return WebSummary(
+                requested=True,
+                status="skipped",
+                reason="web_unavailable",
+                hint=WEB_HINTS["web_unavailable"],
+            )
+        if layer.status == "ok":
+            return WebSummary(requested=True, status="ok")
+        reason = layer.detail or ("denied" if layer.status == "blocked" else "not_used")
+        hint = WEB_HINTS.get(reason) or "Web search was not used for this answer."
+        status = "blocked" if layer.status == "blocked" else "failed" if layer.status == "failed" else "skipped"
+        return WebSummary(requested=True, status=status, reason=reason, hint=hint)
+
+    def capabilities(self) -> Capabilities:
+        """Deployment capability view (assistant-capabilities); no secrets, no user identifiers."""
+        settings = self.settings
+        model_configured = bool(getattr(settings, "model", None))
+        approved = bool(getattr(settings, "approved_processor", False))
+        general = (
+            bool(getattr(settings, "general_web", False))
+            and bool(getattr(self.gateway, "supports_tool_search", False))
+            and self.egress is not None
+        )
+        provider = getattr(settings, "web", "off")
+        if provider not in ("off", "fixture", "http"):
+            provider = "off"
+        policy = self.egress
+        return Capabilities(
+            model=ModelCapability(
+                configured=model_configured,
+                label=getattr(settings, "processor_label", None) if model_configured else None,
+                approved_processor=approved,
+            ),
+            layers=LayerCapability(
+                local=True,
+                approved_web=self.web is not None,
+                general_web=general,
+            ),
+            egress=EgressCapability(
+                policy_version=str(getattr(policy, "version", "unset")),
+                allowed_domains=len(getattr(policy, "allowed_domains", []) or []),
+                loaded=bool(getattr(policy, "loaded", False)),
+            ),
+            web=WebCapability(provider=provider),  # type: ignore[arg-type]
+        )
+
+    def _general_available(self) -> bool:
+        return (
+            bool(getattr(self.settings, "general_web", False))
+            and bool(getattr(self.gateway, "supports_tool_search", False))
+            and self.egress is not None
+        )
+
+    def _should_fallback(
+        self, plan: QueryPlan, payload: RunCreate, answer: Answer
+    ) -> bool:
+        """In-scope questions fall back to general web only when the corpus gave nothing citable."""
+        return (
+            payload.web_search
+            and plan.handoff_target is None
+            and plan.intent in (
+                "trade_rule_explanation",
+                "product_faq",
+                "document_explanation",
+            )
+            and answer.outcome in ("insufficient_evidence", "unable_to_assess")
+            and not answer.citations
+            and self._general_available()
+        )
+
+    def _general_route(self, plan: QueryPlan, payload: RunCreate) -> bool:
+        """The general channel: out-of-scope, not a handoff, explicitly enabled, and configured."""
+        return (
+            payload.web_search
+            and bool(getattr(self.settings, "general_web", False))
+            and bool(getattr(self.gateway, "supports_tool_search", False))
+            and self.egress is not None
+            and plan.intent == "out_of_scope"
+            and plan.handoff_target is None
+            and not plan.needs_clarification
+        )
+
+    def _general_decision(
+        self, plan: QueryPlan, payload: RunCreate, run_id: str
+    ) -> EgressDecision:
+        selection = payload.selection.selected_text if payload.selection else None
+        decision = self.egress.check(
+            EgressInput(
+                purpose="tool_search",
+                question=payload.question,
+                candidate_query=payload.question,
+                selection_text=selection,
+                entities=tuple(plan.entities),
+                provider=getattr(self.settings, "model", None),
+                provider_approved=bool(getattr(self.settings, "approved_processor", False)),
+                tool_search_enabled=bool(getattr(self.settings, "general_web", False)),
+            )
+        )
+        self._audit_decision(run_id, "tool_search", decision)
+        return decision
+
+    @staticmethod
+    def _domain_allowed(host: str, allowed: list[str]) -> bool:
+        if not host or not allowed:
+            return False
+        return any(host == domain or host.endswith(f".{domain}") for domain in allowed)
+
+    def _run_general_web(
+        self, plan: QueryPlan, payload: RunCreate, run: dict[str, Any]
+    ) -> tuple[Answer, list[RetrievalLayer], EvidenceBundle]:
+        """One read-only web_search call, post-hoc domain filtering, capped and labelled answer."""
+        run_id = run["id"]
+        english = plan.language == "en"
+        started = time.monotonic()
+        self.logger.info(
+            "general_web start run=%s max_keyword=%d", run_id,
+            int(getattr(self.settings, "web_search_max_keyword", 3)),
+        )
+
+        decision = self._general_decision(plan, payload, run_id)
+        if not decision.allowed:
+            self.logger.warning(
+                "general_web blocked run=%s reason=%s", run_id, decision.reason_code
+            )
+            answer = Answer(
+                outcome="unable_to_assess",
+                language=plan.language,
+                support_level="insufficient",
+                limitations=[WEB_BLOCKED_EN if english else WEB_BLOCKED_ZH],
+            )
+            return (
+                answer,
+                [RetrievalLayer(layer="web", status="blocked", detail=decision.reason_code)],
+                EvidenceBundle([]),
+            )
+
+        try:
+            result = self.gateway.general_web(
+                decision.outbound_query or payload.question,
+                max_keyword=int(getattr(self.settings, "web_search_max_keyword", 3)),
+                language=plan.language,
+            )
+        except ModelGatewayError as exc:
+            self.logger.error(
+                "general_web failed run=%s code=%s duration_ms=%d",
+                run_id, exc.code, int((time.monotonic() - started) * 1000),
+            )
+            self.audit.append(
+                "", run_id, audit_events.WEB_SEARCH_FAILED, "",
+                {"code": exc.code, "channel": "general_web"},
+            )
+            limitation = (
+                WEB_TOOL_NOT_OPEN_EN
+                if english and exc.code == "TOOL_NOT_OPEN"
+                else WEB_TOOL_NOT_OPEN_ZH
+                if exc.code == "TOOL_NOT_OPEN"
+                else WEB_INCOMPLETE_EN
+                if english
+                else WEB_INCOMPLETE_ZH
+            )
+            answer = Answer(
+                outcome="unable_to_assess",
+                language=plan.language,
+                support_level="insufficient",
+                limitations=[limitation],
+            )
+            return (
+                answer,
+                [RetrievalLayer(layer="web", status="failed", detail=exc.code)],
+                EvidenceBundle([]),
+            )
+
+        retrieved_at = self.clock.now()
+        allowed = getattr(self.egress, "allowed_domains", []) if self.egress is not None else []
+        annotations = {
+            str(annotation.get("url")): annotation
+            for annotation in result.annotations
+            if annotation.get("url")
+        }
+        kept: list[Citation] = []
+        candidates: list[EvidenceCandidate] = []
+        dropped = 0
+        for citation in result.answer.citations:
+            locator = dict(citation.locator or {})
+            url = str(locator.get("url") or "")
+            host = (urlparse(url).hostname or "").lower()
+            if not self._domain_allowed(host, allowed):
+                dropped += 1
+                continue
+            annotation = annotations.get(url, {})
+            locator.update(
+                {
+                    "url": url,
+                    "domain": host,
+                    "retrieved_at": retrieved_at,
+                    "annotation_start": annotation.get("start_index"),
+                    "annotation_end": annotation.get("end_index"),
+                }
+            )
+            labelled = citation.model_copy(
+                update={"source_type": "general_web", "locator": locator}
+            )
+            kept.append(labelled)
+            snippet = str(annotation.get("title") or labelled.title or url)
+            candidates.append(
+                EvidenceCandidate(
+                    citation_id=labelled.id,
+                    source_type="general_web",
+                    title=labelled.title,
+                    source_version=labelled.source_version or retrieved_at,
+                    excerpt=snippet[:300],
+                    locator=locator,
+                    source_text=snippet,
+                    chunk_id=labelled.id,
+                )
+            )
+
+        answer = result.answer.model_copy(update={"citations": kept})
+        answer, removed = review_general_answer(answer, {citation.id for citation in kept})
+        answer = apply_general_web_policy(
+            answer, has_approved_citation=bool(kept), language=plan.language
+        )
+        if dropped:
+            self.audit.append(
+                "", run_id, audit_events.WEB_EVIDENCE_DROPPED, "",
+                {"channel": "general_web", "dropped": dropped},
+            )
+        if removed:
+            self.audit.append(
+                "", run_id, "run_review_issues", "",
+                {"issues": [{"code": "general_web_claim_removed", "count": removed}]},
+            )
+        layers = [
+            RetrievalLayer(layer="web", status="ok", detail="general_web", retrieved_at=retrieved_at)
+        ]
+        self.logger.info(
+            "general_web done run=%s citations=%d dropped=%d removed=%d outcome=%s duration_ms=%d",
+            run_id, len(kept), dropped, removed, answer.outcome,
+            int((time.monotonic() - started) * 1000),
+        )
+        return answer, layers, EvidenceBundle(candidates)
+
+    def _annotate_layers(
+        self, answer: Answer, layers: list[RetrievalLayer], payload: RunCreate
+    ) -> Answer:
+        """State the web layer's outcome; never let a failed search read as 'verified online'."""
+        if not payload.web_search:
+            return answer
+        english = answer.language == "en"
+        notes: list[str] = []
+        for layer in layers:
+            if layer.layer != "web":
+                continue
+            if layer.status == "failed":
+                notes.append(WEB_INCOMPLETE_EN if english else WEB_INCOMPLETE_ZH)
+            elif layer.status == "blocked":
+                notes.append(WEB_BLOCKED_EN if english else WEB_BLOCKED_ZH)
+            elif layer.status == "skipped":
+                notes.append(WEB_SKIPPED_EN if english else WEB_SKIPPED_ZH)
+        if not notes:
+            return answer
+        deduped = list(dict.fromkeys([*answer.limitations, *notes]))
+        return answer.model_copy(update={"limitations": deduped})
+
+    # --- layer workers (run inside a thread pool) -------------------------------------------
+    def _run_local(
+        self, principal: Principal, workspace_id: str, plan: QueryPlan, applicable_on: str | None
+    ) -> list[EvidenceCandidate]:
+        return list(self.retriever.search(principal, workspace_id, plan, applicable_on))
+
+    def _run_web(self, plan: QueryPlan, decision: EgressDecision):
+        pages, retrieved_at = self.web.search(decision.outbound_query or "")
+        allowed = getattr(self.egress, "allowed_domains", []) if self.egress is not None else []
+        return web_candidates(
+            pages,
+            set(plan.retrieval_terms),
+            allowed_domains=allowed,
+            retrieved_at=retrieved_at or None,
+        )
+
+    def _retrieve_layers(
+        self,
+        principal: Principal,
+        session: dict[str, Any],
+        plan: QueryPlan,
+        payload: RunCreate,
+        run_id: str,
+        web_decision: EgressDecision | None,
+    ) -> tuple[EvidenceBundle, list[RetrievalLayer]]:
+        """Run the local and web layers after the gate, in parallel, with per-layer budgets."""
+        local_name = self._local_layer_name()
+        layers: list[RetrievalLayer] = []
+        local_candidates: list[EvidenceCandidate] = []
+        web_found: list[EvidenceCandidate] = []
+        local_error: Exception | None = None
+        pool = ThreadPoolExecutor(max_workers=2)
+        try:
+            local_future = pool.submit(
+                self._run_local, principal, session["workspace_id"], plan, payload.applicable_on
+            )
+            web_future = None
+            if web_decision is not None and web_decision.allowed:
+                web_future = pool.submit(self._run_web, plan, web_decision)
+            try:
+                local_candidates = local_future.result(timeout=5)
+                layers.append(RetrievalLayer(layer=local_name, status="ok"))
+            except FutureTimeout as exc:
+                local_error = exc
+                layers.append(RetrievalLayer(layer=local_name, status="failed", detail="timeout"))
+            except RetrievalError as exc:
+                local_error = exc
+                layers.append(RetrievalLayer(layer=local_name, status="failed", detail=exc.code))
+            except Exception as exc:  # noqa: BLE001 - one layer failing must not hide the other
+                local_error = exc
+                layers.append(
+                    RetrievalLayer(layer=local_name, status="failed", detail="retrieval_failed")
+                )
+            if web_future is not None:
+                try:
+                    outcome = web_future.result(timeout=8)
+                    web_found = outcome.candidates
+                    layers.append(
+                        RetrievalLayer(layer="web", status="ok", retrieved_at=outcome.retrieved_at)
+                    )
+                    if outcome.dropped:
+                        self.audit.append(
+                            "", run_id, audit_events.WEB_EVIDENCE_DROPPED, "",
+                            {"dropped": outcome.dropped[:10]},
+                        )
+                except FutureTimeout:
+                    layers.append(RetrievalLayer(layer="web", status="failed", detail="timeout"))
+                    self.audit.append(
+                        "", run_id, audit_events.WEB_SEARCH_FAILED, "", {"code": "timeout"}
+                    )
+                except RetrievalError as exc:
+                    layers.append(RetrievalLayer(layer="web", status="failed", detail=exc.code))
+                    self.audit.append(
+                        "", run_id, audit_events.WEB_SEARCH_FAILED, "", {"code": exc.code}
+                    )
+                except Exception:  # noqa: BLE001
+                    layers.append(
+                        RetrievalLayer(layer="web", status="failed", detail="web_search_failed")
+                    )
+                    self.audit.append(
+                        "", run_id, audit_events.WEB_SEARCH_FAILED, "", {"code": "web_search_failed"}
+                    )
+            elif web_decision is not None:
+                layers.append(
+                    RetrievalLayer(layer="web", status="blocked", detail=web_decision.reason_code)
+                )
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+        if local_error is not None and not local_candidates and not web_found:
+            # A backend failure is not "no evidence": keep the old guarantee and fail the run.
+            raise local_error
+        bundle = EvidenceBundle(merge_layers(local_candidates, web_found))
+        self.logger.info(
+            "retrieval run=%s local=%d web=%d candidates=%d layers=%s",
+            run_id, len(local_candidates), len(web_found), len(bundle.candidates),
+            ",".join(f"{layer.layer}:{layer.status}" for layer in layers) or "none",
+        )
+        if local_error is not None:
+            self.logger.warning(
+                "retrieval local layer failed run=%s error=%s",
+                run_id, type(local_error).__name__,
+            )
+        return bundle, layers
+
+    def _standard_answer(
+        self,
+        principal: Principal,
+        session: dict[str, Any],
+        plan: QueryPlan,
+        payload: RunCreate,
+        snapshot: dict[str, Any] | None,
+        run: dict[str, Any],
+    ) -> tuple[Answer, list[RetrievalLayer], EvidenceBundle, list[dict[str, Any]], list[dict[str, Any]]]:
+        """The in-scope path: local/public retrieval, compose, review (unchanged behaviour)."""
+        run_id = run["id"]
+        layers: list[RetrievalLayer] = []
+        web_decision: EgressDecision | None = None
+        if payload.web_search:
+            if self.web is None:
+                layers.append(
+                    RetrievalLayer(layer="web", status="skipped", detail="web_unavailable")
+                )
+                self.logger.info(
+                    "web layer skipped run=%s reason=web_unavailable (no approved web provider)",
+                    run["id"],
+                )
+            else:
+                web_decision = self._search_decision(plan, payload, run_id)
+                if web_decision.allowed:
+                    # The stored question is no longer byte-identical to what left the service.
+                    self.store.mark_message_redacted(run["user_message_id"])
+                else:
+                    self.logger.info(
+                        "web layer blocked run=%s reason=%s",
+                        run["id"], web_decision.reason_code,
+                    )
+
+        if plan.intent == "document_explanation" and payload.selection and snapshot:
+            selection = payload.selection
+            bundle = EvidenceBundle([
+                EvidenceCandidate(
+                    citation_id=document_citation_id(
+                        snapshot["id"], selection.start_offset, selection.end_offset
+                    ),
+                    source_type="document_snapshot",
+                    title=session.get("document_id") or "document",
+                    source_version=snapshot.get("version_label") or snapshot["id"],
+                    excerpt=selection.selected_text,
+                    locator={"node_id": selection.node_id, "start_offset": selection.start_offset,
+                             "end_offset": selection.end_offset},
+                    source_text=snapshot["text"], source_id=snapshot["id"], version_id=snapshot["id"],
+                    document_id=session.get("document_id"), snapshot_id=snapshot["id"],
+                    start_offset=selection.start_offset, end_offset=selection.end_offset,
+                )
+            ])
+            layers.append(RetrievalLayer(layer="local", status="ok", detail="document_snapshot"))
+            if web_decision is not None:
+                blocked = not web_decision.allowed
+                layers.append(
+                    RetrievalLayer(
+                        layer="web",
+                        status="blocked" if blocked else "skipped",
+                        detail=web_decision.reason_code if blocked else "document_selection",
+                    )
+                )
+        elif plan.handoff_target or plan.needs_clarification or plan.intent == "out_of_scope":
+            bundle = EvidenceBundle([])
+            layers.append(RetrievalLayer(layer="local", status="skipped", detail="no_retrieval"))
+            if web_decision is not None:
+                blocked = not web_decision.allowed
+                layers.append(
+                    RetrievalLayer(
+                        layer="web",
+                        status="blocked" if blocked else "skipped",
+                        detail=web_decision.reason_code if blocked else "no_retrieval",
+                    )
+                )
+        else:
+            bundle, layer_reports = self._retrieve_layers(
+                principal, session, plan, payload, run_id, web_decision
+            )
+            layers.extend(layer_reports)
+
+        if plan.capability_help and not bundle.candidates:
+            help_source = self.store.get_knowledge_source(plan.help_source_id or "")
+            if not help_source:
+                raise AssistantError(
+                    503,
+                    "HELP_SOURCE_UNAVAILABLE",
+                    f"help source {plan.help_source_id or 'unknown'} is not loaded",
+                )
+
+        conflicts = detect_conflicts(bundle.candidates)
+        composition = self._compose(plan, bundle, snapshot, session, run_id, payload)
+        answer, issues = review_answer(composition.answer, bundle, snapshot)
+        answer = apply_layer_policy(answer, plan, bundle)
+        answer = self._annotate_layers(answer, layers, payload).model_copy(
+            update={"retrieval": layers, "processor": self._processor_label()}
+        )
+        return answer, layers, bundle, conflicts, issues
+
     # --- execution ----------------------------------------------------------------------------
     def execute_run(self, run_id: str) -> None:
         run = self.store.get_run(run_id)
@@ -280,12 +938,15 @@ class AssistantService:
         ):
             return
         self.audit.append("", run_id, "run_started", run["session_id"], {})
+        started = time.monotonic()
+        self.logger.info("run started run=%s session=%s", run_id, run["session_id"])
         try:
             if datetime.fromisoformat(run["deadline_at"]) < datetime.fromisoformat(self.clock.now()):
                 self.store.transition_run(
                     run_id, ("running",), "timed_out", stage="timed_out", finished_at=self.clock.now()
                 )
                 self.audit.append("", run_id, "run_timed_out", "", {})
+                self.logger.warning("run timed out before start run=%s", run_id)
                 return
             session = self.store.get_session(run["session_id"])
             if not session:
@@ -303,46 +964,67 @@ class AssistantService:
                 has_snapshot=bool(snapshot), applicable_on=payload.applicable_on,
                 jurisdiction_codes=payload.jurisdiction_codes, rule_version=payload.rule_version,
             )
-
-            if plan.intent == "document_explanation" and payload.selection and snapshot:
-                selection = payload.selection
-                bundle = EvidenceBundle([
-                    EvidenceCandidate(
-                        citation_id=document_citation_id(
-                            snapshot["id"], selection.start_offset, selection.end_offset
-                        ),
-                        source_type="document_snapshot",
-                        title=session.get("document_id") or "document",
-                        source_version=snapshot.get("version_label") or snapshot["id"],
-                        excerpt=selection.selected_text,
-                        locator={"node_id": selection.node_id, "start_offset": selection.start_offset,
-                                 "end_offset": selection.end_offset},
-                        source_text=snapshot["text"], source_id=snapshot["id"], version_id=snapshot["id"],
-                        document_id=session.get("document_id"), snapshot_id=snapshot["id"],
-                        start_offset=selection.start_offset, end_offset=selection.end_offset,
-                    )
-                ])
-            elif plan.handoff_target or plan.needs_clarification or plan.intent == "out_of_scope":
-                bundle = EvidenceBundle([])
-            else:
-                bundle = EvidenceBundle(
-                    self.retriever.search(principal, session["workspace_id"], plan, payload.applicable_on)
-                )
-
-            if plan.capability_help and not bundle.candidates:
-                help_source = self.store.get_knowledge_source(plan.help_source_id or "")
-                if not help_source:
-                    raise AssistantError(
-                        503,
-                        "HELP_SOURCE_UNAVAILABLE",
-                        f"help source {plan.help_source_id or 'unknown'} is not loaded",
-                    )
-
-            conflicts = detect_conflicts(bundle.candidates)
-            composition = self.gateway.compose(
-                plan, bundle, {"snapshot": snapshot, "session": session, "conflicts": conflicts}
+            self.logger.info(
+                "run plan run=%s intent=%s language=%s web_search=%s",
+                run_id, plan.intent, plan.language, payload.web_search,
             )
-            answer, issues = review_answer(composition.answer, bundle, snapshot)
+
+            general_route = self._general_route(plan, payload)
+            if general_route:
+                answer, layers, bundle = self._run_general_web(plan, payload, run)
+                conflicts: list[dict[str, Any]] = []
+                issues: list[dict[str, Any]] = []
+            else:
+                answer, layers, bundle, conflicts, issues = self._standard_answer(
+                    principal, session, plan, payload, snapshot, run
+                )
+                if self._should_fallback(plan, payload, answer):
+                    self.logger.info(
+                        "general_web fallback run=%s reason=corpus_insufficient", run_id
+                    )
+                    fallback_answer, fallback_layers, fallback_bundle = self._run_general_web(
+                        plan, payload, run
+                    )
+                    if fallback_answer.citations:
+                        note = (
+                            GENERAL_WEB_FALLBACK_EN
+                            if plan.language == "en"
+                            else GENERAL_WEB_FALLBACK_ZH
+                        )
+                        answer = fallback_answer.model_copy(
+                            update={"limitations": [*fallback_answer.limitations, note]}
+                        )
+                        layers = fallback_layers
+                        bundle = fallback_bundle
+                        general_route = True
+                        self.logger.info(
+                            "general_web fallback used run=%s citations=%d",
+                            run_id, len(fallback_answer.citations),
+                        )
+                    else:
+                        # Keep the corpus-level answer, but report why the fallback did not help.
+                        stale = {WEB_SKIPPED_EN, WEB_SKIPPED_ZH}
+                        answer = answer.model_copy(
+                            update={
+                                "limitations": [
+                                    *[item for item in answer.limitations if item not in stale],
+                                    *fallback_answer.limitations,
+                                ]
+                            }
+                        )
+                        layers = [
+                            *fallback_layers,
+                            *(item for item in layers if item.layer != "web"),
+                        ]
+            answer = reconcile_answer(answer)
+            answer = answer.model_copy(
+                update={
+                    "retrieval": layers,
+                    "processor": self._processor_label(),
+                    "route": self._route_for(plan, general_route, snapshot, payload, answer),
+                    "web": self._web_summary(payload, layers),
+                }
+            )
             if issues:
                 self.audit.append(
                     "", run_id, "run_review_issues", "",
@@ -356,6 +1038,10 @@ class AssistantService:
                     run_id, ("running",), "timed_out", stage="timed_out", finished_at=self.clock.now()
                 )
                 self.audit.append("", run_id, "run_timed_out", "", {})
+                self.logger.warning(
+                    "run timed out run=%s duration_ms=%d",
+                    run_id, int((time.monotonic() - started) * 1000),
+                )
                 return
 
             citations: list[dict[str, Any]] = []
@@ -366,7 +1052,7 @@ class AssistantService:
                     "resource_version": snapshot.get("version_label"),
                 })
             for citation in answer.citations:
-                candidate = composition.details.get(citation.id) or bundle.by_id().get(citation.id)
+                candidate = bundle.by_id().get(citation.id)
                 if not candidate:
                     continue
                 citations.append({
@@ -407,12 +1093,32 @@ class AssistantService:
                     },
                 },
             )
+            self.logger.info(
+                "run succeeded run=%s outcome=%s support=%s route=%s citations=%d "
+                "synthetic=%s duration_ms=%d",
+                run_id, answer.outcome, answer.support_level, answer.route, len(citations),
+                any(citation["synthetic"] for citation in citations),
+                int((time.monotonic() - started) * 1000),
+            )
         except AssistantError as exc:
             self.store.fail_run(run_id, exc.code, exc.message, self.clock.now())
             self.audit.append("", run_id, "run_failed", "", {"code": exc.code})
+            self.logger.warning(
+                "run failed run=%s code=%s message=%s duration_ms=%d",
+                run_id, exc.code, exc.message, int((time.monotonic() - started) * 1000),
+            )
+        except ModelGatewayError as exc:
+            # Surface the provider/model failure by its own code instead of a generic one.
+            self.store.fail_run(run_id, exc.code, "model provider failed", self.clock.now())
+            self.audit.append("", run_id, "run_failed", "", {"code": exc.code})
+            self.logger.error(
+                "run failed run=%s code=%s provider=doubao duration_ms=%d",
+                run_id, exc.code, int((time.monotonic() - started) * 1000),
+            )
         except Exception:
             self.store.fail_run(run_id, "ASSISTANT_FAILED", "assistant run failed", self.clock.now())
             self.audit.append("", run_id, "run_failed", "", {"code": "ASSISTANT_FAILED"})
+            self.logger.exception("run failed run=%s code=ASSISTANT_FAILED", run_id)
 
     # --- history / citations / feedback -------------------------------------------------------
     def _message_view(self, principal: Principal, row: dict[str, Any]) -> Message:
@@ -437,6 +1143,7 @@ class AssistantService:
             )
         return Message(
             id=row["id"], session_id=row["session_id"], run_id=row["run_id"], role="user",
+            visibility=row.get("visibility") or "visible",
             question=row.get("question"), created_at=row["created_at"],
         )
 

@@ -151,4 +151,18 @@ describe('assistant client', () => {
       getRun('run_1', { fetchImpl: (() => Promise.reject(new Error('down'))) as unknown as typeof fetch }),
     ).rejects.toMatchObject({ status: 0, code: NETWORK_CODE });
   });
+
+  it('sends web_search only when the caller opts in', async () => {
+    const calls: Call[] = [];
+
+    await createRun('sess_1', { question: 'q' }, 'key-1', {
+      fetchImpl: record(calls, { id: 'run_1', status: 'queued' }, 202),
+    });
+    await createRun('sess_1', { question: 'q', web_search: true }, 'key-2', {
+      fetchImpl: record(calls, { id: 'run_2', status: 'queued' }, 202),
+    });
+
+    expect(JSON.parse(String(calls[0].init.body))).not.toHaveProperty('web_search');
+    expect(JSON.parse(String(calls[1].init.body)).web_search).toBe(true);
+  });
 });

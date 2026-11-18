@@ -110,6 +110,25 @@ def test_english_questions_use_only_english_sources(store):
     assert "KS-RULES-001-EN" in {candidate.source_id for candidate in rule_results}
 
 
+def test_english_definition_question_retrieves_the_guarantee_definition(store):
+    retriever = LexicalRetriever(store)
+    candidates = retriever.search(
+        PRINCIPAL, WORKSPACE, analyze("what is guarantee"), None
+    )
+    assert candidates
+    assert candidates[0].chunk_id == "KC-RULES-001-EN-13"
+    assert "written undertaking by a guarantor" in candidates[0].excerpt
+
+
+def test_chinese_definition_question_retrieves_the_guarantee_definition(store):
+    retriever = LexicalRetriever(store)
+    candidates = retriever.search(
+        PRINCIPAL, WORKSPACE, analyze("国际贸易里的guarantee是什么？"), None
+    )
+    assert candidates
+    assert candidates[0].chunk_id == "KC-RULES-001-13"
+
+
 def test_chinese_questions_do_not_mix_english_sources(store):
     retriever = LexicalRetriever(store)
     candidates = retriever.search(

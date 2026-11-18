@@ -1,11 +1,11 @@
 {
   "title": "合成贸易规则摘要（演示用，非官方原文）",
-  "version_id": "KV-RULES-001-v2",
+  "version_id": "KV-RULES-001-v3",
   "source": {
     "source_id": "KS-RULES-001",
     "source_type": "trade_rule",
     "publisher": "Synthetic Trade Rules Demo",
-    "version_label": "demo-2",
+    "version_label": "demo-3",
     "language": "zh-CN",
     "scope": "organization",
     "license_reference": "synthetic-demo-not-official",
@@ -142,6 +142,16 @@
       "locator": {
         "section": "ISP98 与 ISBP 821 要点",
         "page": 21
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-13",
+      "section": "保函定义",
+      "title_path": "贸易规则 / 保函 / 定义",
+      "text": "合成摘要：在国际贸易中，保函（guarantee，也称见索即付保函或独立保函）是担保人（通常是银行）向受益人作出的书面承诺：受益人按照保函条款提出书面索赔时，担保人支付约定金额。核心当事人为申请人、受益人与担保人。保函为 underlying 商业合同项下的履约或付款义务提供担保，同时独立于该基础合同。本段是演示摘要，不是 ICC 官方条文，也不构成法律意见。",
+      "locator": {
+        "section": "保函定义",
+        "page": 2
       }
     }
   ]

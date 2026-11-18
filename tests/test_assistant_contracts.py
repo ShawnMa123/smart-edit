@@ -200,3 +200,16 @@ def test_clarification_handoff_and_insufficient_invariants():
     assert "insufficient_support_level" in validate_answer(
         _answer(outcome="insufficient_evidence", support_level="qualified", claims=[], citations=[])
     )
+
+
+def test_run_create_web_search_is_opt_in_and_unknown_fields_stay_rejected():
+    from app.assistant.schemas import RunCreate, RunStage
+
+    assert RunCreate(question="hello").web_search is False
+    assert RunCreate(question="hello", web_search=True).web_search is True
+    with pytest.raises(ValidationError):
+        RunCreate(question="hello", tools=["search"])
+
+    # The poller must be able to express the new stages.
+    for stage in ("screening", "local_retrieval", "web_search"):
+        assert stage in RunStage.__args__

@@ -10,19 +10,25 @@ from app.knowledge.text import entities, tokens
 Intent = str  # product_faq | trade_rule_explanation | document_explanation | out_of_scope
 Handoff = str  # automation | standards_audit | regulatory_advice
 
+# Word boundaries around ASCII keywords must also fire next to CJK text: `\b` treats CJK as a word
+# character, so "的guarantee是" would never match `\bguarantee\b`. These lookarounds keep the same
+# intent (whole ASCII token) without excluding adjacent Chinese.
+_L = r"(?<![a-z0-9])"
+_R = r"(?![a-z0-9])"
+
 _EDIT = re.compile(
-    r"\b(rewrite|polish|modify|replace|fill in|change the wording|edit the clause)\b"
-    r"|润色|改写|替换|修改|填充|改成|帮我改|改一下",
+    _L + r"(rewrite|polish|modify|replace|fill in|change the wording|edit the clause)" + _R
+    + r"|润色|改写|替换|修改|填充|改成|帮我改|改一下",
     re.IGNORECASE,
 )
 _AUDIT_ACTION = re.compile(
-    r"\b(run|perform|start|check)\b.{0,24}\b(audit|compliance)\b"
+    r"(run|perform|start|check).{0,24}(audit|compliance)"
     r"|审查(我的|这份)?文档|全文检查|合规审查|帮我检查",
-    re.IGNORECASE,
+    re.IGNORECASE | re.DOTALL,
 )
 _REGULATORY = re.compile(
-    r"\b(export requirement|jurisdiction|is it legal|can we issue|sanctions?)\b"
-    r"|出口管制|是否合法|能否开立|法规要求|法域|合规要求",
+    _L + r"(export requirement|jurisdiction|is it legal|can we issue|sanctions?)" + _R
+    + r"|出口管制|是否合法|能否开立|法规要求|法域|合规要求",
     re.IGNORECASE,
 )
 # Capability/help questions must stay after edit/audit/regulatory actions: a real "帮我改写" request
@@ -33,21 +39,29 @@ _HELP = re.compile(
     re.IGNORECASE,
 )
 _HELP_EN = re.compile(
-    r"\b(what can you do|what can this assistant not do|what can't (you|this assistant) do"
-    r"|how (should|do) i (ask|use)|how can i ask|what questions can i ask|usage guide)\b",
+    _L + r"(what can you do|what can this assistant not do|what can't (you|this assistant) do"
+    r"|how (should|do) i (ask|use)|how can i ask|what questions can i ask|usage guide)" + _R,
     re.IGNORECASE,
 )
 
 # A's help sources are fixtures; C can replace this with a configured per-language mapping.
 HELP_SOURCE_IDS = {"zh-CN": "KS-HELP-001", "en": "KS-HELP-002"}
 HELP_SOURCE_ID = HELP_SOURCE_IDS["zh-CN"]
-_DOCUMENT = re.compile(r"\b(this document|selected text|selection|the document)\b|这段|本文|选区|当前文档", re.IGNORECASE)
-_RULE = re.compile(r"\b(urdg|isp98|ucp|isbp|rule|clause|guarantee|standby)\b|条款|规则|惯例|保函", re.IGNORECASE)
+_DOCUMENT = re.compile(
+    _L + r"(this document|selected text|selection|the document)" + _R
+    + r"|这段|本文|选区|当前文档",
+    re.IGNORECASE,
+)
+_RULE = re.compile(
+    _L + r"(urdg|isp98|ucp|isbp|rule|clause|guarantees?|standby)" + _R
+    + r"|条款|规则|惯例|保函",
+    re.IGNORECASE,
+)
 _PRODUCT = re.compile(
-    r"\b(lock|submit|version|import|editor|audit|save|toolbar|panel|scan|ocr|log|export|attachment"
+    _L + r"(lock|submit|version|import|editor|audit|save|toolbar|panel|scan|ocr|log|export|attachment"
     r"|approval|amount|limit|sanction|records?|documents?|application|apply|materials?|fees?|charges?"
-    r"|cancellation|release|processing|rejection)\b"
-    r"|编辑锁|提交|版本|导入|编辑器|工具栏|保存|面板|审查|检查|扫描|文件|日志|导出|附件|审批|金额|上限|制裁|记录",
+    r"|cancellation|release|processing|rejection)" + _R
+    + r"|编辑锁|提交|版本|导入|编辑器|工具栏|保存|面板|审查|检查|扫描|文件|日志|导出|附件|审批|金额|上限|制裁|记录",
     re.IGNORECASE,
 )
 _APPLICABILITY = re.compile(r"\b(appl(y|ies|icable)|scope)\b|适用|是否适用|适用于", re.IGNORECASE)

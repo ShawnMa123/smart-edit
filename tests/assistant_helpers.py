@@ -34,7 +34,14 @@ def make_store(tmp_path: Path, *, seed: bool = True, name: str = "assistant.db")
 
 
 def make_services(
-    tmp_path: Path, *, seed: bool = True, retriever=None, gateway=None
+    tmp_path: Path,
+    *,
+    seed: bool = True,
+    retriever=None,
+    gateway=None,
+    egress=None,
+    web=None,
+    settings=None,
 ) -> AssistantServices:
     store = make_store(tmp_path, seed=seed)
     return AssistantServices(
@@ -49,14 +56,33 @@ def make_services(
         ids=SystemIds(),
         knowledge_admin=KnowledgeService(store),
         mode="test",
+        egress=egress,
+        web=web,
+        settings=settings,
     )
 
 
 def make_service(
-    tmp_path: Path, *, seed: bool = True, retriever=None, gateway=None, deadline_seconds: int = 60
+    tmp_path: Path,
+    *,
+    seed: bool = True,
+    retriever=None,
+    gateway=None,
+    egress=None,
+    web=None,
+    settings=None,
+    deadline_seconds: int = 60,
 ) -> AssistantService:
     return AssistantService(
-        make_services(tmp_path, seed=seed, retriever=retriever, gateway=gateway),
+        make_services(
+            tmp_path,
+            seed=seed,
+            retriever=retriever,
+            gateway=gateway,
+            egress=egress,
+            web=web,
+            settings=settings,
+        ),
         deadline_seconds=deadline_seconds,
     )
 

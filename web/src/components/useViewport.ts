@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-/** The prototype's breakpoint: three panes at ≥ 1366 px, one pane plus tabs below it (design D8). */
-export const NARROW_QUERY = '(max-width: 1365px)';
+/** The reference prototype switches from rail + three panes at 960px. */
+export const NARROW_QUERY = '(max-width: 960px)';
 
 const matchesNarrow = (): boolean =>
   typeof window !== 'undefined' && typeof window.matchMedia === 'function'

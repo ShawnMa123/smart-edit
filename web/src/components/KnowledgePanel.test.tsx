@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AssistantClient } from '../api/assistant';
-import type { Answer, AssistantSelection, Run, Session } from '../api/assistantTypes';
+import type { Answer, AssistantSelection, Capabilities, Run, Session } from '../api/assistantTypes';
 import { ApiError, explainError } from '../api/errors';
 import { KnowledgePanel } from './KnowledgePanel';
 
@@ -200,6 +200,30 @@ describe('KnowledgePanel', () => {
     expect(screen.getByRole('button', { name: 'What can you do?' })).toBeTruthy();
   });
 
+  it('reports a completed knowledge run to the activity callback', async () => {
+    const onActivity = vi.fn();
+    render(
+      <KnowledgePanel
+        documentId="doc-1"
+        digest={'a'.repeat(64)}
+        text="text"
+        locale="en"
+        client={fakeClient()}
+        pollDelayMs={0}
+        onActivity={onActivity}
+      />,
+    );
+
+    await ask();
+    await waitFor(() =>
+      expect(onActivity).toHaveBeenCalledWith(
+        'knowledge',
+        'Knowledge answer',
+        'Knowledge answer: answered',
+      ),
+    );
+  });
+
   it('labels the answer as fixture-backed and renders claims, citations and limitations', async () => {
     const client = fakeClient();
     renderPanel(client);
@@ -392,5 +416,201 @@ describe('KnowledgePanel', () => {
     await screen.findByText('Answer · answered');
     expect(screen.getByText(/bound to an older document snapshot/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start new conversation' })).toBeTruthy();
+  });
+});
+
+describe('web layer opt-in (knowledge-retrieval-layers)', () => {
+  const toggle = () =>
+    screen.getByRole('checkbox', { name: /Search the web for the latest/i }) as HTMLInputElement;
+
+  it('is off by default, explains the boundary, and sends web_search false', async () => {
+    const client = fakeClient();
+    renderPanel(client);
+
+    expect(toggle().checked).toBe(false);
+    expect(screen.getByText(/Off: only published sources/i)).toBeTruthy();
+
+    await ask();
+    expect(client.createRun).toHaveBeenCalledWith(
+      'sess_1',
+      expect.objectContaining({ web_search: false }),
+      expect.any(String),
+      expect.anything(),
+    );
+  });
+
+  it('previews what will and will not be sent when enabled', async () => {
+    const client = fakeClient();
+    renderPanel(client);
+
+    await userEvent.click(toggle());
+
+    expect(toggle().checked).toBe(true);
+    expect(screen.getByText(/Will send: the screened question only/i)).toBeTruthy();
+    expect(screen.getByText(/Will not send: document text/i)).toBeTruthy();
+
+    await ask();
+    expect(client.createRun).toHaveBeenCalledWith(
+      'sess_1',
+      expect.objectContaining({ web_search: true }),
+      expect.any(String),
+      expect.anything(),
+    );
+  });
+
+  it('shows the blocking reason instead of pretending nothing was found', async () => {
+    const blocked: Answer = {
+      ...ANSWER,
+      retrieval: [
+        { layer: 'web', status: 'blocked', detail: 'contains_selection', retrieved_at: null },
+      ],
+    };
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(blocked)) }));
+
+    await ask();
+
+    expect(await screen.findByText(/Web search blocked \(contains_selection\)/i)).toBeTruthy();
+  });
+
+  it('says when the web layer failed instead of implying live verification', async () => {
+    const failed: Answer = {
+      ...ANSWER,
+      retrieval: [{ layer: 'web', status: 'failed', detail: 'timeout', retrieved_at: null }],
+    };
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(failed)) }));
+
+    await ask();
+
+    expect(await screen.findByText(/Web search did not complete/i)).toBeTruthy();
+  });
+
+  it('groups citations by source and labels web evidence as unverified', async () => {
+    const withWeb: Answer = {
+      ...ANSWER,
+      processor: 'doubao:seed-1',
+      retrieval: [
+        { layer: 'web', status: 'ok', detail: null, retrieved_at: '2026-11-16T00:00:00Z' },
+      ],
+      citations: [
+        ANSWER.citations[0],
+        {
+          id: 'cite_web',
+          source_type: 'approved_web',
+          title: 'ICC guidance on demand guarantee claims',
+          source_version: '2026-11-16T00:00:00Z',
+          locator: {
+            url: 'https://iccwbo.org/opinions/claims',
+            domain: 'iccwbo.org',
+            retrieved_at: '2026-11-16T00:00:00Z',
+          },
+        },
+      ],
+    };
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(withWeb)) }));
+
+    await ask();
+    await screen.findByText('Answer · answered');
+
+    expect(screen.getByText('Published corpus (1)')).toBeTruthy();
+    expect(screen.getByText('Web (1)')).toBeTruthy();
+    expect(screen.getByText(/Unverified third-party/)).toBeTruthy();
+    expect(screen.getByText(/Processor: doubao:seed-1/)).toBeTruthy();
+    expect(screen.getByText(/Stored question: redacted/i)).toBeTruthy();
+    expect(screen.queryByText('Document (1)')).toBeNull();
+  });
+
+  it('labels general web answers as unverified and groups them separately', async () => {
+    const general: Answer = {
+      ...ANSWER,
+      processor: 'doubao:seed-1',
+      retrieval: [
+        { layer: 'web', status: 'ok', detail: 'general_web', retrieved_at: '2026-11-16T00:00:00Z' },
+      ],
+      citations: [
+        {
+          id: 'web_1',
+          source_type: 'general_web',
+          title: 'Market update',
+          source_version: '2026-11-16T00:00:00Z',
+          locator: {
+            url: 'https://iccwbo.org/news/1',
+            domain: 'iccwbo.org',
+            retrieved_at: '2026-11-16T00:00:00Z',
+          },
+        },
+      ],
+      limitations: ['This answer comes from general web search: unverified third-party content.'],
+    };
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(general)) }));
+
+    await ask();
+    await screen.findByText('Answer · answered');
+
+    expect(screen.getByText('General web (1)')).toBeTruthy();
+    expect(screen.getByText(/General web answer — unverified/i)).toBeTruthy();
+    expect(screen.queryByText(/^Web \(\d+\)$/)).toBeNull();
+    expect(screen.queryByText('Published corpus (1)')).toBeNull();
+  });
+});
+
+const CAPABILITIES = (over: Partial<Capabilities> = {}): Capabilities => ({
+  model: { configured: false, label: null, approved_processor: false },
+  layers: { local: true, approved_web: false, general_web: false },
+  egress: { policy_version: 'v1', allowed_domains: 5, loaded: true },
+  web: { provider: 'off' },
+  ...over,
+});
+
+describe('capabilities and provenance (assistant-transparency)', () => {
+  it('disables the toggle when the server has no web layer', async () => {
+    const client = fakeClient({ getCapabilities: vi.fn(async () => CAPABILITIES()) });
+    renderPanel(client);
+
+    const toggle = await screen.findByRole('checkbox', { name: /Search the web for the latest/i });
+    expect((toggle as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText(/Web is not available on this server/i)).toBeTruthy();
+  });
+
+  it('relabels the toggle when only the general channel exists', async () => {
+    const client = fakeClient({
+      getCapabilities: vi.fn(async () =>
+        CAPABILITIES({ layers: { local: true, approved_web: false, general_web: true } }),
+      ),
+    });
+    renderPanel(client);
+
+    expect(
+      await screen.findByRole('checkbox', { name: /Ask general web \(unverified\)/i }),
+    ).toBeTruthy();
+  });
+
+  it('explains a skipped web search from the answer summary', async () => {
+    const skipped: Answer = {
+      ...ANSWER,
+      route: 'published',
+      web: {
+        requested: true,
+        status: 'skipped',
+        reason: 'web_unavailable',
+        hint: 'This server has no web provider configured.',
+      },
+    };
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(skipped)) }));
+
+    await ask();
+
+    expect(await screen.findByText(/Web search skipped \(web_unavailable\)/i)).toBeTruthy();
+    expect(screen.getByText(/This server has no web provider configured/i)).toBeTruthy();
+    expect(screen.getByText(/Answered from published sources · web not needed/i)).toBeTruthy();
+  });
+
+  it('does not invent a web explanation for old answers without the summary', async () => {
+    renderPanel(fakeClient());
+
+    await ask();
+    await screen.findByText('Answer · answered');
+
+    expect(screen.queryByText(/web not needed/i)).toBeNull();
+    expect(screen.queryByText(/Web search skipped/i)).toBeNull();
   });
 });

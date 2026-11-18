@@ -16,6 +16,7 @@ dependencies = [
     "pydantic>=2",
     "pymupdf>=1.24,<2",  # 2.x pulls in pymupdf-layout/onnxruntime, unused by the POC (see agent-normalize/design.md §15)
     "PyYAML",
+    "httpx",  # knowledge assistant: approved model provider + web/RAG adapters
 ]
 
 [project.optional-dependencies]

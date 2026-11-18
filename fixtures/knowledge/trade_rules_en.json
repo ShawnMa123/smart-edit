@@ -1,11 +1,11 @@
 {
   "title": "Synthetic Trade Rules Summary (demo, not official)",
-  "version_id": "KV-RULES-001-EN-v1",
+  "version_id": "KV-RULES-001-EN-v2",
   "source": {
     "source_id": "KS-RULES-001-EN",
     "source_type": "trade_rule",
     "publisher": "Synthetic Trade Rules Demo",
-    "version_label": "demo-1",
+    "version_label": "demo-2",
     "language": "en",
     "scope": "organization",
     "license_reference": "synthetic-demo-not-official",
@@ -142,6 +142,16 @@
       "locator": {
         "section": "ISP98 and ISBP 821 points",
         "page": 21
+      }
+    },
+    {
+      "chunk_id": "KC-RULES-001-EN-13",
+      "section": "Guarantee definition",
+      "title_path": "Trade rules / Guarantee / Definition",
+      "text": "Synthetic summary: a guarantee (also called a demand guarantee or independent guarantee) is a written undertaking by a guarantor, usually a bank, to pay the beneficiary a stated amount when the beneficiary presents a complying written demand. Its core parties are the applicant, the beneficiary and the guarantor. A guarantee supports performance or payment obligations under an underlying commercial contract while remaining independent of that contract. This is a demo summary, not the official ICC text and not legal advice.",
+      "locator": {
+        "section": "Guarantee definition",
+        "page": 2
       }
     }
   ]

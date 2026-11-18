@@ -197,7 +197,7 @@ def test_seed_fixtures_are_synthetic_with_version_and_effective_period(tmp_path)
     for payload in payloads:
         source = payload["source"]
         assert source["synthetic"] is True
-        assert source["version_label"] in ("demo-1", "demo-2")
+        assert source["version_label"] in ("demo-1", "demo-2", "demo-3")
         assert source["effective_from"]
         assert "合成" in payload["title"] or "synthetic" in payload["title"].lower()
         assert source["license_reference"].startswith("synthetic")
@@ -207,12 +207,12 @@ def test_seed_fixtures_are_synthetic_with_version_and_effective_period(tmp_path)
         assert version["submitted_by"] == "user_demo_author"
 
 
-def test_demo_corpus_has_72_published_chunks(tmp_path):
+def test_demo_corpus_has_74_published_chunks(tmp_path):
     store = SQLiteStore(tmp_path / "k.db")
     KnowledgeService(store).seed()
 
     rows = store.published_chunks()
-    assert len(rows) == 72
+    assert len(rows) == 74
     assert {row["source_id"] for row in rows} == {
         "KS-PRODUCT-001",
         "KS-RULES-001",
@@ -225,11 +225,11 @@ def test_demo_corpus_has_72_published_chunks(tmp_path):
     }
     assert {row["version_id"] for row in rows} == {
         "KV-PRODUCT-001-v2",
-        "KV-RULES-001-v2",
+        "KV-RULES-001-v3",
         "KV-POLICY-001-v2",
         "KV-HELP-001-v1",
         "KV-PRODUCT-001-EN-v1",
-        "KV-RULES-001-EN-v1",
+        "KV-RULES-001-EN-v2",
         "KV-POLICY-001-EN-v1",
         "KV-HELP-002-v1",
     }

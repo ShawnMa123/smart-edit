@@ -6,6 +6,7 @@ import type { DraftView } from '../api/documents';
 import type { DownstreamSystemStore } from '../automation/downstreamSystemStore';
 import type { TemplateStore } from '../automation/templateStore';
 import type { RichDocument } from '../rich/richDocument';
+import type { ActivityKind } from '../workspace/activityStore';
 import { AuditPanel, type AuditPanelProps } from './AuditPanel';
 import { AutomationPanel } from './AutomationPanel';
 import { KnowledgePanel } from './KnowledgePanel';
@@ -74,6 +75,7 @@ export interface KnowledgePanelBinding {
   client?: AssistantClient;
   options?: AssistantOptions;
   pollDelayMs?: number;
+  onActivity?: (kind: ActivityKind, action: string, detail: string) => void;
 }
 
 export interface AutomationPanelBinding {

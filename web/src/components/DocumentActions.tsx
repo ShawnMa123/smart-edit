@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 
-interface UnavailableAction {
+export interface UnavailableAction {
   id: string;
   label: string;
   reason: string;
@@ -8,7 +8,6 @@ interface UnavailableAction {
 
 /** Actions the reference prototype offers that this build cannot perform (task 6.4). */
 export const UNAVAILABLE_ACTIONS: UnavailableAction[] = [
-  { id: 'format', label: 'Formatting', reason: 'Rich-text formatting (ED-02) is not implemented in this build.' },
   { id: 'export', label: 'Export', reason: 'Export (ED-09) is not implemented in this build.' },
   { id: 'approve', label: 'Start approval', reason: 'The approval workflow (§10) is not implemented in this build.' },
 ];
@@ -19,13 +18,17 @@ export const IMPORT_ACCEPT = '.pdf,.docx,.png,.jpg,.jpeg';
 export interface DocumentActionsProps {
   /** Hand the chosen files to the importer; the button never uploads on its own. */
   onImport?: (files: File[]) => void;
+  /** Opens the explicit Comments placeholder; this build has no comment service. */
+  onComments?: () => void;
+  /** Reports a deliberate activation of an action this build cannot perform. */
+  onUnavailableAction?: (action: UnavailableAction) => void;
 }
 
 /**
  * Header/footer actions from the prototype. `Import file` is real (it opens a picker and hands the
  * files over); every other action is labelled and says so instead of appearing to succeed.
  */
-export function DocumentActions({ onImport }: DocumentActionsProps) {
+export function DocumentActions({ onImport, onComments, onUnavailableAction }: DocumentActionsProps) {
   const [message, setMessage] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -55,6 +58,15 @@ export function DocumentActions({ onImport }: DocumentActionsProps) {
             if (files.length > 0) onImport?.(files);
           }}
         />
+        <button
+          type="button"
+          className="quiet"
+          data-testid="comments"
+          title="Comments are not available in this build"
+          onClick={() => onComments?.()}
+        >
+          Comments
+        </button>
         {UNAVAILABLE_ACTIONS.map((action) => (
           <button
             key={action.id}
@@ -63,7 +75,10 @@ export function DocumentActions({ onImport }: DocumentActionsProps) {
             data-unavailable="true"
             aria-label={`${action.label} · not implemented`}
             title={action.reason}
-            onClick={() => setMessage(action.reason)}
+            onClick={() => {
+              setMessage(action.reason);
+              onUnavailableAction?.(action);
+            }}
           >
             {action.label}
             <span className="tag tag--muted" aria-hidden="true">

@@ -17,7 +17,10 @@ export type RunStage =
   | 'queued'
   | 'resolving_context'
   | 'analyzing'
+  | 'screening'
   | 'retrieving'
+  | 'local_retrieval'
+  | 'web_search'
   | 'composing'
   | 'reviewing'
   | 'publishing'
@@ -32,7 +35,8 @@ export type SourceType =
   | 'internal_policy'
   | 'document_snapshot'
   | 'attachment'
-  | 'approved_web';
+  | 'approved_web'
+  | 'general_web';
 
 export interface AssistantSelection {
   nodeId: string;
@@ -56,6 +60,29 @@ export interface Citation {
   locator: Record<string, unknown>;
 }
 
+export interface RetrievalLayer {
+  layer: 'local' | 'rag' | 'web';
+  status: 'ok' | 'failed' | 'skipped' | 'blocked';
+  detail: string | null;
+  retrieved_at: string | null;
+}
+
+export type AnswerRoute = 'published' | 'document' | 'general_web' | 'handoff' | 'none';
+
+export interface WebSummary {
+  requested: boolean;
+  status: 'off' | 'skipped' | 'ok' | 'blocked' | 'failed';
+  reason: string | null;
+  hint: string | null;
+}
+
+export interface Capabilities {
+  model: { configured: boolean; label: string | null; approved_processor: boolean };
+  layers: { local: boolean; approved_web: boolean; general_web: boolean };
+  egress: { policy_version: string; allowed_domains: number; loaded: boolean };
+  web: { provider: 'off' | 'fixture' | 'http' };
+}
+
 export interface Answer {
   schema_version: '1.0';
   outcome: Outcome;
@@ -67,6 +94,10 @@ export interface Answer {
   clarification_questions: string[];
   context_stale: boolean;
   handoff_target: HandoffTarget | null;
+  retrieval?: RetrievalLayer[];
+  processor?: string | null;
+  route?: AnswerRoute | null;
+  web?: WebSummary | null;
 }
 
 export interface AssistantErrorBody {

@@ -32,6 +32,13 @@ export interface RichEditorProps {
   onKeepLocal?: () => void;
   /** Right-click action for turning the current selection into a variable. */
   onMarkVariable?: (selection: AssistantSelection) => void;
+  /** Real lock actions; App owns the API calls. */
+  onReleaseLock?: () => void | Promise<void>;
+  onStartEditing?: () => void | Promise<void>;
+  /** Opens the honest shared-submission placeholder. */
+  onSubmitVersion?: () => void;
+  /** Visible lock-action failure/release notice. */
+  lockNotice?: string | null;
   /** Reports whether the rich surface or the textarea fallback is active (variable actions depend on it). */
   onModeChange?: (mode: 'rich' | 'fallback') => void;
   /** Document identity for the page header; never an example reference (design D4). */
@@ -53,11 +60,14 @@ interface Tool {
   active?: (editor: Editor) => boolean;
 }
 
+export const BLOCK_FORMATS = [
+  { value: 'paragraph', label: 'Paragraph', run: (e: Editor) => e.chain().focus().setParagraph().run() },
+  { value: 'heading-1', label: 'Heading 1', run: (e: Editor) => e.chain().focus().toggleHeading({ level: 1 }).run() },
+  { value: 'heading-2', label: 'Heading 2', run: (e: Editor) => e.chain().focus().toggleHeading({ level: 2 }).run() },
+  { value: 'heading-3', label: 'Heading 3', run: (e: Editor) => e.chain().focus().toggleHeading({ level: 3 }).run() },
+] as const;
+
 export const TOOLS: Tool[] = [
-  { label: '¶', title: 'Paragraph', run: (e) => e.chain().focus().setParagraph().run(), active: (e) => e.isActive('paragraph') },
-  { label: 'H1', title: 'Heading 1', run: (e) => e.chain().focus().toggleHeading({ level: 1 }).run(), active: (e) => e.isActive('heading', { level: 1 }) },
-  { label: 'H2', title: 'Heading 2', run: (e) => e.chain().focus().toggleHeading({ level: 2 }).run(), active: (e) => e.isActive('heading', { level: 2 }) },
-  { label: 'H3', title: 'Heading 3', run: (e) => e.chain().focus().toggleHeading({ level: 3 }).run(), active: (e) => e.isActive('heading', { level: 3 }) },
   { label: 'B', title: 'Bold', run: (e) => e.chain().focus().toggleBold().run(), active: (e) => e.isActive('bold') },
   { label: 'I', title: 'Italic', run: (e) => e.chain().focus().toggleItalic().run(), active: (e) => e.isActive('italic') },
   { label: 'U', title: 'Underline', run: (e) => e.chain().focus().toggleUnderline().run(), active: (e) => e.isActive('underline') },
@@ -141,6 +151,10 @@ export function RichEditor(props: RichEditorProps) {
       onOverwriteLocal={props.onOverwriteLocal}
       onKeepLocal={props.onKeepLocal}
       onMarkVariable={props.onMarkVariable}
+      onReleaseLock={props.onReleaseLock}
+      onStartEditing={props.onStartEditing}
+      onSubmitVersion={props.onSubmitVersion}
+      lockNotice={props.lockNotice ?? null}
       documentId={props.documentId}
       versions={props.versions ?? 0}
       draftRevision={props.draftRevision ?? null}
@@ -161,6 +175,10 @@ function Surface({
   onOverwriteLocal,
   onKeepLocal,
   onMarkVariable,
+  onReleaseLock,
+  onStartEditing,
+  onSubmitVersion,
+  lockNotice,
   documentId,
   versions,
   draftRevision,
@@ -177,6 +195,10 @@ function Surface({
   onOverwriteLocal?: () => void;
   onKeepLocal?: () => void;
   onMarkVariable?: (selection: AssistantSelection) => void;
+  onReleaseLock?: () => void | Promise<void>;
+  onStartEditing?: () => void | Promise<void>;
+  onSubmitVersion?: () => void;
+  lockNotice: string | null;
   documentId?: string;
   versions: number;
   draftRevision: number | null;
@@ -199,12 +221,22 @@ function Surface({
     };
   }, [editor, onSelection]);
   // Reactive read of the search plugin: `useEditor` alone does not re-render on every transaction.
-  const { total, current } = useEditorState({
+  const { total, current, block } = useEditorState({
     editor,
     selector: ({ editor: instance }) => {
       const storage = (instance.storage as { findAndReplace?: { results?: unknown[]; currentIndex?: number | null } })
         .findAndReplace;
-      return { total: storage?.results?.length ?? 0, current: storage?.currentIndex ?? null };
+      return {
+        total: storage?.results?.length ?? 0,
+        current: storage?.currentIndex ?? null,
+        block: instance.isActive('heading', { level: 1 })
+          ? 'heading-1'
+          : instance.isActive('heading', { level: 2 })
+            ? 'heading-2'
+            : instance.isActive('heading', { level: 3 })
+              ? 'heading-3'
+              : 'paragraph',
+      };
     },
   });
 
@@ -220,10 +252,15 @@ function Surface({
 
       {/* One status band, one source of truth (design D5). */}
       <div className="editor-status" data-testid="editor-status">
-        <strong>{versions > 0 ? `snapshot v${versions}` : 'no captured version'}</strong>
-        <span>{draftRevision === null ? 'no server draft' : `draft rev ${draftRevision}`}</span>
-        <span>{lockHeld ? 'lock: this session' : 'lock: unknown'}</span>
+        <span className="status-chip status-chip--strong">
+          {versions > 0 ? `snapshot v${versions}` : 'no captured version'}
+        </span>
+        <span className="status-chip">
+          {draftRevision === null ? 'no server draft' : `draft rev ${draftRevision}`}
+        </span>
+        <span className="status-chip">{lockHeld ? 'lock: this session' : 'lock: unknown'}</span>
         <span
+          className="status-chip"
           aria-live="polite"
           data-testid="save-state"
           style={{
@@ -250,7 +287,22 @@ function Surface({
       </div>
 
       <div className="toolbar" role="toolbar" aria-label="Formatting">
-        {[...TOOLS, ...TABLE_TOOLS].map((tool) => {
+        <select
+          className="toolbar-block-format"
+          aria-label="Paragraph style"
+          value={block}
+          onChange={(event) => {
+            const format = BLOCK_FORMATS.find((item) => item.value === event.target.value);
+            format?.run(editor);
+          }}
+        >
+          {BLOCK_FORMATS.map((format) => (
+            <option key={format.value} value={format.value}>
+              {format.label}
+            </option>
+          ))}
+        </select>
+        {TOOLS.map((tool) => {
           const active = tool.active ? tool.active(editor) : false;
           return (
             <button
@@ -265,6 +317,22 @@ function Surface({
             </button>
           );
         })}
+        <details className="toolbar-menu">
+          <summary>Table</summary>
+          <div className="toolbar-menu-panel">
+            {TABLE_TOOLS.map((tool) => (
+              <button
+                key={tool.title}
+                type="button"
+                title={tool.title}
+                aria-label={tool.title}
+                onClick={() => tool.run(editor)}
+              >
+                {tool.label}
+              </button>
+            ))}
+          </div>
+        </details>
         <button
           type="button"
           title="Find and replace"
@@ -371,9 +439,36 @@ function Surface({
         </article>
       </div>
 
+      {lockNotice ? (
+        <p className="notice notice--warn tiny" role="status">
+          {lockNotice}
+        </p>
+      ) : null}
+
       <div className="editor-footer">
-        <span>{richToPlainText(document).length} characters in the audit text</span>
-        <span className="muted">Paper view · the projection above is unchanged</span>
+        <div className="editor-footer-copy">
+          <span>{richToPlainText(document).length} characters in the audit text</span>
+          <span className="muted">Paper view · the projection above is unchanged</span>
+        </div>
+        <div className="editor-footer-actions">
+          <button
+            type="button"
+            disabled={!lockHeld}
+            onClick={() => void onReleaseLock?.()}
+          >
+            Release lock
+          </button>
+          <button
+            type="button"
+            disabled={lockHeld}
+            onClick={() => void onStartEditing?.()}
+          >
+            Start editing
+          </button>
+          <button type="button" className="primary" onClick={() => onSubmitVersion?.()}>
+            Submit new version
+          </button>
+        </div>
       </div>
     </section>
   );

@@ -32,8 +32,10 @@ PORT=8010 WEB_PORT=5174 ./scripts/dev.sh     # 换端口，前端代理自动跟
 ```
 
 Ctrl+C **一起停**；如果终端已经关掉、或进程是 `nohup` 起的，用 `./scripts/stop.sh` 收尾。
-脚本会先清掉这两个端口上的残留进程、等后端 `/openapi.json` 就绪再起前端，
-后端日志写到临时文件并在退出时把路径打出来。
+脚本会先清掉这两个端口上的残留进程、等后端 `/openapi.json` 就绪再起前端。
+后端/前端日志都会以 `[backend]` / `[web]` 前缀实时打印在终端，同时落到
+`runs/logs/backend-<时间>.log` 与 `runs/logs/web-<时间>.log`；退出时也会打印这两个路径。
+`SMART_EDIT_LOG_LEVEL=DEBUG ./scripts/dev.sh` 可额外看到每次 GET/轮询请求。
 
 ### 两个终端（想分别盯着两边日志时）
 
@@ -281,15 +283,17 @@ DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**�
 右栏除了 **Rule audit**，还有 **Knowledge Q&A**（Legal 仍明确标 `not implemented`；Automation 为 `fixture only`）。它只做
 "解释 + 引用 + 弃答/澄清/转交"，**不改正文、不审批、不提交、不联网**。
 
-当前演示语料为 **8 个 synthetic source / 72 chunks**（中文 36 + 英文 36：产品 12、规则 12、内部政策 8、帮助指南 4，各一份英文镜像），全部标
+当前演示语料为 **8 个 synthetic source / 74 chunks**（中文 37 + 英文 37：产品 12、规则 13、内部政策 8、帮助指南 4，各一份英文镜像），全部标
 `Fixture-backed`；评测集为 **33 题**（31 个回答题 + 2 个澄清题）。已有本地 `runs/assistant.db` 会在 local/test 启动时补种/升级；若补种失败，删除重建或按下面的 CLI 走 `import → review`。
 
 首次打开知识 tab 默认显示英文 **Can / Cannot / How** 引导卡片和 3 个英文快捷问题（有选区时为
 `What does this passage mean?`）。点击快捷问题只填入输入框，不会自动提交；第一次回答后折叠为 `Show examples`。
 
 可直接演示的问题：`What can you do?`、`What can this assistant not do?`、`How should I ask a question?`、
-`What documents are required for the application?`、`What does URDG 758 article 20 require for claims?`。
-中文问题仍按中文语料回答；`URDG 758 是否适用于德国？` 会走澄清，`帮我改写这段条款` 会转交。
+`What documents are required for the application?`、`What does URDG 758 article 20 require for claims?`、
+`What is guarantee?`。
+中文问题仍按中文语料回答；`什么是guarantee` 会解释保函定义，`URDG 758 是否适用于德国？` 会走澄清，
+`帮我改写这段条款` 会转交。
 
 一次提问做的事（Network 面板可见）：
 
@@ -326,9 +330,66 @@ needs_handoff）、`support_level`（strong / qualified / insufficient / not_app
 # 实测：outcome_accuracy 1.0 · citation_hit_rate 1.0（31 个回答题 + 2 个澄清题）
 ```
 
-**A 不做（C 再做）**：PostgreSQL、真实 Worker/队列、真实身份/组织 ACL、宿主快照服务、真实模型与
-向量/重排、受控联网、语音/截图、管理端 UI、导出。`SMART_EDIT_ASSISTANT_MODE=production` 时检测到
-fake adapter 会**启动失败**，而不是假装生产可用。
+**A 不做（C 再做）**：PostgreSQL、真实 Worker/队列、真实身份/组织 ACL、宿主快照服务、真实向量检索与
+重排、真实外部搜索服务商与生产凭据、语音/截图、管理端 UI、导出。`SMART_EDIT_ASSISTANT_MODE=production`
+时，除“已登记 approved processor 的真实模型 provider”之外的配置会**启动失败**，而不是假装生产可用。
+
+### 8.1 联网 / 本地 RAG / 出站闸门（knowledge-assistant-web-rag）
+
+默认全部关闭：不配置 provider 时，知识助手仍只查本地已发布语料与文档快照，**不会发出任何外部请求**。
+
+| 能力 | 环境变量 | 默认 | 说明 |
+|---|---|---|---|
+| 真实模型 | `SMART_EDIT_ASSISTANT_MODEL=doubao:<model>` + `SMART_EDIT_ASSISTANT_API_KEY` | 空（fixture composer） | Ark **Responses API**（`POST /responses`、`stream:false`、无 tools）；输出必须通过 schema 校验 |
+| 处理方批准 | `SMART_EDIT_ASSISTANT_PROCESSOR_APPROVED=1` | 0 | 只有登记为 approved processor 才允许发送“问题 + 证据包”；未登记一律拒绝 |
+| 通用联网 | `SMART_EDIT_ASSISTANT_GENERAL_WEB=1` | 0 | 只回答"范围外且非转交"的问题，且只挂一个只读 `web_search` 工具；结果标 `general_web`，等级封顶 `qualified` |
+| 检索关键字上限 | `SMART_EDIT_ASSISTANT_WEB_SEARCH_MAX_KEYWORD` | 3（1–5） | 传给提供方搜索工具的 `max_keyword` |
+| 隐藏推理 | `SMART_EDIT_ASSISTANT_THINKING` | 0 | 默认关闭以降低延迟（单次 10–60s）；需要更强推理时设为 1 |
+| 联网层 | `SMART_EDIT_ASSISTANT_WEB=off\|fixture\|http` + `SMART_EDIT_ASSISTANT_WEB_ENDPOINT` | off | 每轮由用户勾选才执行；结果只保留准入域名内的页面 |
+| 本地 RAG | `SMART_EDIT_ASSISTANT_RAG_ENDPOINT`（可选 `…_RAG_API_KEY`） | 空（用本地词法检索） | 作为第二层；失败会显式降级，不会冒充“两层都查过” |
+| 出站策略 | `SMART_EDIT_ASSISTANT_EGRESS_POLICY` | `app/configs/egress.yaml` | 文件缺失/损坏 = 拒绝所有联网请求；判定结果写审计 |
+
+界面路径：**Knowledge Q&A → 勾选 `Search the web for the latest`** → 面板显示“将发送 / 不会发送”；
+回答的引用按 `Published corpus` / `Web` / `General web` / `Document` 分区；网页条目显示域名、抓取时间与
+`Unverified third-party`；被拦截时显示 `Web search blocked (<reason>)`，不会伪装成“没搜到”。
+
+通用联网通道（`GENERAL_WEB=1`）对**范围外且不转交**的问题生效（例如“今天有什么热点新闻”），
+并在 **in-scope 问题本地语料给不出任何可引用证据时回退**（回答会同时标注“已发布语料未能回答”和
+“未核验第三方内容”）。
+这类回答会额外显示 `General web answer — unverified third-party content` 提示，引用来自
+`general_web`，且规则版本/适用范围类结论永远不会由它支撑；改写、审查、法规类问题仍然转交。
+
+**为什么没联网？** 先看 `GET /assistant/capabilities`，不要靠猜：
+
+| 字段 | 含义 |
+|---|---|
+| `model.configured` / `label` | 是否配置了真实模型；`false` 时回答里的 `processor` 就是 `fixture` |
+| `model.approved_processor` | 是否允许把问题/证据发给该提供方 |
+| `layers.approved_web` | 是否装配了准入域名的自建 web provider |
+| `layers.general_web` | 是否允许提供方的只读 `web_search` 工具 |
+| `egress.loaded` / `allowed_domains` | 出站策略是否可用、准入域名数量 |
+
+**如何确认真的调用了豆包**：能力接口只能证明“已配置”，要证明“这一次真的发了请求”，看回答底部的
+`Processor: doubao:<model>` 与运行记录；`fixture` 表示未配置模型。知识类问题（产品 FAQ、规则解释、
+文档选区）在配置了豆包后不会回退到 fixture：调用失败会显式 `failed`（`MODEL_*`），不会静默改答。
+转交（handoff）、澄清（needs_clarification）和未启用通用联网的范围外问题由确定性分支生成，不调用模型，
+其 `processor` 仍显示配置的提供方标签，不能用它证明发生了模型调用。
+
+```bash
+# 当前部署能力（不泄露 key）
+curl -s http://127.0.0.1:8000/assistant/capabilities -H 'X-Demo-User: user_demo_01' | python3 -m json.tool
+
+# 最近几次运行实际使用的 processor
+sqlite3 runs/assistant.db \
+  "select id, json_extract(result_json,'\$.processor') from assistant_runs order by created_at desc limit 5;"
+```
+
+回答本身也会带 `route`（`published / document / general_web / handoff / none`）与
+`web` 摘要（`requested / status / reason / hint`）：面板据此显示
+`Web search skipped (web_unavailable)` 或 `Answered from published sources · web not needed`，
+两种开关都不具备时联网开关会直接置灰。
+
+回滚：把 `SMART_EDIT_ASSISTANT_WEB` 改回 `off`、`GENERAL_WEB` 置 0、清空模型配置即可回到原行为。
 
 **Sample input from UI
 ```

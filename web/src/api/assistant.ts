@@ -11,6 +11,7 @@ import type {
   AssistantErrorBody,
   AssistantSelection,
   AssistantSnapshot,
+  Capabilities,
   EvidenceDetail,
   Feedback,
   FeedbackInput,
@@ -139,6 +140,8 @@ export interface RunInput {
   applicable_on?: string | null;
   jurisdiction_codes?: string[];
   rule_version?: string | null;
+  /** Per-run opt-in for the web retrieval layer; omitted means off. */
+  web_search?: boolean;
 }
 
 const toServerSelection = (selection: AssistantSelection): Record<string, unknown> => ({
@@ -160,6 +163,7 @@ export function createRun(
     ...(input.applicable_on ? { applicable_on: input.applicable_on } : {}),
     ...(input.jurisdiction_codes?.length ? { jurisdiction_codes: input.jurisdiction_codes } : {}),
     ...(input.rule_version ? { rule_version: input.rule_version } : {}),
+    ...(input.web_search ? { web_search: true } : {}),
   };
   return requestJson(`/sessions/${encodeURIComponent(sessionId)}/runs`, {
     ...options,
@@ -218,6 +222,10 @@ export function putFeedback(
   });
 }
 
+export function getCapabilities(options: AssistantOptions = {}): Promise<Capabilities> {
+  return requestJson('/capabilities', { ...options, method: 'GET' });
+}
+
 export interface AssistantClient {
   createSnapshot: typeof createSnapshot;
   createSession: typeof createSession;
@@ -229,6 +237,7 @@ export interface AssistantClient {
   listMessages: typeof listMessages;
   getCitation: typeof getCitation;
   putFeedback: typeof putFeedback;
+  getCapabilities: typeof getCapabilities;
 }
 
 export const assistantClient: AssistantClient = {
@@ -242,4 +251,5 @@ export const assistantClient: AssistantClient = {
   listMessages,
   getCitation,
   putFeedback,
+  getCapabilities,
 };

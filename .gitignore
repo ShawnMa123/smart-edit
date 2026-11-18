@@ -30,3 +30,7 @@ runs/
 # Cline local tooling (workspace metadata, not part of the application)
 /.cline/
 /.clinerules/
+
+AI-Campaign_Note.md
+AI-Campaign-2026-Team04-ECS登录信息.txt
+team04-postgresql.txt

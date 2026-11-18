@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Request, Response
 from app.assistant.errors import AssistantError
 from app.assistant.schemas import (
     CancelDecision,
+    Capabilities,
     EvidenceDetail,
     Feedback,
     FeedbackInput,
@@ -35,6 +36,14 @@ def _request_id(request: Request) -> str:
 
 def _idempotency_key(request: Request) -> str | None:
     return request.headers.get("Idempotency-Key")
+
+
+@router.get("/capabilities", response_model=Capabilities)
+def capabilities(request: Request) -> Capabilities:
+    service = _service(request)
+    # Same identity resolution as every other endpoint; the response carries no user data.
+    service.principal(request)
+    return service.capabilities()
 
 
 @router.post("/snapshots", response_model=Snapshot, status_code=201)

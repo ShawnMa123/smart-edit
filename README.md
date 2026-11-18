@@ -71,7 +71,7 @@ ingest → parse → extract → normalize → reset → (Agent2 要件校验 �
 
 ```bash
 pip install -e .
-./scripts/dev.sh                       # 一条命令起后端 :8000（fixture 模型）+ 前端 :5173，Ctrl+C 一起停
+./scripts/dev.sh                       # 一条命令起后端 :8000 + 前端 :5173；日志实时打印，Ctrl+C 一起停
 ./scripts/stop.sh                      # 终端已关/进程 nohup 起时收尾（--all 连 e2e 端口一起清）
 uvicorn app.api.main:app --reload      # 只要后端时
 langgraph dev          # 在 LangSmith Studio 里看图和回放

@@ -23,7 +23,10 @@ RunStage = Literal[
     "queued",
     "resolving_context",
     "analyzing",
+    "screening",
     "retrieving",
+    "local_retrieval",
+    "web_search",
     "composing",
     "reviewing",
     "publishing",
@@ -41,6 +44,7 @@ SourceType = Literal[
     "document_snapshot",
     "attachment",
     "approved_web",
+    "general_web",
 ]
 Rating = Literal["helpful", "not_helpful"]
 FeedbackCategory = Literal["incorrect", "wrong_citation", "outdated", "irrelevant", "unclear"]
@@ -78,6 +82,57 @@ class Citation(Strict):
     locator: dict[str, Any] = Field(default_factory=dict)
 
 
+class RetrievalLayer(Strict):
+    layer: Literal["local", "rag", "web"]
+    status: Literal["ok", "failed", "skipped", "blocked"]
+    detail: str | None = None
+    retrieved_at: str | None = None
+
+
+Route = Literal["published", "document", "general_web", "handoff", "none"]
+WebStatus = Literal["off", "skipped", "ok", "blocked", "failed"]
+
+
+class WebSummary(Strict):
+    """Why the web layer did or did not contribute to this answer (design D5)."""
+
+    requested: bool = False
+    status: WebStatus = "off"
+    reason: str | None = None
+    hint: str | None = None
+
+
+class ModelCapability(Strict):
+    configured: bool
+    label: str | None = None
+    approved_processor: bool = False
+
+
+class LayerCapability(Strict):
+    local: bool = True
+    approved_web: bool = False
+    general_web: bool = False
+
+
+class EgressCapability(Strict):
+    policy_version: str = "unset"
+    allowed_domains: int = 0
+    loaded: bool = False
+
+
+class WebCapability(Strict):
+    provider: Literal["off", "fixture", "http"] = "off"
+
+
+class Capabilities(Strict):
+    """Read-only deployment view; never contains keys, URLs or user identifiers."""
+
+    model: ModelCapability
+    layers: LayerCapability
+    egress: EgressCapability
+    web: WebCapability
+
+
 class Answer(Strict):
     schema_version: Literal["1.0"] = "1.0"
     outcome: Outcome
@@ -88,6 +143,14 @@ class Answer(Strict):
     limitations: list[str] = Field(default_factory=list)
     clarification_questions: list[str] = Field(default_factory=list)
     context_stale: bool = False
+    # Retrieval transparency (knowledge-retrieval-layers): which layers ran and how they ended.
+    retrieval: list[RetrievalLayer] = Field(default_factory=list)
+    # Which model processor produced the answer ("fixture" or the configured provider label).
+    processor: str | None = None
+    # Which path produced this answer (design D4); null only for records written before this field.
+    route: Route | None = None
+    # Why the web layer did or did not contribute (design D5).
+    web: WebSummary | None = None
     handoff_target: Literal["automation", "standards_audit", "regulatory_advice"] | None = None
 
 
@@ -151,6 +214,8 @@ class RunCreate(Strict):
     applicable_on: str | None = Field(default=None, max_length=20)
     jurisdiction_codes: list[str] = Field(default_factory=list, max_length=20)
     rule_version: str | None = Field(default=None, max_length=120)
+    # Per-run opt-in for the web retrieval layer; default off (knowledge-retrieval-layers).
+    web_search: bool = False
 
 
 class Run(Strict):

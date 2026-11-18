@@ -15,11 +15,16 @@ from app.assistant.adapters import (
     assert_safe_mode,
     resolve_mode,
 )
+from app.assistant.egress import EgressPolicy
+from app.assistant.gateway import DoubaoGateway
 from app.assistant.pipeline import FixtureComposer
+from app.assistant.retrieval import FixtureWebSearch, HttpWebSearch, RagHttpAdapter
+from app.assistant.settings import AssistantSettings
 from app.assistant.store import SQLiteStore
 from app.knowledge.retriever import LexicalRetriever
 from app.knowledge.seed import seed_knowledge
 from app.knowledge.service import KnowledgeService
+from app.logging_setup import get_logger
 
 DB_ENV = "SMART_EDIT_ASSISTANT_DB"
 
@@ -29,14 +34,80 @@ def build_services(
     db_path: str | Path | None = None,
     mode: str | None = None,
     seed: bool = True,
+    settings: AssistantSettings | None = None,
+    retriever: object | None = None,
+    web: object | None = None,
+    gateway: object | None = None,
+    egress: object | None = None,
 ) -> AssistantServices:
     resolved = resolve_mode(mode)
-    assert_safe_mode(resolved)
+    resolved_settings = settings or AssistantSettings.from_env()
+    assert_safe_mode(resolved, resolved_settings)
     store = SQLiteStore(db_path or os.environ.get(DB_ENV, "runs/assistant.db"))
+    seed_result = {"imported": 0, "published": 0}
     if seed:
         # Reconcile even when the DB is non-empty: an older local DB must gain new fixture
         # sources/versions (e.g. English corpus, help guide) on restart.
-        seed_knowledge(store)
+        seed_result = seed_knowledge(store)
+
+    local_retriever = retriever
+    if local_retriever is None:
+        local_retriever = (
+            RagHttpAdapter(
+                endpoint=resolved_settings.rag_endpoint or "",
+                api_key=resolved_settings.rag_api_key,
+            )
+            if resolved_settings.rag_endpoint
+            else LexicalRetriever(store)
+        )
+
+    web_layer = web
+    if web_layer is None and resolved_settings.web == "fixture":
+        web_layer = FixtureWebSearch()
+    elif web_layer is None and resolved_settings.web == "http" and resolved_settings.web_endpoint:
+        web_layer = HttpWebSearch(
+            endpoint=resolved_settings.web_endpoint, api_key=resolved_settings.web_api_key
+        )
+
+    model_gateway = gateway
+    if model_gateway is None:
+        if resolved_settings.model and resolved_settings.model_name and resolved_settings.api_key:
+            model_gateway = DoubaoGateway(
+                api_key=resolved_settings.api_key,
+                base_url=resolved_settings.base_url,
+                model=resolved_settings.model_name,
+                thinking=resolved_settings.thinking,
+            )
+        else:
+            model_gateway = FixtureComposer()
+
+    policy = egress or EgressPolicy.from_file(resolved_settings.egress_policy)
+
+    logger = get_logger("bootstrap")
+    if resolved != "test":
+        # Safe to print: labels/booleans only, never keys, tokens or endpoints with credentials.
+        logger.info("mode=%s db=%s", resolved, store.path)
+        if seed:
+            logger.info(
+                "knowledge corpus: imported=%d published=%d published_chunks=%d",
+                seed_result["imported"],
+                seed_result["published"],
+                len(store.published_chunks()),
+            )
+        logger.info(
+            "assistant: model=%s approved=%s general_web=%s approved_web=%s web=%s rag=%s "
+            "egress=%s",
+            resolved_settings.processor_label if resolved_settings.model else "fixture",
+            resolved_settings.approved_processor,
+            bool(resolved_settings.general_web)
+            and bool(getattr(model_gateway, "supports_tool_search", False))
+            and policy is not None,
+            web_layer is not None,
+            resolved_settings.web,
+            bool(resolved_settings.rag_endpoint),
+            getattr(policy, "version", "unset"),
+        )
+
     return AssistantServices(
         store=store,
         identity=FakeIdentity(),
@@ -44,8 +115,11 @@ def build_services(
         snapshots=FakeSnapshots(store),
         audit=StoreAudit(store),
         clock=SystemClock(),
-        retriever=LexicalRetriever(store),
-        gateway=FixtureComposer(),
+        retriever=local_retriever,
+        gateway=model_gateway,
         knowledge_admin=KnowledgeService(store),
         mode=resolved,
+        egress=policy,
+        web=web_layer,
+        settings=resolved_settings,
     )

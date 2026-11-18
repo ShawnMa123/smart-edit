@@ -224,6 +224,15 @@ class SQLiteStore:
         )
 
     # --- messages / runs --------------------------------------------------------------------
+    def mark_message_redacted(self, message_id: str) -> None:
+        """Mark a stored user message as redacted (its outbound form differed from the original)."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE assistant_messages SET visibility='redacted' "
+                "WHERE id=:id AND role='user'",
+                {"id": message_id},
+            )
+
     def create_user_message(
         self, session_id: str, run_id: str, question: str, message_id: str | None = None
     ) -> dict[str, Any]:
@@ -403,6 +412,13 @@ class SQLiteStore:
                 (new_id("audit"), request_id, run_id, event_type, actor,
                  json.dumps(payload, ensure_ascii=False), now_iso()),
             )
+
+    def list_audit(self, run_id: str) -> list[dict[str, Any]]:
+        """Audit trail for one run (test/diagnostic seam; payload stays JSON)."""
+        return self._all(
+            "SELECT * FROM assistant_audit WHERE run_id = ? ORDER BY created_at ASC, id ASC",
+            (run_id,),
+        )
 
     def get_idempotency(
         self, principal: str, method: str, path: str, key: str

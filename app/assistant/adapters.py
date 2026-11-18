@@ -23,12 +23,11 @@ def resolve_mode(env: str | None = None) -> str:
     return raw
 
 
-def assert_safe_mode(mode: str) -> None:
-    if mode == "production":
-        raise RuntimeError(
-            "knowledge assistant has only fake/local adapters in this build; "
-            "production must fail closed until identity/snapshot/model/knowledge adapters are approved"
-        )
+def assert_safe_mode(mode: str, settings: object | None = None) -> None:
+    """Fail closed unless production declares an approved external processor (design D5)."""
+    from app.assistant.settings import AssistantSettings, assert_production_safe
+
+    assert_production_safe(mode, settings if isinstance(settings, AssistantSettings) else None)
 
 
 class FakeIdentity:
@@ -99,3 +98,7 @@ class AssistantServices:
     ids: SystemIds = SystemIds()
     knowledge_admin: object | None = None
     mode: str = "local"
+    # Knowledge-assistant-web-rag: optional layers; unset means "no external call".
+    egress: object | None = None
+    web: object | None = None
+    settings: object | None = None

@@ -176,9 +176,9 @@ def test_build_services_reconciles_an_older_local_database(tmp_path):
             store._conn.execute("DELETE FROM knowledge_sources WHERE source_id = ?", (source_id,))
 
     services = build_services(db_path=path, mode="test")
-    assert len(services.store.published_chunks()) == 72
+    assert len(services.store.published_chunks()) == 74
     assert len(services.store.list_knowledge_versions_all()) == 8
 
     # Restarting again must not publish duplicates.
     build_services(db_path=path, mode="test")
-    assert len(services.store.published_chunks()) == 72
+    assert len(services.store.published_chunks()) == 74

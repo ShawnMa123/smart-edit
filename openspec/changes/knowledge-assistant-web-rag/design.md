@@ -180,3 +180,9 @@ EgressDecision {
 - 内部 RAG 服务的实际 endpoint、鉴权与返回字段；适配器骨架已就绪，缺的只是配置与映射。
 - allowed domains 与禁止字段清单的维护人、审批流程与更新频率。
 历史消息：联网轮次以 `visibility="redacted"` 保存 `outbound_query`；审计只记录理由码、提供方与查询的不可逆摘要（`sha256` 前缀），不记录正文。
+
+按外呼类型区分（egress spec 的"按外呼类型最小化"）：
+
+- `purpose=search`：只允许 `outbound_query` + `locale` + 公共规则编号 + 日期；文档内容与实体一律拒绝。
+- `purpose=compose`：仅当提供方在配置中登记为 `approved_processor` 时，允许发送问题与证据包（含 `document_snapshot` 片段）；仍禁止会话身份、附件原文件与未入选证据。
+- 未登记提供方：拒绝并给出可解释错误，不静默改用本地 composer 或另一提供方。

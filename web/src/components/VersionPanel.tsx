@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import { shortDigest } from '../snapshot';
 import type { VersionEntry } from '../versionStore';
 import { EmptyState } from './EmptyState';
@@ -13,6 +15,8 @@ export interface VersionPanelProps {
   onCapture: () => void;
   onRestore: (id: string) => void;
   onClear: () => void;
+  /** Called with exactly two selected version ids. */
+  onCompare?: (ids: [string, string]) => void;
   /** Real document metadata only; omitted fields are not rendered (design D6). */
   facts?: VersionFacts;
 }
@@ -29,8 +33,27 @@ export function VersionPanel({
   onCapture,
   onRestore,
   onClear,
+  onCompare,
   facts,
 }: VersionPanelProps) {
+  const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedForCompare((previous) =>
+      previous.filter((id) => versions.some((version) => version.id === id)),
+    );
+  }, [versions]);
+
+  const toggleCompare = (id: string) => {
+    setSelectedForCompare((previous) => {
+      if (previous.includes(id)) return previous.filter((selected) => selected !== id);
+      if (previous.length >= 2) return previous;
+      return [...previous, id];
+    });
+  };
+
+  const canCompare = selectedForCompare.length === 2 && Boolean(onCompare);
+
   return (
     <aside className="pane pane--versions" aria-label="Version history">
       <div className="row">
@@ -53,9 +76,20 @@ export function VersionPanel({
         <ol className="versions">
           {versions.map((version) => {
             const current = version.id === currentVersionId;
+            const selected = selectedForCompare.includes(version.id);
+            const selectionFull = selectedForCompare.length >= 2 && !selected;
             return (
               <li className="version" data-current={current} key={version.id}>
                 <div className="version-head">
+                  <label className="version-select">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${version.label} for comparison`}
+                      checked={selected}
+                      disabled={selectionFull}
+                      onChange={() => toggleCompare(version.id)}
+                    />
+                  </label>
                   <strong>{version.label}</strong>
                   <span className="muted tiny">{version.chars} chars</span>
                 </div>
@@ -82,13 +116,24 @@ export function VersionPanel({
           </button>
           <button
             type="button"
-            disabled
-            aria-disabled="true"
-            title="Structural version comparison (VER-04) is not implemented in this build"
+            disabled={!canCompare}
+            title={canCompare ? 'Compare the two selected versions' : 'Select two versions to compare'}
+            onClick={() => {
+              if (canCompare && onCompare) {
+                onCompare([selectedForCompare[0], selectedForCompare[1]]);
+              }
+            }}
           >
-            Compare versions — not implemented
+            Compare versions
           </button>
         </div>
+      ) : null}
+      {versions.length > 0 ? (
+        <p className="tiny muted">
+          {selectedForCompare.length === 2
+            ? 'Two versions selected.'
+            : 'Select two versions to compare.'}
+        </p>
       ) : null}
       {versions.length > 0 ? (
         <button type="button" className="quiet tiny" onClick={onClear}>
