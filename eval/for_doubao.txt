@@ -1,0 +1,161 @@
+你是独立评测复核员。任务：不看任何已有结论，独立产出判定表。
+
+【硬性约束】
+- 只使用下面我贴给你的材料；不要联网搜索，不要假设存在其他文件，不要读取工作区。
+- 材料里没有 gold 标签、没有 supported/partial/unsupported 判定、没有任何指标数字；
+  如果哪里看起来像结论，那是原始数据的一部分，不要当答案。
+- 只判「主题是否相符 / 文档 ID 是否像真的」，不判法规条文的实质法律含义。
+- 不修改任何文件，只输出判定表；不要给综合分数或「通过/不通过」结论。
+- 无法独立判断的条目请明确标 UNDECIDED，留给人工终裁。
+
+【材料 1：L3 判据节选（spec 原文）】
+#### Scenario: 标注口径
+- **WHEN** 标注 `gold_rules`
+- **THEN** MUST 只标"业务上应该报什么"
+- **AND** MUST NOT 参考模型实际报了什么
+
+#### Scenario: 分歧处理
+- **WHEN** 两人对同一处是否应报存在分歧
+- **THEN** MUST 各标一半再交叉复核
+- **AND** MUST NOT 由单人决定
+
+#### Scenario: L2 指标
+- **WHEN** 计算 L2 指标
+- **THEN** MUST 报告 **blocking 漏报数**（最关键的指标）
+- **AND** SHOULD 报告误报数
+
+### Requirement: L3 检索与引用真值
+
+系统 SHALL 记录检索与引用的真值，用于评估 RAG 质量。
+
+#### Scenario: 检索真值
+- **WHEN** 构造 `eval/gold_retrieval.json`
+- **THEN** MUST 含 20 个问题，每题列出应命中的 `chunk_id`
+- **AND** 指标 MUST 为 **Recall@5**（应命中 chunk 是否在前 5）与 **MRR**（首个正确 chunk 的排名倒数）
+
+#### Scenario: 引用支持度抽检
+- **WHEN** 评估引用质量
+- **THEN** MUST 抽 50 条 claim 人工判定，结果写入 `eval/citations_50.csv`
+- **AND** 每条判定 MUST 为 `supported` / `partial` / `unsupported` 之一：
+
+| 判定 | 含义 |
+|---|---|
+| `supported` | 引用片段确实支持这句话 |
+| `partial` | 部分支持（数值对、条件缺） |
+| `unsupported` | 不支持或无关 |
+
+- **AND** 指标 MUST 为 `citation_support_rate = supported / 50` 与 `partial_support_rate = partial / 50`
+
+#### Scenario: 拒答率
+- **WHEN** 评估覆盖声明
+- **THEN** MUST 构造 10 个超出语料覆盖范围的问题，检查是否输出 `coverage.unavailable`
+- **AND** 指标 MUST 为 `refusal_rate = 正确拒答数 / 10`，目标 ≥ 0.9
+- **理由**：这一项最能体现"没检索到 ≠ 没问题"的设计意图
+
+【材料 2：语料范围】
+语料共 143 部法规，领域为：贸易 / 海关 / 进出口 / 出口管制 / 制裁 / CISG / WTO 协定。
+法域：AU、CN、EU、INT、JP、US、WTO。文档 ID 形如 cn-customs-law-2021、wto-adp、
+us-cfr-19-152、au-export-control-act-2020、au-autonomous-sanctions-act-2011。
+不包含：个人所得税、婚姻家庭、交通事故、专利诉讼、食品安全、劳动法、环保、
+医疗损害、商品房买卖、公司法等领域。
+
+【材料 3：20 道评测题 + 待复核的 gold 文档 ID】
+1. 进口货物的完税价格由哪些项目组成？ | gold=cn-customs-law-2021, cn-customs-valuation-measures-2013
+2. 办理海关事务担保应当提交哪些材料？ | gold=cn-customs-guarantee-2018
+3. 被担保人要求变更担保内容的，应当如何办理？ | gold=cn-customs-guarantee-2018
+4. 哪些情形下人民法院应认定当事人开立的独立保函？ | gold=cn-independent-guarantee-2020
+5. WTO反倾销协定下反倾销调查应如何发起？ | gold=wto-adp
+6. 中国反倾销调查的立案条件和程序是什么？ | gold=cn-anti-dumping-2004, cn-ad-cvd-1997
+7. CISG下卖方交付的货物不符合同，买方应在多长时间内通知？ | gold=cisg
+8. CISG对损害赔偿额如何计算？ | gold=cisg
+9. 美国海关对进口货物完税价格的估价方法有哪些？ | gold=us-cfr-19-152
+10. 美国商务部反倾销调查的程序规定是什么？ | gold=us-cfr-19-165
+11. 日本关税定率法对关税估价是如何规定的？ | gold=jp-kazei-teiritsu-hou
+12. 澳大利亚出口管制法对受管制货物的许可要求是什么？ | gold=au-export-control-act-2020
+13. 澳大利亚自治制裁如何指定受制裁的人和物？ | gold=au-autonomous-sanctions-act-2011
+14. WTO贸易便利化协定对预裁定有什么要求？ | gold=wto-tfa
+15. WTO保障措施的实施条件是什么？ | gold=wto-safeg, cn-safeguard-2004
+16. WTO进口许可程序协定对许可的透明度有什么要求？ | gold=wto-lic
+17. 非优惠原产地规则下如何判定货物的原产国？ | gold=cn-nonpreferential-origin-2018, cn-origin-2019, wto-ro
+18. 中国两用物项出口管制如何管理管制清单？ | gold=cn-export-control-law-2020, cn-dual-use-export-control-2024
+19. 美国EAR出口管制有哪些许可例外？ | gold=us-cfr-15-740
+20. OFAC经济制裁的资产冻结（SDN名单）如何执行？ | gold=us-cfr-31-501
+
+【材料 4：50 条 claim（只含 document / chunk_id / claim_text，不含任何判定标签）】
+1. document=进口货物的完税价格由哪些项目组成？海关审定完税价格规定 | chunk_id=e70c94238505da95 | claim=第一条 为了正确审查确定进出口货物的完税价格，根据《中华人民共和国海关法》（以下简称《海关法》）、《中华人民共和国进出口关税条例》的规定，制定本办法。
+2. document=进口货物的完税价格由哪些项目组成？海关审定完税价格规定 | chunk_id=104e688e5713ec82 | claim=第四十条 海关扣留货物、物品、运输工具以及账册、单据等资料的期限不得超过1年。
+3. document=进口货物的完税价格由哪些项目组成？海关审定完税价格规定 | chunk_id=849ba3fd7c90a71b | claim=1. The person concerned shall, for the purposes of customs controls, keep the documents and information referred to in A
+4. document=进口货物的完税价格由哪些项目组成？海关审定完税价格规定 | chunk_id=34846e5c5c6eb47e | claim=进口货物的收货人超过前款规定期限向海关申报的，由海关征收滞报金。
+5. document=进口货物的完税价格由哪些项目组成？海关审定完税价格规定 | chunk_id=0c38105fe34e313e | claim=第二条 海关审查确定进出口货物的完税价格，应当遵循客观、公平、统一的原则。
+6. document=办理海关事务担保应当提交书面申请及财产权利凭证 | chunk_id=104e688e5713ec82 | claim=第四十条 海关扣留货物、物品、运输工具以及账册、单据等资料的期限不得超过1年。
+7. document=办理海关事务担保应当提交书面申请及财产权利凭证 | chunk_id=849ba3fd7c90a71b | claim=1. The person concerned shall, for the purposes of customs controls, keep the documents and information referred to in A
+8. document=办理海关事务担保应当提交书面申请及财产权利凭证 | chunk_id=34846e5c5c6eb47e | claim=第二十四条 进口货物的收货人、出口货物的发货人应当向海关如实申报，交验进出口许可证件和有关单证。
+9. document=办理海关事务担保应当提交书面申请及财产权利凭证 | chunk_id=9c3ce07b887d93bd | claim=1. This Regulation establishes the Union Customs Code (the Code), laying down the general rules and procedures applicabl
+10. document=办理海关事务担保应当提交书面申请及财产权利凭证 | chunk_id=fd6a7d1778bf1c6e | claim=第十五条 办理担保，当事人应当提交书面申请以及真实、合法、有效的财产、权利凭证和身份或者资格证明等材料。
+11. document=独立保函载明见索即付，适用URDG758统一惯例 | chunk_id=d25033e32d4ba04f | claim=对不符合规定的担保，海关应当书面通知当事人不予接受，并说明理由。
+12. document=独立保函载明见索即付，适用URDG758统一惯例 | chunk_id=35cc2814f6fa408b | claim=前款所称的单据，是指独立保函载明的受益人应提交的付款请求书、违约声明、第三方签发的文件、法院判决、仲裁裁决、汇票、发票等表明发生付款到期事件的书面文件。
+13. document=独立保函载明见索即付，适用URDG758统一惯例 | chunk_id=82dd9df4f894fccf | claim=（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；
+14. document=独立保函载明见索即付，适用URDG758统一惯例 | chunk_id=1008bee7f0c0b65f | claim=第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。
+15. document=独立保函载明见索即付，适用URDG758统一惯例 | chunk_id=e9e4c206b8ca7620 | claim=第二条 当事人向海关申请提供担保，承诺履行法律义务，海关为当事人办理海关事务担保，适用本条例。
+16. document=反倾销调查立案申请与损害证据审查程序 | chunk_id=35cc2814f6fa408b | claim=第一条 本规定所称的独立保函，是指银行或非银行金融机构作为开立人，以书面形式向受益人出具的，同意在受益人请求付款并提交符合保函要求的单据时，向其支付特定款项或在保函最高金额内付款的承诺。
+17. document=反倾销调查立案申请与损害证据审查程序 | chunk_id=82dd9df4f894fccf | claim=（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；
+18. document=反倾销调查立案申请与损害证据审查程序 | chunk_id=1008bee7f0c0b65f | claim=第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。
+19. document=反倾销调查立案申请与损害证据审查程序 | chunk_id=b5d1e77f2812dd4f | claim=第二十二条 涉外独立保函未载明适用法律，开立人和受益人在一审法庭辩论终结前亦未就适用法律达成一致的，开立人和受益人之间因涉外独立保函而产生的纠纷适用开立人经常居所地法律；
+20. document=反倾销调查立案申请与损害证据审查程序 | chunk_id=4d5f8b42e17efedf | claim=第十三条 当事人以保函向海关提供担保的，保函应当以海关为受益人，并且载明下列事项：
+21. document=CISG国际货物销售合同货物不符的通知期限与损害赔偿 | chunk_id=2292eabbc23cc0c0 | claim=Publication and Administration of Trade Regulations
+22. document=CISG国际货物销售合同货物不符的通知期限与损害赔偿 | chunk_id=bd5b0b9f47e84213 | claim=any special external factors adversely affecting the export trade of the contracting party applying the restrictions.*
+23. document=CISG国际货物销售合同货物不符的通知期限与损害赔偿 | chunk_id=7cf0c3b3f13e6cc7 | claim=3. (a) If agreement among the interested contracting parties with respect to the action is not reached, the contracting 
+24. document=CISG国际货物销售合同货物不符的通知期限与损害赔偿 | chunk_id=3f691ce291693960 | claim=s of the kind described in paragraph 1 (a) of this Article might be operated so as to create serious obstacles to trade;
+25. document=CISG国际货物销售合同货物不符的通知期限与损害赔偿 | chunk_id=41bf6ac7dbd1f8e3 | claim=4. With regard to restrictions applied in accordance with paragraph 2 (d) of this Article or under paragraph 2 (c) of Ar
+26. document=美国海关完税价格估价方法与成交价格审查 | chunk_id=f2d761a85cc3f6a8 | claim=## § 122.2 Other Customs laws and regulations.
+27. document=美国海关完税价格估价方法与成交价格审查 | chunk_id=f3247a54b8116969 | claim=(a) General. Except as otherwise provided in paragraph (b) of this section, any record required to be made, kept, and re
+28. document=美国海关完税价格估价方法与成交价格审查 | chunk_id=099d867331cc12a0 | claim=(a) Any bill or account for money due the United States shall be rendered by an authorized Customs officer or employee o
+29. document=美国海关完税价格估价方法与成交价格审查 | chunk_id=fc8ddf1344dce62e | claim=## § 122.30 Other Customs laws and regulations.
+30. document=美国海关完税价格估价方法与成交价格审查 | chunk_id=689706fbfff0622b | claim=In the event an importer cannot produce the certificate, documentation, or evidence, or the electronic equivalent, requi
+31. document=WTO贸易便利化协定预裁定与进口许可程序透明度 | chunk_id=2292eabbc23cc0c0 | claim=Publication and Administration of Trade Regulations
+32. document=WTO贸易便利化协定预裁定与进口许可程序透明度 | chunk_id=bd5b0b9f47e84213 | claim=any special external factors adversely affecting the export trade of the contracting party applying the restrictions.*
+33. document=WTO贸易便利化协定预裁定与进口许可程序透明度 | chunk_id=3f691ce291693960 | claim=s of the kind described in paragraph 1 (a) of this Article might be operated so as to create serious obstacles to trade;
+34. document=WTO贸易便利化协定预裁定与进口许可程序透明度 | chunk_id=41bf6ac7dbd1f8e3 | claim=4. With regard to restrictions applied in accordance with paragraph 2 (d) of this Article or under paragraph 2 (c) of Ar
+35. document=WTO贸易便利化协定预裁定与进口许可程序透明度 | chunk_id=32372bcd390a9895 | claim=arties secure a share in the growth in international trade commensurate with the needs of their economic development.
+36. document=非优惠原产地规则判定货物原产国标准 | chunk_id=104e688e5713ec82 | claim=第四十条 海关扣留货物、物品、运输工具以及账册、单据等资料的期限不得超过1年。
+37. document=非优惠原产地规则判定货物原产国标准 | chunk_id=849ba3fd7c90a71b | claim=1. The person concerned shall, for the purposes of customs controls, keep the documents and information referred to in A
+38. document=非优惠原产地规则判定货物原产国标准 | chunk_id=34846e5c5c6eb47e | claim=进口货物的收货人超过前款规定期限向海关申报的，由海关征收滞报金。
+39. document=非优惠原产地规则判定货物原产国标准 | chunk_id=9c3ce07b887d93bd | claim=1. This Regulation establishes the Union Customs Code (the Code), laying down the general rules and procedures applicabl
+40. document=非优惠原产地规则判定货物原产国标准 | chunk_id=a7e181e2d2bb6d8b | claim=2　２税関は、前項の規定による確認をしたときは、経済産業省令で定めるところにより、その結果を経済産業大臣に通知するものとする。
+41. document=两用物项出口管制清单与出口许可证管理 | chunk_id=35cc2814f6fa408b | claim=第一条 本规定所称的独立保函，是指银行或非银行金融机构作为开立人，以书面形式向受益人出具的，同意在受益人请求付款并提交符合保函要求的单据时，向其支付特定款项或在保函最高金额内付款的承诺。
+42. document=两用物项出口管制清单与出口许可证管理 | chunk_id=82dd9df4f894fccf | claim=（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；
+43. document=两用物项出口管制清单与出口许可证管理 | chunk_id=1008bee7f0c0b65f | claim=第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。
+44. document=两用物项出口管制清单与出口许可证管理 | chunk_id=b5d1e77f2812dd4f | claim=第二十二条 涉外独立保函未载明适用法律，开立人和受益人在一审法庭辩论终结前亦未就适用法律达成一致的，开立人和受益人之间因涉外独立保函而产生的纠纷适用开立人经常居所地法律；
+45. document=两用物项出口管制清单与出口许可证管理 | chunk_id=4d5f8b42e17efedf | claim=第十三条 当事人以保函向海关提供担保的，保函应当以海关为受益人，并且载明下列事项：
+46. document=OFAC制裁名单资产冻结与出口管制许可例外 | chunk_id=35cc2814f6fa408b | claim=第一条 本规定所称的独立保函，是指银行或非银行金融机构作为开立人，以书面形式向受益人出具的，同意在受益人请求付款并提交符合保函要求的单据时，向其支付特定款项或在保函最高金额内付款的承诺。
+47. document=OFAC制裁名单资产冻结与出口管制许可例外 | chunk_id=82dd9df4f894fccf | claim=（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；
+48. document=OFAC制裁名单资产冻结与出口管制许可例外 | chunk_id=1008bee7f0c0b65f | claim=第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。
+49. document=OFAC制裁名单资产冻结与出口管制许可例外 | chunk_id=b5d1e77f2812dd4f | claim=第二十二条 涉外独立保函未载明适用法律，开立人和受益人在一审法庭辩论终结前亦未就适用法律达成一致的，开立人和受益人之间因涉外独立保函而产生的纠纷适用开立人经常居所地法律；
+50. document=OFAC制裁名单资产冻结与出口管制许可例外 | chunk_id=4d5f8b42e17efedf | claim=第十三条 当事人以保函向海关提供担保的，保函应当以海关为受益人，并且载明下列事项：
+
+【材料 5：10 条超纲文本】
+1. 个人所得税专项附加扣除的适用范围与标准
+2. 离婚时夫妻共同财产分割的认定与比例
+3. 交通事故人身损害赔偿项目和计算标准
+4. 发明专利侵权诉讼法定赔偿数额的确定
+5. 食品安全法对生产经营者的罚款起罚标准
+6. 用人单位违法解除劳动合同经济赔偿金计算
+7. 环保部门对企业超标排污按日连续处罚的适用
+8. 医疗损害责任纠纷中医疗机构举证责任
+9. 商品房买卖合同纠纷买受人退房条件
+10. 公司注册资本认缴制下股东出资加速到期条件
+
+【任务 A：gold 独立复核（20 题）】
+逐题判断 gold 文档 ID 是否与问题主题相符，并检查 ID 是否像真实语料 ID（拼写/多词缺漏）。
+输出：题号 | 你判定的 gold 文档 | 与材料中写的是否一致 | 理由一句话。
+
+【任务 B：claim 独立复核（50 条）】
+逐条判断 claim 文本与 document 主题是否属同一话题。
+三档：supported（同话题且内容相关）/ partial（沾边但不直接相关）/ unsupported（明显无关）。
+输出：行号 | 判定 | 理由一句话。
+注意：不要因为文本看起来像法规原文就判 supported——判断的是「和这份文档的话题对不对得上」。
+
+【任务 C：超纲核对（10 条）】
+结合材料 2 的语料范围，判断每条是否真的超出覆盖范围。输出：编号 | 是/否 | 一句话理由。
+
+【结尾】只输出三张判定表 + 一个 UNDECIDED 编号列表。不要总结、不要打分。

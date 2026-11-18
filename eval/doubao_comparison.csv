@@ -1,0 +1,51 @@
+﻿row,document,claim_text,our_label,doubao_verdict,divergent
+1,进口货物的完税价格由哪些项目组成？海关审定完税价格规定,第一条 为了正确审查确定进出口货物的完税价格，根据《中华人民共和国海关法》（以下简称《海关法》）、《中华人民共和国进出口关税条例》的规定，制定本办法。,supported,supported,
+2,进口货物的完税价格由哪些项目组成？海关审定完税价格规定,第四十条 海关扣留货物、物品、运输工具以及账册、单据等资料的期限不得超过1年。,supported,unsupported,YES
+3,进口货物的完税价格由哪些项目组成？海关审定完税价格规定,"1. The person concerned shall, for the purposes of customs controls, keep the documents and information referred to in A",supported,unsupported,YES
+4,进口货物的完税价格由哪些项目组成？海关审定完税价格规定,进口货物的收货人超过前款规定期限向海关申报的，由海关征收滞报金。,supported,unsupported,YES
+5,进口货物的完税价格由哪些项目组成？海关审定完税价格规定,第二条 海关审查确定进出口货物的完税价格，应当遵循客观、公平、统一的原则。,supported,supported,
+6,办理海关事务担保应当提交书面申请及财产权利凭证,第四十条 海关扣留货物、物品、运输工具以及账册、单据等资料的期限不得超过1年。,supported,unsupported,YES
+7,办理海关事务担保应当提交书面申请及财产权利凭证,"1. The person concerned shall, for the purposes of customs controls, keep the documents and information referred to in A",supported,unsupported,YES
+8,办理海关事务担保应当提交书面申请及财产权利凭证,第二十四条 进口货物的收货人、出口货物的发货人应当向海关如实申报，交验进出口许可证件和有关单证。,supported,unsupported,YES
+9,办理海关事务担保应当提交书面申请及财产权利凭证,"1. This Regulation establishes the Union Customs Code (the Code), laying down the general rules and procedures applicabl",supported,unsupported,YES
+10,办理海关事务担保应当提交书面申请及财产权利凭证,第十五条 办理担保，当事人应当提交书面申请以及真实、合法、有效的财产、权利凭证和身份或者资格证明等材料。,supported,supported,
+11,独立保函载明见索即付，适用URDG758统一惯例,对不符合规定的担保，海关应当书面通知当事人不予接受，并说明理由。,supported,unsupported,YES
+12,独立保函载明见索即付，适用URDG758统一惯例,前款所称的单据，是指独立保函载明的受益人应提交的付款请求书、违约声明、第三方签发的文件、法院判决、仲裁裁决、汇票、发票等表明发生付款到期事件的书面文件。,supported,supported,
+13,独立保函载明见索即付，适用URDG758统一惯例,（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；,supported,supported,
+14,独立保函载明见索即付，适用URDG758统一惯例,第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。,supported,supported,
+15,独立保函载明见索即付，适用URDG758统一惯例,第二条 当事人向海关申请提供担保，承诺履行法律义务，海关为当事人办理海关事务担保，适用本条例。,supported,unsupported,YES
+16,反倾销调查立案申请与损害证据审查程序,第一条 本规定所称的独立保函，是指银行或非银行金融机构作为开立人，以书面形式向受益人出具的，同意在受益人请求付款并提交符合保函要求的单据时，向其支付特定款项或在保函最高金额内付款的承诺。,supported,unsupported,YES
+17,反倾销调查立案申请与损害证据审查程序,（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；,supported,unsupported,YES
+18,反倾销调查立案申请与损害证据审查程序,第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。,supported,unsupported,YES
+19,反倾销调查立案申请与损害证据审查程序,第二十二条 涉外独立保函未载明适用法律，开立人和受益人在一审法庭辩论终结前亦未就适用法律达成一致的，开立人和受益人之间因涉外独立保函而产生的纠纷适用开立人经常居所地法律；,supported,unsupported,YES
+20,反倾销调查立案申请与损害证据审查程序,第十三条 当事人以保函向海关提供担保的，保函应当以海关为受益人，并且载明下列事项：,supported,unsupported,YES
+21,CISG国际货物销售合同货物不符的通知期限与损害赔偿,Publication and Administration of Trade Regulations,supported,unsupported,YES
+22,CISG国际货物销售合同货物不符的通知期限与损害赔偿,any special external factors adversely affecting the export trade of the contracting party applying the restrictions.*,supported,unsupported,YES
+23,CISG国际货物销售合同货物不符的通知期限与损害赔偿,"3. (a) If agreement among the interested contracting parties with respect to the action is not reached, the contracting ",supported,unsupported,YES
+24,CISG国际货物销售合同货物不符的通知期限与损害赔偿,s of the kind described in paragraph 1 (a) of this Article might be operated so as to create serious obstacles to trade;,supported,unsupported,YES
+25,CISG国际货物销售合同货物不符的通知期限与损害赔偿,4. With regard to restrictions applied in accordance with paragraph 2 (d) of this Article or under paragraph 2 (c) of Ar,supported,unsupported,YES
+26,美国海关完税价格估价方法与成交价格审查,## § 122.2 Other Customs laws and regulations.,supported,unsupported,YES
+27,美国海关完税价格估价方法与成交价格审查,"(a) General. Except as otherwise provided in paragraph (b) of this section, any record required to be made, kept, and re",supported,unsupported,YES
+28,美国海关完税价格估价方法与成交价格审查,(a) Any bill or account for money due the United States shall be rendered by an authorized Customs officer or employee o,supported,unsupported,YES
+29,美国海关完税价格估价方法与成交价格审查,## § 122.30 Other Customs laws and regulations.,supported,unsupported,YES
+30,美国海关完税价格估价方法与成交价格审查,"In the event an importer cannot produce the certificate, documentation, or evidence, or the electronic equivalent, requi",supported,unsupported,YES
+31,WTO贸易便利化协定预裁定与进口许可程序透明度,Publication and Administration of Trade Regulations,supported,partial,YES
+32,WTO贸易便利化协定预裁定与进口许可程序透明度,any special external factors adversely affecting the export trade of the contracting party applying the restrictions.*,supported,unsupported,YES
+33,WTO贸易便利化协定预裁定与进口许可程序透明度,s of the kind described in paragraph 1 (a) of this Article might be operated so as to create serious obstacles to trade;,supported,unsupported,YES
+34,WTO贸易便利化协定预裁定与进口许可程序透明度,4. With regard to restrictions applied in accordance with paragraph 2 (d) of this Article or under paragraph 2 (c) of Ar,supported,unsupported,YES
+35,WTO贸易便利化协定预裁定与进口许可程序透明度,arties secure a share in the growth in international trade commensurate with the needs of their economic development.,supported,unsupported,YES
+36,非优惠原产地规则判定货物原产国标准,第四十条 海关扣留货物、物品、运输工具以及账册、单据等资料的期限不得超过1年。,supported,unsupported,YES
+37,非优惠原产地规则判定货物原产国标准,"1. The person concerned shall, for the purposes of customs controls, keep the documents and information referred to in A",supported,unsupported,YES
+38,非优惠原产地规则判定货物原产国标准,进口货物的收货人超过前款规定期限向海关申报的，由海关征收滞报金。,supported,unsupported,YES
+39,非优惠原产地规则判定货物原产国标准,"1. This Regulation establishes the Union Customs Code (the Code), laying down the general rules and procedures applicabl",supported,unsupported,YES
+40,非优惠原产地规则判定货物原产国标准,2　２税関は、前項の規定による確認をしたときは、経済産業省令で定めるところにより、その結果を経済産業大臣に通知するものとする。,supported,unsupported,YES
+41,两用物项出口管制清单与出口许可证管理,第一条 本规定所称的独立保函，是指银行或非银行金融机构作为开立人，以书面形式向受益人出具的，同意在受益人请求付款并提交符合保函要求的单据时，向其支付特定款项或在保函最高金额内付款的承诺。,supported,unsupported,YES
+42,两用物项出口管制清单与出口许可证管理,（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；,supported,unsupported,YES
+43,两用物项出口管制清单与出口许可证管理,第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。,supported,unsupported,YES
+44,两用物项出口管制清单与出口许可证管理,第二十二条 涉外独立保函未载明适用法律，开立人和受益人在一审法庭辩论终结前亦未就适用法律达成一致的，开立人和受益人之间因涉外独立保函而产生的纠纷适用开立人经常居所地法律；,supported,unsupported,YES
+45,两用物项出口管制清单与出口许可证管理,第十三条 当事人以保函向海关提供担保的，保函应当以海关为受益人，并且载明下列事项：,supported,unsupported,YES
+46,OFAC制裁名单资产冻结与出口管制许可例外,第一条 本规定所称的独立保函，是指银行或非银行金融机构作为开立人，以书面形式向受益人出具的，同意在受益人请求付款并提交符合保函要求的单据时，向其支付特定款项或在保函最高金额内付款的承诺。,supported,unsupported,YES
+47,OFAC制裁名单资产冻结与出口管制许可例外,（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；,supported,unsupported,YES
+48,OFAC制裁名单资产冻结与出口管制许可例外,第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。,supported,unsupported,YES
+49,OFAC制裁名单资产冻结与出口管制许可例外,第二十二条 涉外独立保函未载明适用法律，开立人和受益人在一审法庭辩论终结前亦未就适用法律达成一致的，开立人和受益人之间因涉外独立保函而产生的纠纷适用开立人经常居所地法律；,supported,unsupported,YES
+50,OFAC制裁名单资产冻结与出口管制许可例外,第十三条 当事人以保函向海关提供担保的，保函应当以海关为受益人，并且载明下列事项：,supported,unsupported,YES

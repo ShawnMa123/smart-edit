@@ -1,0 +1,102 @@
+[
+  {
+    "document": "个人所得税专项附加扣除的适用范围与标准",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "离婚时夫妻共同财产分割的认定与比例",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "交通事故人身损害赔偿项目和计算标准",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "发明专利侵权诉讼法定赔偿数额的确定",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "食品安全法对生产经营者的罚款起罚标准",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "用人单位违法解除劳动合同经济赔偿金计算",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "环保部门对企业超标排污按日连续处罚的适用",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "医疗损害责任纠纷中医疗机构举证责任",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "商品房买卖合同纠纷买受人退房条件",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  },
+  {
+    "document": "公司注册资本认缴制下股东出资加速到期条件",
+    "stage": "done",
+    "coverage_unavailable": false,
+    "business_type_uncertain": true,
+    "escalate_to_human": true,
+    "notes": "基于正文检索，未使用字段表 | 未能确定交易日期，按当前有效版本适用",
+    "chunks": 5,
+    "claims": 5
+  }
+]

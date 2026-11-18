@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "spec": "openspec/changes/agent-verify/specs/eval-benchmark/spec.md §L3 (20 questions, Recall@5, MRR)",
+    "gold_unit": "document (doc_id); remote chunk ids are hashes, so verified article labels are recorded in gold_articles",
+    "review": "AI-authored from corpus inventory; human review required (owner: C)"
+  },
+  "questions": [
+    {"question": "进口货物的完税价格由哪些项目组成？", "gold_docs": ["cn-customs-law-2021", "cn-customs-valuation-measures-2013"], "gold_articles": ["cn-customs-law-2021:55"]},
+    {"question": "办理海关事务担保应当提交哪些材料？", "gold_docs": ["cn-customs-guarantee-2018"], "gold_articles": ["cn-customs-guarantee-2018:15"]},
+    {"question": "被担保人要求变更担保内容的，应当如何办理？", "gold_docs": ["cn-customs-guarantee-2018"], "gold_articles": ["cn-customs-guarantee-2018:17"]},
+    {"question": "哪些情形下人民法院应认定当事人开立的独立保函？", "gold_docs": ["cn-independent-guarantee-2020"], "gold_articles": ["cn-independent-guarantee-2020:3"]},
+    {"question": "WTO反倾销协定下反倾销调查应如何发起？", "gold_docs": ["wto-adp"], "gold_articles": ["wto-adp:art-5"]},
+    {"question": "中国反倾销调查的立案条件和程序是什么？", "gold_docs": ["cn-anti-dumping-2004", "cn-ad-cvd-1997"], "gold_articles": []},
+    {"question": "CISG下卖方交付的货物不符合同，买方应在多长时间内通知？", "gold_docs": ["cisg"], "gold_articles": ["cisg:39"]},
+    {"question": "CISG对损害赔偿额如何计算？", "gold_docs": ["cisg"], "gold_articles": ["cisg:74"]},
+    {"question": "美国海关对进口货物完税价格的估价方法有哪些？", "gold_docs": ["us-cfr-19-152"], "gold_articles": ["us-cfr-19-152:152.103"]},
+    {"question": "美国商务部反倾销调查的程序规定是什么？", "gold_docs": ["us-cfr-19-165"], "gold_articles": []},
+    {"question": "日本关税定率法对关税估价是如何规定的？", "gold_docs": ["jp-kazei-teiritsu-hou"], "gold_articles": ["jp-kazei-teiritsu-hou:4.5"]},
+    {"question": "澳大利亚出口管制法对受管制货物的许可要求是什么？", "gold_docs": ["au-export-control-act-2020"], "gold_articles": []},
+    {"question": "澳大利亚自治制裁如何指定受制裁的人和物？", "gold_docs": ["au-autonomous-sanctions-act-2011"], "gold_articles": []},
+    {"question": "WTO贸易便利化协定对预裁定有什么要求？", "gold_docs": ["wto-tfa"], "gold_articles": []},
+    {"question": "WTO保障措施的实施条件是什么？", "gold_docs": ["wto-safeg", "cn-safeguard-2004"], "gold_articles": []},
+    {"question": "WTO进口许可程序协定对许可的透明度有什么要求？", "gold_docs": ["wto-lic"], "gold_articles": []},
+    {"question": "非优惠原产地规则下如何判定货物的原产国？", "gold_docs": ["cn-nonpreferential-origin-2018", "cn-origin-2019", "wto-ro"], "gold_articles": []},
+    {"question": "中国两用物项出口管制如何管理管制清单？", "gold_docs": ["cn-export-control-law-2020", "cn-dual-use-export-control-2024"], "gold_articles": []},
+    {"question": "美国EAR出口管制有哪些许可例外？", "gold_docs": ["us-cfr-15-740"], "gold_articles": []},
+    {"question": "OFAC经济制裁的资产冻结（SDN名单）如何执行？", "gold_docs": ["us-cfr-31-501"], "gold_articles": []}
+  ]
+}
