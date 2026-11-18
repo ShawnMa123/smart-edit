@@ -18,7 +18,7 @@
 - [x] 2.1 `retrieve`：`InMemoryVectorStore` 向量 top-5
 - [x] 2.2 `retrieve`：关键词兜底，与向量结果合并去重
 - [x] 2.3 `retrieve`：结果写入 `state.retrieved`
-- [ ] 2.4 自测 20 个问题，记录 top-5 命中情况
+- [x] 2.4 自测 20 个问题，记录 top-5 命中情况
 
 ## 3. 检索式生成（两模式）
 
@@ -67,11 +67,28 @@
 ## 8. L3 评测（格式见 `agent-verify/specs/eval-benchmark/`）
 
 - [ ] 8.1 `eval/gold_retrieval.json`：20 个问题 + 每题应命中的 `chunk_id`
-- [ ] 8.2 计算 Recall@5 与 MRR，写入 `eval/report.md`
+- [x] 8.2 计算 Recall@5 与 MRR，写入 `eval/report.md`
 - [ ] 8.3 抽 50 条 claim 人工判 `supported` / `partial` / `unsupported` → `eval/citations_50.csv`
 - [ ] 8.4 计算 `citation_support_rate` 与 `partial_support_rate`
 - [ ] 8.5 构造 10 个超纲问题测拒答 → `refusal_rate`，目标 ≥ 0.9
-- [ ] 8.6 报告中主动声明：未做 rerank、`citation_check` 只做实体覆盖未做语义蕴含
+
+  > **保持未勾（owner 2026-11-19 决定，已知缺口）**
+  > spec.md:155 的判据是 `legal.coverage.unavailable=true`；实测 agent3 真实输出 **0/10**。
+  > 根因：`answer.py:122` 定义为 `unavailable = not retrieved`，而远程 BM25 对超纲文本仍返回
+  > 5 条无关 chunk。**不是设计变更**：spec 判据（11-07）与 `escalate_to_human` 6 条件（11-07）
+  > 同日写入、实现（11-09）一次落地；变的是外部检索服务从本地 20 条手写语料换成远程 143 部。
+  > 注意 `escalate_to_human` 10/10 不能当作"识别超纲"：raw 模式下 `not filters.as_of` 恒成立，
+  > 域内文档同样为 true（见 `eval/refusal_agent3.md`）。
+  > **实测输出形态**：既不是拒绝回答、也不是编造——`stage=done`、`unavailable=false`、
+  > summary 写「检索到 5 条相关条文」、5 条 claim 全 `supported`（问个税却返回独立保函条文）。
+  > 零编造法规、零法律定性，但把无关条文当相关结果照常输出，且无「主题不在语料范围」声明。
+  > **修复方向（此前建议已作废）**：原建议「所有 claim 均 insufficient 时置 unavailable=true」
+  > 经实测永不触发——超纲与域内 claims 全 `supported`，超纲 top1 分数也是 1.0，低分阈值分不开。
+  > 剩余路径：① Shawn 服务端加相关性重排/阈值；② 本仓库新 change 引入语义蕴含判断
+  > （`proposal.md:21` 明确排除）；③ 改 `build_query` 主题约束（BM25 兜底未必有效）。
+  > **边界**：不能改评测脚本把 `escalate=true` 算成拒答（改考卷迁就答案，且域内也 true）；
+  > 不能改 spec 冻结判据；产品代码可改但属新 change。详见 `eval/refusal_agent3.md`。 
+- [x] 8.6 报告中主动声明：未做 rerank、`citation_check` 只做实体覆盖未做语义蕴含
 
 ## 9. 接入与验收
 
@@ -79,4 +96,4 @@
 - [x] 9.2 `raw` 模式端到端跑通：只上传 PDF，直接得到 `legal(input_mode="raw")`
 - [x] 9.3 空检索时全链路无"无问题"措辞
 - [x] 9.4 虚构 chunk_id 能被 `cite_check` 降级
-- [ ] 9.5 修改语料 → 重建索引 → 答案与引用同步变化（10 秒闭环）
+- [x] 9.5 修改语料 → 重建索引 → 答案与引用同步变化（10 秒闭环）

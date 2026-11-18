@@ -267,6 +267,7 @@ python -m app.regulatory.index status
 | `SMART_EDIT_RAG_CONFIG` | 本地检索配置路径，默认 `data/regulatory/config.json` |
 | `SMART_EDIT_RAG_KEYWORD_ONLY=1` | 本地检索强制 BM25，不调用 embedding |
 | `SMART_EDIT_RAG_TIMEOUT` | 外部检索超时秒数 |
+| `SMART_EDIT_RAG_TOKEN` | 外部检索服务的 Bearer token；为空则不带鉴权头（局域网无鉴权服务不受影响）；被拒绝时报 `HTTP 401`，不会静默变空结果 |
 
 ### 5.4 验证检索
 

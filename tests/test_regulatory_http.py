@@ -124,3 +124,50 @@ def test_resolve_retriever_reads_environment():
     assert isinstance(retriever, HttpRetriever)
     assert retriever.base_url == "http://127.0.0.1:8100"
     assert retriever.timeout == 2.5
+
+
+def test_http_retriever_sends_bearer_token_when_configured():
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["request"] = request
+        return _Response(_payload())
+
+    with patch("app.regulatory.retriever.urllib.request.urlopen", fake_urlopen):
+        HttpRetriever("http://127.0.0.1:8100", token="sk-test").retrieve(["保函 展期"], {})
+
+    assert captured["request"].headers.get("Authorization") == "Bearer sk-test"
+
+
+def test_http_retriever_omits_auth_header_without_token():
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["request"] = request
+        return _Response(_payload())
+
+    with patch("app.regulatory.retriever.urllib.request.urlopen", fake_urlopen):
+        HttpRetriever("http://127.0.0.1:8100").retrieve(["保函 展期"], {})
+
+    assert "Authorization" not in captured["request"].headers
+
+
+def test_http_retriever_maps_401_to_retrieval_unavailable():
+    error = urllib.error.HTTPError(URL, 401, "unauthorized", hdrs=None, fp=io.BytesIO(b"{}"))
+    with patch("app.regulatory.retriever.urllib.request.urlopen", side_effect=error):
+        with pytest.raises(RetrievalUnavailable) as excinfo:
+            HttpRetriever("http://127.0.0.1:8100", token="sk-wrong").retrieve(["q"], {})
+    assert "HTTP 401" in str(excinfo.value)
+
+
+def test_resolve_retriever_reads_token():
+    retriever = resolve_retriever(
+        {"SMART_EDIT_RAG": "http://127.0.0.1:8100", "SMART_EDIT_RAG_TOKEN": "sk-abc"}
+    )
+    assert isinstance(retriever, HttpRetriever)
+    assert retriever.token == "sk-abc"
+
+    # Blank token = no auth header: LAN deployments without a token keep working unchanged.
+    bare = resolve_retriever({"SMART_EDIT_RAG": "http://127.0.0.1:8100"})
+    assert isinstance(bare, HttpRetriever)
+    assert bare.token is None

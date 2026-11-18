@@ -120,21 +120,31 @@ def to_chunks(raw_chunks: list[dict]) -> list[dict]:
 
 
 class HttpRetriever:
-    """Stdlib JSON-over-HTTP client. No hidden retries: a failure is reported, not papered over."""
+    """Stdlib JSON-over-HTTP client. No hidden retries: a failure is reported, not papered over.
 
-    def __init__(self, base_url: str, timeout: float = DEFAULT_TIMEOUT):
+    `token` (from `SMART_EDIT_RAG_TOKEN`) is sent as `Authorization: Bearer <token>` on every
+    request. A blank token sends no auth header at all, so LAN deployments without auth keep
+    working; a rejected token surfaces as `RetrievalUnavailable("HTTP 401 ...")`, never as an
+    empty result.
+    """
+
+    def __init__(self, base_url: str, timeout: float = DEFAULT_TIMEOUT, token: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.token = (token or "").strip() or None
 
     def retrieve(self, queries: list[str], filters: dict, top_k: int = DEFAULT_TOP_K) -> dict:
         body = json.dumps(
             {"queries": list(queries), "top_k": int(top_k), "filters": dict(filters or {})},
             ensure_ascii=False,
         ).encode("utf-8")
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         request = urllib.request.Request(
             f"{self.base_url}/retrieve",
             data=body,
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            headers=headers,
             method="POST",
         )
         try:
@@ -272,7 +282,8 @@ def resolve_retriever(env: dict[str, str] | None = None) -> Retriever | None:
             timeout = float(raw_timeout) if raw_timeout else DEFAULT_TIMEOUT
         except ValueError:
             timeout = DEFAULT_TIMEOUT
-        return HttpRetriever(base_url, timeout=timeout)
+        token = (values.get("SMART_EDIT_RAG_TOKEN") or "").strip() or None
+        return HttpRetriever(base_url, timeout=timeout, token=token)
 
     config_path = (values.get(LOCAL_CONFIG_ENV) or "").strip() or None
     return InProcessRetriever(config_path, keyword_only=_keyword_only(values))
