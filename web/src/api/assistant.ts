@@ -53,8 +53,12 @@ async function requestJson<T>(path: string, config: RequestConfig): Promise<T> {
   try {
     const response = await doFetch(`${ASSISTANT_BASE}${path}`, {
       method: config.method,
-      headers,
+      headers:
+        config.method === 'GET'
+          ? headers
+          : { ...headers, 'X-Requested-With': 'smart-edit' },
       body: config.body === undefined ? undefined : JSON.stringify(config.body),
+      credentials: 'include',
       signal: controller.signal,
     });
     const payload: unknown = await response.json().catch(() => null);

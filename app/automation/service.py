@@ -32,13 +32,25 @@ from app.shared.ports import Principal
 
 class AutomationService:
     def __init__(
-        self, host: HostStore, store: AutomationStore, identity: Any, clock: Any, ids: Any
+        self,
+        host: HostStore,
+        store: AutomationStore,
+        identity: Any,
+        clock: Any,
+        ids: Any,
+        authorizer: Any | None = None,
+        version_provider: Any | None = None,
+        activity: Any | None = None,
     ) -> None:
         self.host = host
         self.store = store
         self.identity = identity
         self.clock = clock
         self.ids = ids
+        # PG mode only: scope checks come from the stored document, never from the client.
+        self.authorizer = authorizer
+        self.version_provider = version_provider
+        self.activity = activity
 
     def principal(self, request) -> Principal:
         return self.identity.resolve(request)
@@ -99,9 +111,12 @@ class AutomationService:
 
     def _draft(self, principal: Principal, document_id: str, draft_id: str) -> dict[str, Any]:
         document = self.host.get_document(document_id)
-        if (
-            not document
-            or document["owner_user_id"] != principal.user_id
+        if not document:
+            raise HostNotFound("document not found")
+        if self.authorizer is not None:
+            self.authorizer.authorize(principal, "document.edit", document)
+        elif (
+            document["owner_user_id"] != principal.user_id
             or document["workspace_id"] != principal.workspace_id
         ):
             raise HostNotFound("document not found")
@@ -110,15 +125,33 @@ class AutomationService:
             raise HostNotFound("draft not found")
         return draft
 
+    def _authorize_document(self, principal: Principal, document_id: str, action: str) -> None:
+        if self.authorizer is None:
+            return
+        document = self.host.get_document(document_id)
+        if not document:
+            raise HostNotFound("document not found")
+        self.authorizer.authorize(principal, action, document)
+
     def _proposal_row(self, principal: Principal, proposal_id: str) -> dict[str, Any]:
         row = self.store.get_proposal(proposal_id)
-        if (
-            not row
-            or row["owner_user_id"] != principal.user_id
+        if not row:
+            raise HostNotFound("proposal not found")
+        if self.authorizer is not None:
+            self._authorize_document(principal, row["document_id"], "document.read")
+        elif (
+            row["owner_user_id"] != principal.user_id
             or row["workspace_id"] != principal.workspace_id
         ):
             raise HostNotFound("proposal not found")
         return row
+
+    def _current_authorization_version(self, workspace_id: str) -> str:
+        if self.version_provider is not None:
+            version = self.version_provider(workspace_id)
+            if version:
+                return str(version)
+        return "auth-demo-1"
 
     def _applicability(self, model: ChangeProposal, draft: dict[str, Any] | None) -> str:
         if draft is None:
@@ -135,7 +168,9 @@ class AutomationService:
             return "stale"
         if model.context.variables_version != int(draft["variables_version"]):
             return "stale"
-        if model.context.authorization_version != "auth-demo-1":
+        if model.context.authorization_version != self._current_authorization_version(
+            draft["workspace_id"]
+        ):
             return "unavailable"
         return "current"
 
@@ -178,7 +213,8 @@ class AutomationService:
         expected_revision: int,
         request_id: str,
     ) -> ChangeProposal:
-        self._proposal_row(principal, proposal_id)
+        row = self._proposal_row(principal, proposal_id)
+        self._authorize_document(principal, row["document_id"], "document.edit")
         row = self.store.record_decision(
             proposal_id=proposal_id,
             decision=payload.decision,
@@ -394,7 +430,38 @@ class AutomationService:
             if replay is not None:
                 return replay
             raise
+        self._record(
+            principal,
+            "document version submitted",
+            draft["document_id"],
+            {"revision": new_revision, "proposal_id": proposal_id},
+        )
         return receipt
+
+    def _record(
+        self,
+        principal: Principal,
+        action: str,
+        document_id: str,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        if self.activity is None or self.authorizer is None:
+            return
+        organization = self.authorizer.organization(principal.workspace_id)
+        if not organization:
+            return
+        document = self.host.get_document(document_id) or {}
+        self.activity.safe_record(
+            org_id=organization["org_id"],
+            department_id=document.get("department_id"),
+            actor_user_id=principal.user_id,
+            actor_label=None,
+            kind="document",
+            action=action,
+            resource_type="document",
+            resource_id=document_id,
+            detail=detail,
+        )
 
     def undo(
         self,
@@ -449,7 +516,7 @@ class AutomationService:
                 revision=int(draft["revision"]),
                 content_sha256=draft["text_sha256"],
                 variables_version=int(draft["variables_version"]),
-                authorization_version="auth-demo-1",
+                authorization_version=principal.authorization_version,
             ),
             operations=[ReplaceTextOperation(**item) for item in inverse_data],
             preview=ProposalPreview(before_text=draft["text"], after_text="", summary="undo"),
@@ -578,6 +645,12 @@ class AutomationService:
             self.host.put_idempotency_conn(
                 conn, principal.user_id, "POST", path, key, self._hash(body), reversal
             )
+        self._record(
+            principal,
+            "document version restored",
+            draft["document_id"],
+            {"revision": new_revision},
+        )
         return reversal
 
 

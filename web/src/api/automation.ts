@@ -164,7 +164,18 @@ async function request<T>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await doFetch(`${AUTOMATION_BASE}${path}`, { ...init, signal: controller.signal });
+    const response = await doFetch(`${AUTOMATION_BASE}${path}`, {
+      ...init,
+      headers:
+        (init.method ?? 'GET').toUpperCase() === 'GET'
+          ? init.headers
+          : {
+              ...((init.headers as Record<string, string> | undefined) ?? {}),
+              'X-Requested-With': 'smart-edit',
+            },
+      credentials: 'include',
+      signal: controller.signal,
+    });
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
       const body = (payload ?? {}) as {

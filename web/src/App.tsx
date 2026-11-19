@@ -46,6 +46,12 @@ import {
   type UnavailableModule,
 } from './components/UnavailableModuleDialog';
 import { ImplementationMap } from './components/ImplementationMap';
+import { AuthProvider, useAuth } from './auth/AuthProvider';
+import { LoginPage } from './components/LoginPage';
+import { PeoplePanel } from './components/PeoplePanel';
+import { ActivityFeed } from './components/ActivityFeed';
+import { DeveloperPanel } from './components/DeveloperPanel';
+import { InviteAcceptPage } from './components/InviteAcceptPage';
 
 const DOCUMENT_ID = 'demo-document';
 type PaneId = 'versions' | 'editor' | 'assistant';
@@ -60,6 +66,14 @@ const DEMO_MODULE_TITLES: Partial<Record<WorkspaceModule, string>> = {
   inbox: 'Inbox',
 };
 
+/** Titles used once PG identity is active (the real modules replace the demo/empty states). */
+const AUTH_MODULE_TITLES: Partial<Record<WorkspaceModule, string>> = {
+  identity: 'Your account',
+  people: 'Organisation & members',
+  developer: 'Developer',
+  activity: 'Activity',
+};
+
 interface ConflictState {
   revision: number;
   sha256: string;
@@ -67,6 +81,23 @@ interface ConflictState {
 }
 
 export function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const auth = useAuth();
+  const workspaceId = auth.workspaceId;
+  const inviteMatch = window.location.pathname.match(/^\/invites\/([^/]+)$/);
+  const inviteToken = inviteMatch ? decodeURIComponent(inviteMatch[1]) : null;
+  useEffect(() => {
+    if (auth.status === 'authenticated' && window.location.pathname === '/login') {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [auth.status]);
   const narrow = useNarrowViewport();
   const [pane, setPane] = useState<PaneId>('editor');
   const [activeModule, setActiveModule] = useState<WorkspaceModule | null>(null);
@@ -562,6 +593,7 @@ export function App() {
         now={now}
         knowledge={{
           documentId: DOCUMENT_ID,
+          workspaceId,
           digest: currentDigest,
           text,
           selection: knowledgeSelection,
@@ -817,9 +849,12 @@ export function App() {
     }
   };
 
+  const authenticatedOrgId =
+    auth.status === 'authenticated' ? auth.profile?.active_org?.org_id ?? null : null;
+
   const isUnavailableModule = (module: WorkspaceModule): module is UnavailableModule =>
-    module === 'people' ||
-    module === 'identity' ||
+    (module === 'people' && !authenticatedOrgId) ||
+    (module === 'identity' && !authenticatedOrgId) ||
     module === 'approval' ||
     module === 'comments';
 
@@ -859,7 +894,27 @@ export function App() {
         />
       );
     }
+    if (module === 'identity' && authenticatedOrgId) {
+      return (
+        <div className="identity-panel">
+          <p>
+            <strong>{auth.profile?.user.display_name}</strong> · {auth.profile?.user.email}
+          </p>
+          <p className="tiny">Roles: {(auth.profile?.roles ?? []).join(', ') || 'member'}</p>
+          <button type="button" onClick={() => void auth.logout()}>
+            Sign out
+          </button>
+          <button type="button" onClick={() => void auth.logout()}>
+            Sign out of all devices
+          </button>
+        </div>
+      );
+    }
+    if (module === 'people' && authenticatedOrgId) {
+      return <PeoplePanel orgId={authenticatedOrgId} />;
+    }
     if (module === 'activity') {
+      if (authenticatedOrgId) return <ActivityFeed orgId={authenticatedOrgId} />;
       return demoMode ? (
         <DemoActivityPanel state={demoState} onMarkAllRead={handleDemoMarkAllRead} />
       ) : (
@@ -878,6 +933,7 @@ export function App() {
       );
     }
     if (module === 'developer') {
+      if (authenticatedOrgId) return <DeveloperPanel orgId={authenticatedOrgId} />;
       return <ImplementationMap />;
     }
     if (isUnavailableModule(module)) {
@@ -916,6 +972,27 @@ export function App() {
     ? versions.find((version) => version.id === comparePair[1])
     : undefined;
 
+  if (auth.status === 'unauthenticated' || window.location.pathname === '/login') {
+    return <LoginPage />;
+  }
+  if (inviteToken) {
+    if (auth.status === 'authenticated') {
+      return <InviteAcceptPage token={inviteToken} />;
+    }
+    return (
+      <main className="auth-page">
+        <section className="auth-card">
+          <h1>Invite link</h1>
+          <p className="tiny">
+            {auth.status === 'unavailable'
+              ? 'Invites require SMART_EDIT_AUTH_MODE=pg; this server is running the local demo identity.'
+              : 'Checking your session…'}
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <div className="app">
       <TopBar
@@ -923,6 +1000,11 @@ export function App() {
         activityCount={demoMode ? demoState.activity.length : activity.length}
         unreadCount={demoMode ? demoUnreadCount : realUnreadCount}
         demoIdentity={demoIdentity}
+        organizations={auth.profile?.organizations ?? []}
+        activeOrgId={auth.profile?.active_org?.org_id ?? null}
+        onSwitchOrg={(orgId) => void auth.switchOrg(orgId)}
+        userLabel={auth.profile?.user.display_name ?? null}
+        onLogout={() => void auth.logout()}
       />
       <EnvironmentStrip
         demoMode={demoMode}
@@ -1017,7 +1099,7 @@ export function App() {
           title={
             demoMode
               ? DEMO_MODULE_TITLES[activeModule] ?? MODULE_TITLES[activeModule]
-              : MODULE_TITLES[activeModule]
+              : AUTH_MODULE_TITLES[activeModule] ?? MODULE_TITLES[activeModule]
           }
           onClose={closeModule}
         >

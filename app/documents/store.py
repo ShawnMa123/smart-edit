@@ -19,18 +19,19 @@ from typing import Any, Iterator
 from app.documents.errors import HostError, HostNotFound, LockConflict, RevisionConflict
 from app.documents.projection import plain_text_document, project_document, sha256_text
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS documents (
   document_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, owner_user_id TEXT NOT NULL,
-  title TEXT NOT NULL, created_at TEXT NOT NULL);
+  title TEXT NOT NULL, created_at TEXT NOT NULL, department_id TEXT);
 CREATE TABLE IF NOT EXISTS document_drafts (
   draft_id TEXT PRIMARY KEY, document_id TEXT NOT NULL UNIQUE, workspace_id TEXT NOT NULL,
   revision INTEGER NOT NULL, content_json TEXT NOT NULL, text TEXT NOT NULL, text_sha256 TEXT NOT NULL,
   variables_json TEXT NOT NULL DEFAULT '{}', variables_version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  department_id TEXT,
   FOREIGN KEY (document_id) REFERENCES documents(document_id));
 CREATE TABLE IF NOT EXISTS document_checkpoints (
   checkpoint_id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, revision INTEGER NOT NULL,
@@ -61,7 +62,7 @@ CREATE TABLE IF NOT EXISTS automation_proposals (
   operations_json TEXT NOT NULL, preview_json TEXT NOT NULL, risk_flags_json TEXT NOT NULL DEFAULT '[]',
   review_json TEXT NOT NULL, disposition TEXT NOT NULL DEFAULT 'open',
   application_status TEXT NOT NULL DEFAULT 'not_applied', revision INTEGER NOT NULL DEFAULT 1,
-  expires_at TEXT NOT NULL, created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL, created_at TEXT NOT NULL, department_id TEXT,
   FOREIGN KEY (draft_id) REFERENCES document_drafts(draft_id));
 CREATE TABLE IF NOT EXISTS automation_proposal_events (
   event_id TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, decision TEXT NOT NULL,
@@ -163,6 +164,16 @@ class HostStore:
                     " created_at FROM document_checkpoints_v1"
                 )
                 conn.execute("DROP TABLE document_checkpoints_v1")
+            if found < 3:
+                # `department_id` is nullable on purpose: NULL means organisation-level (design D4).
+                # The guard makes the migration idempotent even after a partial manual run.
+                for table in ("documents", "document_drafts", "automation_proposals"):
+                    columns = {
+                        row["name"]
+                        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+                    }
+                    if "department_id" not in columns:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN department_id TEXT")
             conn.execute(
                 "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
                 (str(SCHEMA_VERSION),),
@@ -205,6 +216,7 @@ class HostStore:
         variables: dict[str, Any] | None = None,
         document_id: str | None = None,
         created_by: str | None = None,
+        department_id: str | None = None,
     ) -> dict[str, Any]:
         document_id = document_id or new_id("doc")
         draft_id = new_id("draft")
@@ -215,11 +227,14 @@ class HostStore:
         actor = created_by or owner_user_id
         with self.transaction() as conn:
             conn.execute(
-                "INSERT INTO documents VALUES (?,?,?,?,?)",
-                (document_id, workspace_id, owner_user_id, title, stamp),
+                "INSERT INTO documents (document_id, workspace_id, owner_user_id, title, created_at, "
+                "department_id) VALUES (?,?,?,?,?,?)",
+                (document_id, workspace_id, owner_user_id, title, stamp, department_id),
             )
             conn.execute(
-                "INSERT INTO document_drafts VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO document_drafts (draft_id, document_id, workspace_id, revision, "
+                "content_json, text, text_sha256, variables_json, variables_version, created_at, "
+                "updated_at, department_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     draft_id,
                     document_id,
@@ -232,6 +247,7 @@ class HostStore:
                     1,
                     stamp,
                     stamp,
+                    department_id,
                 ),
             )
             conn.execute(

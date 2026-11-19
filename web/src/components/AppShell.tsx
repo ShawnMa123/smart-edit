@@ -28,6 +28,12 @@ export interface TopBarProps {
   unreadCount?: number;
   sessionLabel?: string;
   demoIdentity?: DemoIdentityView | null;
+  /** PG identity: organisation switcher and sign-out (task 6.2). */
+  organizations?: Array<{ org_id: string; name: string }>;
+  activeOrgId?: string | null;
+  onSwitchOrg?: (orgId: string) => void;
+  userLabel?: string | null;
+  onLogout?: () => void;
 }
 
 export function TopBar({
@@ -36,6 +42,11 @@ export function TopBar({
   unreadCount = 0,
   sessionLabel = SESSION_LABEL,
   demoIdentity = null,
+  organizations = [],
+  activeOrgId = null,
+  onSwitchOrg,
+  userLabel = null,
+  onLogout,
 }: TopBarProps = {}) {
   return (
     <header className="topbar">
@@ -74,6 +85,31 @@ export function TopBar({
             </button>
           );
         })}
+        {organizations.length > 0 ? (
+          <div className="org-switcher">
+            <label className="tiny" htmlFor="active-org">
+              Organisation
+            </label>
+            <select
+              id="active-org"
+              aria-label="Active organisation"
+              value={activeOrgId ?? organizations[0]?.org_id}
+              onChange={(event) => onSwitchOrg?.(event.target.value)}
+            >
+              {organizations.map((organization) => (
+                <option key={organization.org_id} value={organization.org_id}>
+                  {organization.name}
+                </option>
+              ))}
+            </select>
+            {userLabel ? <span className="tiny">{userLabel}</span> : null}
+            {onLogout ? (
+              <button type="button" className="small" onClick={onLogout}>
+                Sign out
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {demoIdentity ? (
           <button
             type="button"

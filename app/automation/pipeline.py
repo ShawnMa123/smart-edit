@@ -20,7 +20,11 @@ class RewriteOutcome:
 
 
 def build_rewrite(
-    draft: dict[str, Any], raw_input: dict[str, Any], *, proposal_id: str
+    draft: dict[str, Any],
+    raw_input: dict[str, Any],
+    *,
+    proposal_id: str,
+    authorization_version: str = "auth-demo-1",
 ) -> RewriteOutcome:
     """Turn a rewrite input into a proposal or a business outcome; no model is called."""
     payload = RewriteInput.model_validate(raw_input)
@@ -34,7 +38,9 @@ def build_rewrite(
         replacement_text=replacement,
         intent=payload.intent,
     )
-    proposal = build_fixture_proposal(draft, fixture, proposal_id=proposal_id)
+    proposal = build_fixture_proposal(
+        draft, fixture, proposal_id=proposal_id, authorization_version=authorization_version
+    )
     assessment = assess_facts(
         proposal.preview.before_text,
         proposal.preview.after_text,

@@ -146,4 +146,27 @@ describe('DocumentHead', () => {
     expect(screen.getByText(/server draft local-only/)).toBeTruthy();
     expect(screen.getByText('not available')).toBeTruthy();
   });
+
+  it('switches organisations and signs out from the top bar', () => {
+    const onSwitch = vi.fn();
+    const onLogout = vi.fn();
+    render(
+      <TopBar
+        organizations={[
+          { org_id: 'org_a', name: 'Alpha' },
+          { org_id: 'org_b', name: 'Beta' },
+        ]}
+        activeOrgId="org_a"
+        onSwitchOrg={onSwitch}
+        userLabel="Owner"
+        onLogout={onLogout}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Active organisation'), {
+      target: { value: 'org_b' },
+    });
+    expect(onSwitch).toHaveBeenCalledWith('org_b');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(onLogout).toHaveBeenCalled();
+  });
 });

@@ -36,6 +36,8 @@ class AutomationRunService:
         ids: Any,
         *,
         deadline_seconds: int = 120,
+        authorizer: Any | None = None,
+        activity: Any | None = None,
     ) -> None:
         self.host = host
         self.store = store
@@ -43,6 +45,8 @@ class AutomationRunService:
         self.clock = clock
         self.ids = ids
         self.deadline_seconds = deadline_seconds
+        self.authorizer = authorizer
+        self.activity = activity
 
     def principal(self, request) -> Principal:
         return self.identity.resolve(request)
@@ -53,9 +57,12 @@ class AutomationRunService:
 
     def _draft(self, principal: Principal, document_id: str, draft_id: str) -> dict[str, Any]:
         document = self.host.get_document(document_id)
-        if (
-            not document
-            or document["owner_user_id"] != principal.user_id
+        if not document:
+            raise HostNotFound("document not found")
+        if self.authorizer is not None:
+            self.authorizer.authorize(principal, "document.edit", document)
+        elif (
+            document["owner_user_id"] != principal.user_id
             or document["workspace_id"] != principal.workspace_id
         ):
             raise HostNotFound("document not found")
@@ -83,9 +90,15 @@ class AutomationRunService:
 
     def _require_run(self, principal: Principal, run_id: str) -> dict[str, Any]:
         row = self.store.get_run(run_id)
-        if (
-            not row
-            or row["owner_user_id"] != principal.user_id
+        if not row:
+            raise HostNotFound("run not found")
+        if self.authorizer is not None:
+            document = self.host.get_document(row["document_id"])
+            if not document:
+                raise HostNotFound("run not found")
+            self.authorizer.authorize(principal, "document.read", document)
+        elif (
+            row["owner_user_id"] != principal.user_id
             or row["workspace_id"] != principal.workspace_id
         ):
             raise HostNotFound("run not found")
@@ -213,7 +226,20 @@ class AutomationRunService:
             if self._context_stale(run, draft):
                 raise HostError(409, "stale_context", "the draft changed before the run started")
             proposal_id = self.ids.new("prop")
-            outcome = build_rewrite(draft, payload["input"], proposal_id=proposal_id)
+            authorization_version = next(
+                (
+                    row["version"]
+                    for row in self.store.list_dependencies("run", run_id)
+                    if row["resource_type"] == "authorization"
+                ),
+                "auth-demo-1",
+            )
+            outcome = build_rewrite(
+                draft,
+                payload["input"],
+                proposal_id=proposal_id,
+                authorization_version=authorization_version or "auth-demo-1",
+            )
             dependencies = [
                 {
                     "resource_type": row["resource_type"],

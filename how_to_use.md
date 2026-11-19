@@ -524,6 +524,23 @@ curl -s "$BASE/v1/chat" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: appl
 转交	帮我改写这段条款 / 帮我检查这份文档	needs_handoff（automation / standards_audit）
 ```
 
+## 8.3 账号 / 组织 / Activity / Developer（PG 模式）
+
+默认 `AUTH_MODE=fake`，界面继续使用演示身份；要体验真实账号：
+
+```bash
+ssh -f -N team04-pg
+SMART_EDIT_AUTH_MODE=pg uvicorn app.api.main:app --reload
+SMART_EDIT_AUTH_MODE=pg npm --prefix web run dev
+```
+
+1. 首次打开会进入登录页；**没有账号就点 “Create one”**：注册会创建账号 + 个人组织（`workspace_id = org_id`），并写入 HttpOnly 会话 cookie。
+2. 顶部 Organisation 选择器可切换组织；切换由服务端重新校验成员状态，非成员会被拒绝且保持原组织。
+3. **People**：部门树、成员列表、角色抽屉（祖先部门的角色显示 `inherited · read-only`）；邀请只生成一次性链接（v1 不发邮件），复制后线下发送。
+4. **Activity**：服务端事件，支持全部 / 我的部门 / 仅未读、单条或全部标为已读；成员被移除后其历史事件仍保留并显示 `Removed user`。
+5. **Developer**：需要 `developer.manage`；创建 Key 后原文**只显示一次**，列表只显示前缀。用 Key 调用接口会产生请求日志（method/path/status/latency），可按天/Key/状态看用量。页面明确写 “Webhooks are not available in this version.”。
+6. **权限边界**：组织级文档所有成员可读；部门级文档只有祖先链上有 `document.read` 的人可读（Finance 读 Legal 文档返回 403，且不泄露标题/正文）。`?demo=1` 仍可回退到演示数据。
+
 ## 9. 不开浏览器也能验证同一条链路
 
 ```bash

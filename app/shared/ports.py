@@ -15,6 +15,11 @@ class Principal:
     roles: tuple[str, ...] = ("member",)
     authorization_version: str = "auth-demo-1"
     capabilities: tuple[str, ...] = ("read", "use_ai", "confirm_fields", "edit", "apply")
+    # PG identity (`user-management`): active organisation, UI department and the auth source.
+    org_id: str | None = None
+    department_id: str | None = None
+    auth_kind: str = "fake"
+    permissions: tuple[str, ...] = ()
 
     def has(self, capability: str) -> bool:
         return capability in self.capabilities

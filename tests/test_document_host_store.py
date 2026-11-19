@@ -42,7 +42,10 @@ def test_schema_tables_and_version(tmp_path):
         "automation_dependencies",
         "automation_reviews",
     } <= tables
-    assert store.schema_version() == 2
+    assert store.schema_version() == 3
+    for table in ("documents", "document_drafts", "automation_proposals"):
+        columns = {row["name"] for row in store.all(f"PRAGMA table_info({table})")}
+        assert "department_id" in columns
 
     newer = sqlite3.connect(tmp_path / "host.db")
     newer.execute("UPDATE schema_meta SET value = '99' WHERE key = 'schema_version'")
@@ -50,6 +53,28 @@ def test_schema_tables_and_version(tmp_path):
     newer.close()
     with pytest.raises(RuntimeError):
         HostStore(tmp_path / "host.db")
+
+
+def test_department_id_migration_is_idempotent_and_keeps_old_data(tmp_path):
+    store = _store(tmp_path)
+    document = store.create_document(
+        workspace_id="ws_demo_01", owner_user_id="u1", title="Old", text="keep me"
+    )
+    # Simulate a v2 database: remove the new column from all three tables and lower the version.
+    with store.transaction() as conn:
+        for table in ("automation_proposals", "document_drafts", "documents"):
+            conn.execute(f"ALTER TABLE {table} DROP COLUMN department_id")
+        conn.execute("UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'")
+    store._conn.close()
+
+    reopened = HostStore(tmp_path / "host.db")
+    assert reopened.schema_version() == 3
+    for table in ("documents", "document_drafts", "automation_proposals"):
+        columns = {row["name"] for row in reopened.all(f"PRAGMA table_info({table})")}
+        assert "department_id" in columns
+    old = reopened.get_document(document["document_id"])
+    assert old["title"] == "Old" and old["department_id"] is None
+    assert reopened.get_draft(document["draft_id"])["text"] == "keep me"
 
 
 def test_create_save_noop_and_checkpoint(tmp_path):

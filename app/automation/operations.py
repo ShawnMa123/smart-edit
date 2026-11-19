@@ -141,6 +141,7 @@ def build_fixture_proposal(
     proposal_id: str,
     now: datetime | None = None,
     risk_flags: list[str] | None = None,
+    authorization_version: str = "auth-demo-1",
 ) -> ChangeProposal:
     """Deterministic fixture proposal: no model, no hidden content."""
     document = json.loads(draft["content_json"])
@@ -158,7 +159,7 @@ def build_fixture_proposal(
             revision=int(draft["revision"]),
             content_sha256=draft["text_sha256"],
             variables_version=int(draft["variables_version"]),
-            authorization_version="auth-demo-1",
+            authorization_version=authorization_version,
         ),
         operations=[
             ReplaceTextOperation(

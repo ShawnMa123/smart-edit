@@ -19,15 +19,24 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.assistant import router as assistant_router
+from app.api.activity import router as activity_router
+from app.api.auth import router as auth_router
 from app.api.automation import router as automation_router
+from app.api.developer import router as developer_router
 from app.api.documents import router as documents_router
 from app.api.envelope import to_envelope
 from app.api.errors import ApiFailure, IncompleteResult, error_body
+from app.api.organization import router as organization_router
 from app.assistant.bootstrap import build_services
 from app.assistant.errors import AssistantError
 from app.assistant.service import AssistantService
 from app.documents.bootstrap import build_host_services
 from app.documents.errors import HostError
+from app.identity.authorization import begin_request_cache, end_request_cache
+from app.identity.bootstrap import build_identity_services
+from app.identity.errors import CsrfRejected, IdentityError
+from app.identity.principal import has_csrf_signal, is_public_path, requires_csrf
+from app.identity.resources import DocumentAccess
 from app.llm import resolve_llm
 from app.logging_setup import get_logger
 from app.runs import RunStore, UnknownRun
@@ -37,6 +46,17 @@ from app.stages import AGENT_SPECS
 
 _UNSET = object()
 logger = get_logger("api")
+
+
+def _authorization_version(store, workspace_id: str) -> str | None:
+    """Current org authorization version for a workspace; used by automation applicability."""
+    if store is None:
+        return None
+    organization = store.get_org_by_workspace(workspace_id)
+    if not organization:
+        return None
+    version = store.authorization_version(organization["org_id"])
+    return f"org:{organization['org_id']}:{version}" if version is not None else None
 
 
 def _read_plan_refusal(plan: dict) -> ApiFailure:
@@ -89,31 +109,85 @@ def create_app(
     assistant_services=None,
     assistant_deadline_seconds: int = 120,
     host_services=None,
+    identity_services=None,
 ) -> FastAPI:
     """Build the app. `llm` overrides provider resolution (tests inject a fixture or `None`)."""
     app = FastAPI(title="smart-edit console API", version="0.1.0")
     app.state.store = store if store is not None else RunStore(runs_dir)
     app.state.llm = resolve_llm() if llm is _UNSET else llm
-    app.state.assistant = AssistantService(
-        assistant_services or build_services(), deadline_seconds=assistant_deadline_seconds
+    identity = identity_services or build_identity_services()
+    app.state.identity = identity
+    host = host_services or build_host_services(
+        identity=identity.principal, activity=identity.activity
     )
-    app.state.host = host_services or build_host_services()
+    app.state.host = host
+    document_access = None
+    if identity.enabled and identity.store is not None and identity.authorization is not None:
+        document_access = DocumentAccess(identity.store, host.store, identity.authorization)
+        # The host services are built before the identity stack (they own the SQLite store); attach
+        # the PG scope checker now that both exist.
+        host.documents.authorizer = document_access
+        host.automation.authorizer = document_access
+        host.runs.authorizer = document_access
+        host.automation.version_provider = lambda workspace_id: _authorization_version(
+            identity.store, workspace_id
+        )
+    assistant_services = assistant_services or build_services(
+        identity=identity.principal,
+        resource_authorization=document_access,
+        evidence_authorizer=document_access,
+        activity=identity.activity,
+    )
+    app.state.assistant = AssistantService(
+        assistant_services, deadline_seconds=assistant_deadline_seconds
+    )
+    app.include_router(auth_router)
+    app.include_router(organization_router)
+    app.include_router(activity_router)
+    app.include_router(developer_router)
     app.include_router(assistant_router)
     app.include_router(documents_router)
     app.include_router(automation_router)
+
+    @app.get("/health")
+    def health() -> dict:
+        return {"status": "ok", "auth_mode": identity.settings.mode}
 
     @app.middleware("http")
     async def _request_id(request: Request, call_next):
         request.state.request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:12]}"
         started = time.monotonic()
+        begin_request_cache()
+        identity_failure: IdentityError | None = None
+        if not is_public_path(request.url.path, request.method):
+            try:
+                request.state.principal = identity.principal.resolve(request)
+                if (
+                    identity.enabled
+                    and requires_csrf(request.method, request)
+                    and not has_csrf_signal(request)
+                ):
+                    raise CsrfRejected()
+            except IdentityError as exc:
+                identity_failure = exc
         try:
-            response = await call_next(request)
+            if identity_failure is not None:
+                response = JSONResponse(
+                    status_code=identity_failure.status,
+                    content=error_body(
+                        identity_failure.code, identity_failure.message, identity_failure.detail
+                    ),
+                )
+            else:
+                response = await call_next(request)
         except Exception:
             logger.exception(
                 "request failed %s %s request=%s",
                 request.method, request.url.path, request.state.request_id,
             )
             raise
+        finally:
+            end_request_cache()
         duration_ms = int((time.monotonic() - started) * 1000)
         # Polling would drown the useful lines; keep reads at DEBUG unless they fail.
         level = logging.INFO if request.method != "GET" else logging.DEBUG
@@ -125,8 +199,28 @@ def create_app(
             request.method, request.url.path, response.status_code, duration_ms,
             request.state.request_id,
         )
+        api_key = getattr(request.state, "api_key", None)
+        if api_key is not None and identity.store is not None:
+            try:
+                # Logs hold no body/token: method, path, status and latency only (design D8).
+                identity.store.append_request_log(
+                    api_key_id=api_key["key_id"],
+                    org_id=api_key["org_id"],
+                    method=request.method,
+                    path=request.url.path,
+                    status=response.status_code,
+                    latency_ms=duration_ms,
+                )
+            except Exception:  # noqa: BLE001 - logging must never break the response
+                logger.exception("api request log write failed")
         response.headers["X-Request-ID"] = request.state.request_id
         return response
+
+    @app.exception_handler(IdentityError)
+    async def _identity_error(request: Request, exc: IdentityError) -> JSONResponse:  # noqa: ARG001
+        return JSONResponse(
+            status_code=exc.status, content=error_body(exc.code, exc.message, exc.detail)
+        )
 
     @app.exception_handler(AssistantError)
     async def _assistant_error(request: Request, exc: AssistantError) -> JSONResponse:

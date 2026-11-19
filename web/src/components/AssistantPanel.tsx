@@ -68,6 +68,8 @@ const tabLabel = (tab: Tab): string =>
 
 export interface KnowledgePanelBinding {
   documentId: string;
+  /** Active organisation workspace (PG identity); defaults to the demo workspace. */
+  workspaceId?: string;
   digest: string;
   text: string;
   selection?: AssistantSelection | null;

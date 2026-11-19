@@ -190,16 +190,81 @@ class AssistantService:
         egress = getattr(services, "egress", None)
         configured_policy = getattr(settings, "egress_policy", None) if settings else None
         self.egress = egress if egress is not None else EgressPolicy.load(configured_policy)
+        # `user-management`: evidence filtering, permission checks and activity writes.
+        self.resource_authorization = getattr(services, "resource_authorization", None)
+        self.evidence_authorizer = getattr(services, "evidence_authorizer", None)
+        self.activity = getattr(services, "activity", None)
+        self.auth_mode = getattr(services, "auth_mode", "fake")
 
     # --- helpers ----------------------------------------------------------------------------
     def principal(self, request) -> Principal:
         return self.identity.resolve(request)
 
     def _authorize(self, principal: Principal, workspace_id: str) -> None:
+        if self.resource_authorization is not None:
+            # PG mode: the session's organisation is checked against a real permission.
+            from app.identity.authorization import ResourceScope
+
+            organization = self.resource_authorization.organization(workspace_id)
+            if not organization:
+                raise AssistantError(404, "RESOURCE_NOT_FOUND", "workspace not found")
+            try:
+                self.resource_authorization.authorization.authorize(
+                    principal,
+                    "assistant.use",
+                    ResourceScope(
+                        org_id=organization["org_id"],
+                        department_id=principal.department_id,
+                        workspace_id=workspace_id,
+                    ),
+                )
+            except Exception as exc:  # noqa: BLE001 - identity errors map onto the assistant contract
+                raise AssistantError(
+                    int(getattr(exc, "status", 403)),
+                    str(getattr(exc, "code", "FORBIDDEN")),
+                    str(getattr(exc, "message", "you do not have permission")),
+                ) from exc
+            return
         try:
             self.authorization.resolve(principal, workspace_id)
         except PermissionError as exc:
             raise AssistantError(404, "RESOURCE_NOT_FOUND", "workspace not found") from exc
+
+    def _filter_evidence(self, principal: Principal, bundle: EvidenceBundle) -> EvidenceBundle:
+        """Drop document evidence the user cannot read *before* composition (design D6)."""
+        if self.evidence_authorizer is None:
+            return bundle
+        kept = [
+            candidate
+            for candidate in bundle.candidates
+            if self.evidence_authorizer.can_read(
+                principal, getattr(candidate, "document_id", None)
+            )
+        ]
+        if len(kept) != len(bundle.candidates):
+            self.logger.info(
+                "evidence filtered by document scope: kept=%d dropped=%d",
+                len(kept), len(bundle.candidates) - len(kept),
+            )
+        return EvidenceBundle(kept)
+
+    def _record_run_activity(self, session: dict[str, Any], run_id: str, outcome: str) -> None:
+        if self.activity is None or self.resource_authorization is None:
+            return
+        organization = self.resource_authorization.organization(session["workspace_id"])
+        if not organization:
+            return
+        self.activity.safe_record(
+            org_id=organization["org_id"],
+            department_id=None,
+            actor_user_id=session["owner_user_id"],
+            actor_label=None,
+            kind="assistant",
+            action="assistant run completed",
+            resource_type="assistant_run",
+            resource_id=run_id,
+            detail={"outcome": outcome},
+        )
 
     def _session_for(self, principal: Principal, session_id: str) -> dict[str, Any]:
         session = self.store.get_session(session_id)
@@ -1352,6 +1417,7 @@ class AssistantService:
             # A backend failure is not "no evidence": keep the old guarantee and fail the run.
             raise local_error
         bundle = EvidenceBundle(merge_layers(local_candidates, web_found))
+        bundle = self._filter_evidence(principal, bundle)
         self.logger.info(
             "retrieval run=%s local=%d web=%d candidates=%d layers=%s",
             run_id, len(local_candidates), len(web_found), len(bundle.candidates),
@@ -1416,6 +1482,7 @@ class AssistantService:
                     start_offset=selection.start_offset, end_offset=selection.end_offset,
                 )
             ])
+            bundle = self._filter_evidence(principal, bundle)
             layers.append(RetrievalLayer(layer="local", status="ok", detail="document_snapshot"))
             if web_decision is not None:
                 blocked = not web_decision.allowed
@@ -1721,6 +1788,7 @@ class AssistantService:
                 any(citation["synthetic"] for citation in citations),
                 int((time.monotonic() - started) * 1000),
             )
+            self._record_run_activity(session, run_id, answer.outcome)
         except AssistantError as exc:
             self.store.fail_run(run_id, exc.code, exc.message, self.clock.now())
             self.audit.append("", run_id, "run_failed", "", {"code": exc.code})

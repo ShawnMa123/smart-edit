@@ -85,7 +85,10 @@ describe('createRunWithFiles', () => {
     expect(calls[0].init.body).toBeInstanceOf(FormData);
     expect((calls[0].init.body as FormData).get('files')).toBeTruthy();
     // A Content-Type here would replace the browser's boundary and the server would see zero files.
-    expect(calls[0].init.headers).toBeUndefined();
+    // The CSRF signal header is expected and harmless.
+    expect(
+      (calls[0].init.headers as Record<string, string> | undefined)?.['Content-Type'],
+    ).toBeUndefined();
   });
 
   it('sends every chosen file under the same field name', async () => {

@@ -12,11 +12,55 @@ from app.shared.ports import IdsPort, Principal
 
 
 class DocumentService:
-    def __init__(self, store: HostStore, identity: Any, clock: Any, ids: IdsPort) -> None:
+    def __init__(
+        self,
+        store: HostStore,
+        identity: Any,
+        clock: Any,
+        ids: IdsPort,
+        authorizer: Any | None = None,
+        activity: Any | None = None,
+    ) -> None:
         self.store = store
         self.identity = identity
         self.clock = clock
         self.ids = ids
+        # PG mode only: document scope lives in the database, never in the request (design D5).
+        self.authorizer = authorizer
+        self.activity = activity
+
+    def _org_id(self, principal: Principal) -> str | None:
+        if principal.org_id:
+            return principal.org_id
+        if self.authorizer is not None:
+            organization = self.authorizer.organization(principal.workspace_id)
+            return organization["org_id"] if organization else None
+        return None
+
+    def _record(
+        self,
+        principal: Principal,
+        action: str,
+        document_id: str,
+        department_id: str | None,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        if self.activity is None:
+            return
+        org_id = self._org_id(principal)
+        if not org_id:
+            return
+        self.activity.safe_record(
+            org_id=org_id,
+            department_id=department_id,
+            actor_user_id=principal.user_id,
+            actor_label=None,
+            kind="document",
+            action=action,
+            resource_type="document",
+            resource_id=document_id,
+            detail=detail,
+        )
 
     def principal(self, request) -> Principal:
         return self.identity.resolve(request)
@@ -41,18 +85,30 @@ class DocumentService:
             "updated_at": draft.get("updated_at"),
         }
 
-    def _document(self, principal: Principal, document_id: str) -> dict[str, Any]:
+    def _document(
+        self, principal: Principal, document_id: str, action: str = "document.read"
+    ) -> dict[str, Any]:
         document = self.store.get_document(document_id)
+        if not document:
+            raise HostNotFound("document not found")
+        if self.authorizer is not None:
+            self.authorizer.authorize(principal, action, document)
+            return document
         if (
-            not document
-            or document["owner_user_id"] != principal.user_id
+            document["owner_user_id"] != principal.user_id
             or document["workspace_id"] != principal.workspace_id
         ):
             raise HostNotFound("document not found")
         return document
 
-    def _draft(self, principal: Principal, document_id: str, draft_id: str) -> tuple[dict, dict]:
-        document = self._document(principal, document_id)
+    def _draft(
+        self,
+        principal: Principal,
+        document_id: str,
+        draft_id: str,
+        action: str = "document.read",
+    ) -> tuple[dict, dict]:
+        document = self._document(principal, document_id, action)
         draft = self.store.get_draft(draft_id)
         if not draft or draft["document_id"] != document_id:
             raise HostNotFound("draft not found")
@@ -76,6 +132,15 @@ class DocumentService:
         document_id = payload.document_id or self.ids.new("doc")
         if self.store.get_document(document_id):
             raise HostError(409, "document_exists", "a document with this id already exists")
+        if self.authorizer is not None:
+            self.authorizer.authorize(
+                principal,
+                "document.create",
+                {
+                    "workspace_id": principal.workspace_id,
+                    "department_id": payload.department_id,
+                },
+            )
         draft = self.store.create_document(
             workspace_id=principal.workspace_id,
             owner_user_id=principal.user_id,
@@ -85,8 +150,16 @@ class DocumentService:
             variables=payload.variables,
             document_id=document_id,
             created_by=principal.user_id,
+            department_id=payload.department_id,
         )
         document = self._document(principal, document_id)
+        self._record(
+            principal,
+            "document created",
+            document_id,
+            payload.department_id,
+            {"title": payload.title},
+        )
         return self._draft_view(draft, document)
 
     def save_draft(
@@ -98,7 +171,7 @@ class DocumentService:
         payload: DraftSave,
         request_id: str,
     ) -> dict[str, Any]:
-        document, _ = self._draft(principal, document_id, draft_id)
+        document, _ = self._draft(principal, document_id, draft_id, "document.edit")
         self._require_capability(principal, "edit")
         self.store.validate_lock(
             draft_id=draft_id,
@@ -125,7 +198,7 @@ class DocumentService:
         payload: Any,
         request_id: str,
     ) -> dict[str, Any]:
-        document, _ = self._draft(principal, document_id, draft_id)
+        document, _ = self._draft(principal, document_id, draft_id, "document.edit")
         self._require_capability(principal, "edit")
         self.store.validate_lock(
             draft_id=draft_id,
@@ -151,7 +224,7 @@ class DocumentService:
         expected_revision: int,
         request_id: str,
     ) -> dict[str, Any]:
-        document, _ = self._draft(principal, document_id, draft_id)
+        document, _ = self._draft(principal, document_id, draft_id, "document.edit")
         draft = self.store.restore_checkpoint(
             draft_id=draft_id,
             checkpoint_id=checkpoint_id,
@@ -164,13 +237,17 @@ class DocumentService:
     def acquire_lock(
         self, principal: Principal, document_id: str, draft_id: str, payload: LockCreate
     ) -> dict[str, Any]:
-        self._draft(principal, document_id, draft_id)
-        return self.store.acquire_lock(
+        document, _ = self._draft(principal, document_id, draft_id, "document.lock")
+        lock = self.store.acquire_lock(
             draft_id=draft_id,
             owner_user_id=principal.user_id,
             session_id=payload.session_id,
             lease_seconds=payload.lease_seconds,
         )
+        self._record(
+            principal, "document locked", document_id, document.get("department_id")
+        )
+        return lock
 
     def heartbeat(
         self, principal: Principal, document_id: str, lock_id: str, payload: Heartbeat
@@ -178,7 +255,7 @@ class DocumentService:
         lock = self.store.one("SELECT * FROM document_locks WHERE lock_id = ?", (lock_id,))
         if not lock:
             raise HostNotFound("lock not found")
-        self._draft(principal, document_id, lock["draft_id"])
+        self._draft(principal, document_id, lock["draft_id"], "document.lock")
         return self.store.heartbeat_lock(
             lock_id=lock_id, owner_user_id=principal.user_id, lease_seconds=payload.lease_seconds
         )
@@ -187,7 +264,7 @@ class DocumentService:
         lock = self.store.one("SELECT * FROM document_locks WHERE lock_id = ?", (lock_id,))
         if not lock:
             raise HostNotFound("lock not found")
-        self._draft(principal, document_id, lock["draft_id"])
+        self._draft(principal, document_id, lock["draft_id"], "document.lock")
         return self.store.release_lock(lock_id=lock_id, owner_user_id=principal.user_id)
 
 

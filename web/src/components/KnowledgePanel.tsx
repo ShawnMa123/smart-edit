@@ -32,6 +32,8 @@ import { onboardingCopy, suggestionsFor } from './knowledgeSuggestions';
 
 export interface KnowledgePanelProps {
   documentId: string;
+  /** Active organisation workspace (design D9); falls back to the demo workspace. */
+  workspaceId?: string;
   /** Digest of the editor text this panel would freeze into the snapshot. */
   digest: string;
   text: string;
@@ -60,6 +62,7 @@ const SUPPORT_COPY: Record<Answer['support_level'], string> = {
 
 export function KnowledgePanel({
   documentId,
+  workspaceId = DEFAULT_WORKSPACE,
   digest,
   text,
   selection = null,
@@ -184,7 +187,7 @@ export function KnowledgePanel({
         }
         active = await client.createSession(
           {
-            workspace_id: DEFAULT_WORKSPACE,
+            workspace_id: workspaceId,
             locale,
             ...(snapshotId ? { document_id: documentId, snapshot_id: snapshotId } : {}),
           },

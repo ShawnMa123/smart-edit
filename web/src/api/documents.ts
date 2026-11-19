@@ -74,8 +74,18 @@ async function request<T>(
   const doFetch = fetchImpl ?? globalThis.fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const method = (init.method ?? 'GET').toUpperCase();
+  const headers =
+    method === 'GET'
+      ? init.headers
+      : { ...((init.headers as Record<string, string> | undefined) ?? {}), 'X-Requested-With': 'smart-edit' };
   try {
-    const response = await doFetch(`${DOCUMENTS_BASE}${path}`, { ...init, signal: controller.signal });
+    const response = await doFetch(`${DOCUMENTS_BASE}${path}`, {
+      ...init,
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    });
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
       const body = (payload ?? {}) as {
@@ -103,7 +113,7 @@ async function request<T>(
 
 const json = (body: unknown): RequestInit => ({
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'smart-edit' },
   body: JSON.stringify(body),
 });
 

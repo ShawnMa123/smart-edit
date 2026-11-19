@@ -104,3 +104,8 @@ class AssistantServices:
     settings: object | None = None
     # `knowledge-statute-retrieval`: optional external statute source; unset means "no statute leg".
     statute: object | None = None
+    # `user-management`: PG authorization, evidence filtering and activity writes.
+    resource_authorization: object | None = None
+    evidence_authorizer: object | None = None
+    activity: object | None = None
+    auth_mode: str = "fake"

@@ -17,6 +17,8 @@ class DocumentCreate(Strict):
     content: dict[str, Any] | None = None
     text: str | None = Field(default=None, max_length=200_000)
     variables: dict[str, Any] = Field(default_factory=dict)
+    # NULL/absent = organisation-level document (design D4).
+    department_id: str | None = Field(default=None, max_length=128)
 
 
 class DraftSave(Strict):

@@ -17,6 +17,10 @@ dependencies = [
     "pymupdf>=1.24,<2",  # 2.x pulls in pymupdf-layout/onnxruntime, unused by the POC (see agent-normalize/design.md §15)
     "PyYAML",
     "httpx",  # knowledge assistant: approved model provider + web/RAG adapters
+    # Identity/auth (user-management): PG-backed accounts, pooled connections and argon2id hashing.
+    "psycopg[binary]>=3.2",
+    "psycopg_pool>=3.2",
+    "argon2-cffi>=23.1",
 ]
 
 [project.optional-dependencies]

@@ -35,22 +35,52 @@ class HostServices:
 
 
 def build_host_services(
-    *, db_path: str | Path | None = None, mode: str | None = None
+    *,
+    db_path: str | Path | None = None,
+    mode: str | None = None,
+    identity: object | None = None,
+    activity: object | None = None,
+    document_access: object | None = None,
+    version_provider: object | None = None,
 ) -> HostServices:
     resolved = resolve_host_mode(mode)
     assert_host_mode_safe(resolved)
     store = HostStore(db_path or os.environ.get(DB_ENV, "runs/host.db"))
-    identity = FakeIdentity()
+    resolved_identity = identity or FakeIdentity()
     clock = SystemClock()
     ids = SystemIds()
     automation_store = AutomationStore(store)
     automation_store.recover_runs()
     return HostServices(
         store=store,
-        documents=DocumentService(store, identity, clock, ids),
-        automation=AutomationService(store, automation_store, identity, clock, ids),
-        runs=AutomationRunService(store, automation_store, identity, clock, ids),
-        identity=identity,
+        documents=DocumentService(
+            store,
+            resolved_identity,
+            clock,
+            ids,
+            authorizer=document_access,
+            activity=activity,
+        ),
+        automation=AutomationService(
+            store,
+            automation_store,
+            resolved_identity,
+            clock,
+            ids,
+            authorizer=document_access,
+            version_provider=version_provider,
+            activity=activity,
+        ),
+        runs=AutomationRunService(
+            store,
+            automation_store,
+            resolved_identity,
+            clock,
+            ids,
+            authorizer=document_access,
+            activity=activity,
+        ),
+        identity=resolved_identity,
         clock=clock,
         ids=ids,
         mode=resolved,

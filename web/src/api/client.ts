@@ -31,8 +31,19 @@ async function request(
   const doFetch = fetchImpl ?? globalThis.fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const method = (init.method ?? 'GET').toUpperCase();
+  // Unsafe methods carry the explicit CSRF signal; reads stay header-free for test clarity.
+  const headers =
+    method === 'GET'
+      ? init.headers
+      : { ...((init.headers as Record<string, string> | undefined) ?? {}), 'X-Requested-With': 'smart-edit' };
   try {
-    const response = await doFetch(`${API_BASE}${path}`, { ...init, signal: controller.signal });
+    const response = await doFetch(`${API_BASE}${path}`, {
+      ...init,
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    });
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
       const body = (payload ?? {}) as { code?: string; message?: string; detail?: unknown };

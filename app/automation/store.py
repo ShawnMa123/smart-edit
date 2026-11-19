@@ -40,16 +40,21 @@ class AutomationStore:
             "revision": proposal.revision,
             "expires_at": proposal.expires_at,
             "created_at": now_iso(),
+            "department_id": (self.host.get_document(proposal.context.document_id) or {}).get(
+                "department_id"
+            ),
         }
 
     def _insert_proposal(
         self, conn, proposal: ChangeProposal, owner_user_id: str, workspace_id: str
     ) -> None:
         conn.execute(
-            "INSERT INTO automation_proposals VALUES (:proposal_id,:document_id,:draft_id,"
-            ":owner_user_id,:workspace_id,:context_json,:operations_json,:preview_json,"
-            ":risk_flags_json,:review_json,:disposition,:application_status,:revision,"
-            ":expires_at,:created_at)",
+            "INSERT INTO automation_proposals (proposal_id, document_id, draft_id, owner_user_id, "
+            "workspace_id, context_json, operations_json, preview_json, risk_flags_json, review_json, "
+            "disposition, application_status, revision, expires_at, created_at, department_id) "
+            "VALUES (:proposal_id,:document_id,:draft_id,:owner_user_id,:workspace_id,:context_json,"
+            ":operations_json,:preview_json,:risk_flags_json,:review_json,:disposition,"
+            ":application_status,:revision,:expires_at,:created_at,:department_id)",
             self._proposal_row(proposal, owner_user_id, workspace_id),
         )
 

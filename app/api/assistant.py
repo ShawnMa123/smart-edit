@@ -41,8 +41,9 @@ def _idempotency_key(request: Request) -> str | None:
 @router.get("/capabilities", response_model=Capabilities)
 def capabilities(request: Request) -> Capabilities:
     service = _service(request)
-    # Same identity resolution as every other endpoint; the response carries no user data.
-    service.principal(request)
+    # Same identity + permission resolution as every other endpoint; the response carries no user data.
+    principal = service.principal(request)
+    service._authorize(principal, principal.workspace_id)
     return service.capabilities()
 
 

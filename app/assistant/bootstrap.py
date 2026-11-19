@@ -41,6 +41,11 @@ def build_services(
     gateway: object | None = None,
     egress: object | None = None,
     statute: object | None = None,
+    identity: object | None = None,
+    authorization: object | None = None,
+    resource_authorization: object | None = None,
+    evidence_authorizer: object | None = None,
+    activity: object | None = None,
 ) -> AssistantServices:
     resolved = resolve_mode(mode)
     resolved_settings = settings or AssistantSettings.from_env()
@@ -128,8 +133,8 @@ def build_services(
 
     return AssistantServices(
         store=store,
-        identity=FakeIdentity(),
-        authorization=FakeAuthorization(),
+        identity=identity or FakeIdentity(),
+        authorization=authorization or FakeAuthorization(),
         snapshots=FakeSnapshots(store),
         audit=StoreAudit(store),
         clock=SystemClock(),
@@ -141,4 +146,8 @@ def build_services(
         web=web_layer,
         settings=resolved_settings,
         statute=statute_layer,
+        resource_authorization=resource_authorization,
+        evidence_authorizer=evidence_authorizer,
+        activity=activity,
+        auth_mode=resolved_settings.auth_mode,
     )

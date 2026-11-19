@@ -35,6 +35,8 @@ STATUTE_ENV = "SMART_EDIT_STATUTE"
 STATUTE_BASE_URL_ENV = "MERCATORIA_BASE_URL"
 STATUTE_TOKEN_ENV = "MERCATORIA_API_TOKEN"
 CHAT_TIMEOUT_ENV = "MERCATORIA_CHAT_TIMEOUT"
+# Identity mode (`user-management` task 1.4); mirrors `app.identity.settings.AUTH_MODE_ENV`.
+AUTH_MODE_ENV = "SMART_EDIT_AUTH_MODE"
 
 DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 # `None` means "resolve by priority" (`knowledge.json` → `knowledge.sample.json` → `egress.yaml`),
@@ -77,6 +79,8 @@ class AssistantSettings:
     statute_api_token: str | None = None
     statute_timeout: float = STATUTE_DEFAULT_TIMEOUT
     chat_timeout: float = CHAT_DEFAULT_TIMEOUT
+    # Identity mode (`user-management` task 1.4): `fake` keeps X-Demo-User, `pg` requires a session.
+    auth_mode: str = "fake"
 
     @property
     def model_provider(self) -> str | None:
@@ -141,6 +145,9 @@ class AssistantSettings:
             ) from exc
         if chat_timeout <= 0:
             raise ValueError(f"{CHAT_TIMEOUT_ENV} must be greater than 0; got {chat_timeout!r}")
+        raw_auth_mode = (values.get(AUTH_MODE_ENV) or "fake").strip().lower()
+        if raw_auth_mode not in ("fake", "pg"):
+            raise ValueError(f"{AUTH_MODE_ENV} must be 'fake' or 'pg'; got {raw_auth_mode!r}")
         return cls(
             model=model,
             base_url=(values.get(MODEL_BASE_URL_ENV) or DEFAULT_BASE_URL).strip(),
@@ -154,6 +161,7 @@ class AssistantSettings:
             statute_base_url=statute_base_url,
             statute_api_token=statute_token,
             chat_timeout=chat_timeout,
+            auth_mode=raw_auth_mode,
             web=raw_web,
             web_endpoint=(values.get(WEB_ENDPOINT_ENV) or "").strip() or None,
             web_api_key=(values.get(WEB_API_KEY_ENV) or "").strip() or None,
