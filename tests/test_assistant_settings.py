@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.assistant.settings import AssistantSettings, assert_production_safe
+from app.assistant.settings import CHAT_TIMEOUT_ENV, AssistantSettings, assert_production_safe
 
 
 def test_defaults_disable_every_external_call():
@@ -26,6 +26,18 @@ def test_model_must_use_the_doubao_prefix():
 def test_model_requires_credentials_instead_of_silent_fallback():
     with pytest.raises(ValueError):
         AssistantSettings.from_env({"SMART_EDIT_ASSISTANT_MODEL": "doubao:seed-1"})
+
+
+def test_chat_timeout_defaults_to_sixty_seconds_and_can_be_overridden():
+    assert AssistantSettings.from_env({}).chat_timeout == 60.0
+    assert AssistantSettings.from_env({CHAT_TIMEOUT_ENV: "12.5"}).chat_timeout == 12.5
+
+
+def test_chat_timeout_must_be_a_positive_number():
+    with pytest.raises(ValueError):
+        AssistantSettings.from_env({CHAT_TIMEOUT_ENV: "soon"})
+    with pytest.raises(ValueError):
+        AssistantSettings.from_env({CHAT_TIMEOUT_ENV: "0"})
 
 
 def test_configured_model_is_reported_with_its_label():

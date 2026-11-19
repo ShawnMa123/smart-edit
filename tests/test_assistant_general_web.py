@@ -404,6 +404,9 @@ class StubStatute:
         self.calls += 1
         return self.outcome
 
+    def chat_detailed(self, *args, **kwargs):
+        return self.search_detailed(*args, **kwargs)
+
     def health(self):
         return {"reachable": True, "documents": 1, "chunks": 1, "index_version": "test"}
 

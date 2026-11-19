@@ -364,6 +364,10 @@ class StubStatute:
         self.calls += 1
         return self.outcome
 
+    def chat_detailed(self, principal, workspace_id, plan, applicable_on):
+        # The pipeline now uses `/v1/chat`; these stubs keep the old outcome shape.
+        return self.search_detailed(principal, workspace_id, plan, applicable_on)
+
     def health(self):
         return {"reachable": True, "documents": 143, "chunks": 11562, "index_version": "idx-1"}
 
@@ -458,24 +462,20 @@ class RecordingComposer:
         return FixtureComposer().compose(plan, bundle, context)
 
 
-def test_a_product_question_merges_rag_and_local_evidence(tmp_path):
+def test_a_product_question_never_calls_chat(tmp_path):
     stub = StubStatute(StatuteOutcome([statute_candidate()], status="ok", reason="ok", hits=1))
-    composer = RecordingComposer()
 
     run = run_once(
         tmp_path,
         statute=stub,
         web_search=False,
         question="提交版本后编辑锁会释放吗？",
-        gateway=composer,
     )
 
-    assert stub.calls == 1
-    layers = {layer.layer: layer for layer in run.result.retrieval}
-    assert layers["statute"].status == "ok"
-    assert layers["local"].detail == "statute_merged"
-    assert "statute" in composer.bundle_types
-    assert any(source_type != "statute" for source_type in composer.bundle_types)
+    assert stub.calls == 0
+    assert all(layer.layer != "statute" for layer in run.result.retrieval)
+    assert run.result.citations
+    assert all(citation.source_type != "statute" for citation in run.result.citations)
 
 
 def test_an_unusable_statute_leg_falls_through_to_the_existing_web_channel(tmp_path):
@@ -696,7 +696,8 @@ def test_a_rule_answer_does_not_search_local_when_rag_has_hits(tmp_path, caplog)
 
     assert local.calls == 0
     assert run.result.route == "statute"
-    assert "retrieval statute" in caplog.text
+    assert "retrieval chat" in caplog.text
+    assert "answer_status=" in caplog.text
     assert "hits=1" in caplog.text
 
 

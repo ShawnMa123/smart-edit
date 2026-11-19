@@ -399,17 +399,19 @@ sqlite3 runs/assistant.db \
 
 回滚：把 `SMART_EDIT_ASSISTANT_WEB` 改回 `off`、`GENERAL_WEB` 置 0、清空模型配置即可回到原行为。
 
-### 8.2 法规检索腿（Mercatoria `/v1/retrieve`，`knowledge-statute-live`）
+### 8.2 法规腿（Mercatoria `/v1/chat` + 豆包结构化，`knowledge-statute-chat`）
 
-默认关闭。开启后，**所有知识类问题先查法规语料**（规则解释、产品 FAQ、显式声明的法域/交易日/规则版本），
-命中（含低置信、法域未覆盖）一律交给豆包总结并以法规原文作答（`source_type="statute"`、`route="statute"`）；
-只有 `/v1/retrieve` **返回零条文本、失败或超时**时才自动联网，绝不把命中丢掉再写成“没有相关规定”。
+默认关闭。开启后，**规则解释与显式声明法域/交易日/规则版本的问题**会先调用 `/v1/chat`（检索 + 服务端草稿），
+再把草稿交给豆包做结构化/润色，最终由本服务评审、标注来源（`source_type="statute"`、`route="statute"`）。
+`/v1/retrieve` 适配器仍保留（离线回放/回滚），但流水线**不再调用**。产品 FAQ 不查法规——`/v1/chat` 会用
+法律语料回答产品问题，因此产品问题只查本地已发布语料。
 
 | 环境变量 | 值 | 说明 |
 |---|---|---|
 | `SMART_EDIT_STATUTE` | `1` | 总开关；缺 URL 或 token 时**启动失败**，不静默降级 |
-| `MERCATORIA_BASE_URL` | 例：`http://127.0.0.1:18080` | 法规语料服务地址（通常经 SSH 隧道） |
+| `MERCATORIA_BASE_URL` | 例：`http://59.110.213.187:8080` | 法规语料服务地址（可直连或经 SSH 隧道） |
 | `MERCATORIA_API_TOKEN` | `<token>` | Bearer token，只放服务端 |
+| `MERCATORIA_CHAT_TIMEOUT` | 默认 `60` | `/v1/chat` 的请求超时（含服务端生成）；检索层预算为它 +10s |
 
 ```bash
 # 1) 起隧道（实测：mercatoria 容器在 team04-pg 上发布 8080；本地 18080 只是本地端口）
@@ -428,49 +430,86 @@ grep "assistant: model=" runs/logs/backend-*.log | tail -1
 
 **界面路径**：浏览器打开 `http://127.0.0.1:5173` → 右侧助手面板的 **`Knowledge Q&A`** 标签 → 法域 chips 保持
 **`Any`（任意）** → 联网开关默认勾选（可关闭；关闭后仍查 RAG 与本地语料）→ 输入问题 → `Ask`。界面上没有
-“法规腿”单独开关，它由服务端 `.env` 决定；打开后知识类问题（含产品 FAQ）都会先查法规。回答里：
+“法规腿”单独开关，它由服务端 `.env` 决定；打开后**规则类/显式范围问题**先走 chat，**产品 FAQ 不查法规**。回答里：
 
-- 法规命中：引用区分组出现 **`Statute (N)`**，徽章带 `jurisdiction / effective <date>`，点开只看获准摘录与条号；
-  不再出现 `Answered from published sources · web not needed`。
-- 低置信 / 法域未覆盖：命中**照样被使用**，结论上方提示 **`N statute match(es) at low confidence — reference only`**
-  或 `Jurisdiction not covered: …`，并在 limitations 写明覆盖边界。
-- RAG 零结果：自动联网，显示 **`RAG returned no result — searched the web automatically (unverified)`**，
-  联网引用标 `General web` + `Unverified third-party`。
+- `answered`：引用区分组出现 **`Statute (N)`**，徽章带 `jurisdiction / effective <date>`，点开只看获准摘录与条号。
+- `partial`：提示 **`Statute answer is partial — the cited evidence is incomplete`**，引用仍可用。
+- `unsupported` / `unavailable`：有 references 时**仍用条文证据**作答，并提示 **`The statute service did not return a usable answer`**（回答注明“服务自身答案不可用”）；零 references 才本地/联网回退。
+- RAG 零结果：自动联网，显示 **`RAG returned no result — searched the web automatically (unverified)`**。
 - 出站被拒：**`Statute search blocked by outbound policy — not covered`**，本次没有任何法规出站。
-- 重建中 / 超时：分别显示 `Statute corpus is being rebuilt` / `Statute search timed out`，随后自动联网。
+- 超时/重建：分别显示 `Statute search timed out` / `Statute corpus is being rebuilt`，随后自动联网。
+- 豆包结构化失败：用 chat 引用的证据原文作答，并注明“草稿已生成但结构化失败”。
 
 > 注意：`Any` 是推荐值。实测（`knowledge-statute-live` 5.2）定义类问题带法域反而更差：选 `WTO` 后 top chunk
 > 变成 WTO 贸易便利化条文且 `confidence=low`；不带法域 + 扩展词才能命中《独立保函规定》。
 
-**触发条件**：规则解释（如 `什么是guarantee`、`URDG 758 第 20 条…`）、产品 FAQ，以及显式选了法域/交易日/规则版本的问题；
-唯一例外是"选中文字并问这段/这句"——该问题以选区快照为证据，不查法规。编辑器里选中一个词**不会**再把主题问题判成文档解释（`knowledge-statute-live` D1）。
+**触发条件**：规则解释（如 `什么是guarantee`、`URDG 758 第 20 条…`）与显式选了法域/交易日/规则版本的问题；
+产品 FAQ 与"选中文字问这段/这句"都不查法规（后者以选区快照为证据）。编辑器里选中一个词**不会**再把主题问题判成文档解释。
 
-**出站闸**：法规调用与联网共用一套判定（用途 `statute`）——金额/单号/账号/邮箱会被脱敏，规则号保留；
-问题与选中文本重叠达到 40 字会被拒绝；隧道/内网地址不参与公网域名白名单。判定结果写审计
-（`egress_allowed` / `egress_blocked`，只存 query digest）。被拒绝时不发请求，法规层状态为 `blocked`，
-回答里写明“因出站策略未查询法规”。
+**出站闸与合规**：法规调用与联网共用一套判定（用途 `statute`，审计里带 `endpoint="chat"`）——金额/单号/账号/邮箱会被脱敏，
+规则号保留；问题与选中文本重叠达到 40 字会被拒绝；隧道/内网地址不参与公网域名白名单。判定结果写审计
+（`egress_allowed` / `egress_blocked`，只存 query digest）。被拒绝时不发请求，法规层状态为 `blocked`。
+注意：chat 的**生成发生在 Mercatoria 侧**（其自带 LLM），不在本服务的出站审计范围内；部署方需在语料服务侧单独审计。
 
-**两种结局都可在运行结果里自证**：
+**成本**：一次规则问题包含**两次模型调用**（Mercatoria chat 生成 + 豆包结构化），延迟与费用都高于旧的 retrieve-only 链路。
+若剩余 run deadline < 20 秒，会跳过豆包润色，直接用证据摘录作答。
+
+**各状态都可在运行结果里自证**：
 
 ```bash
-# 最近一次法规层记录：status / detail / hits
+# 最近一次法规层记录：status / detail（answer_status）/ hits
 sqlite3 runs/assistant.db \
   "select json_extract(result_json,'\$.route'),
           json_extract(result_json,'\$.retrieval')
    from assistant_runs order by created_at desc limit 3;"
 ```
 
-| 结局 | 你会看到 | 含义 |
+| 状态 | 你会看到 | 含义 |
 |---|---|---|
-| 采信 | `route="statute"`、`statute/ok/ok`、引用徽章 `Statute`、locator 带条号/法域/生效日 | 答案来自法规原文 |
-| 低置信 / 未覆盖 | `route="statute"`、`statute/ok/low_confidence`（或 `uncovered:*`）+ `hits=N`，附“仅供参考 / 覆盖边界” | 命中照样使用，只降级说明 |
-| RAG 零结果 | `statute/ok/zero:*`（或 `failed/*`）→ 自动联网，`route="general_web"`、`web.reason="rag_empty"` | 只有此时才联网 |
+| `answered` | `route="statute"`、`statute/ok/answered`、引用徽章 `Statute`、locator 带条号/法域/生效日 | chat 草稿 + 豆包结构化完成 |
+| `partial` | `statute/ok/partial`，附“依据不完整” | 引用仍可用，但覆盖不全 |
+| `unsupported` / `unavailable` | `statute/ok/<status>`；有 references 时仍引用条文并注明“服务自身答案不可用”，零 references 才回退 | chat 未给出可用答案 |
+| RAG 零结果 | `statute/ok/zero:*`（或 `failed/*`）→ 自动联网，`web.reason="rag_empty"` | 只有此时才联网 |
 | 两处皆空 | 零引用 + “知识库检索与联网搜索都没有找到可用证据” | 如实说明，不编造 |
 | 出站被拒 | `statute/blocked/policy_unavailable`（或缺策略） | 本次根本没有出站 |
 
 **术语归一化**：`app/configs/knowledge.sample.json` 的 `query_expansion` 会把 `guarantee` 等通用词扩成
 `见索即付保函 / 独立保函 / demand guarantee / URDG 758`；每键 ≤4 条、总字符 ≤120，越界由加载器拦截。
 想调整召回，改这张表并重启，不需要改代码。
+
+**直接调用 `/v1/chat`（调试/独立脚本）**：助手内部也调用这个端点（`/v1/chat`，检索 + 服务端生成）；这里介绍如何脱离助手直接调用它做对比或排障。
+请求支持 `question` 或 `messages`（多轮）、`retrieval_query`、`rewrite_query:false`、`queries[]`、`top_k`、`filters`，
+以及 `answer: {"enabled": false}`（只检索）。响应在检索结果之外多出 `answer`、`answer_status`
+（`answered / partial / unsupported / unavailable / skipped / error`）、`citations[]`（chunk 级）与
+`references[]`（带 `cited` 标记）。回答里的 `[chunk_id]` 就是引用锚点。
+
+```bash
+TOKEN=$(grep '^MERCATORIA_API_TOKEN=' .env | cut -d= -f2-)
+BASE=$(grep '^MERCATORIA_BASE_URL=' .env | cut -d= -f2-)
+
+# 1) 只检索（不生成）
+curl -s "$BASE/v1/chat" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"question":"在wto里，什么是guarantee","top_k":3,"answer":{"enabled":false}}' \
+  | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['answer_status']);print([(r['doc_id'],r['article_label']) for r in d['references']])"
+
+# 2) 检索 + 生成（带引用）
+curl -s "$BASE/v1/chat" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"question":"独立保函的定义是什么","top_k":3,"answer":{"enabled":true}}' \
+  | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['answer_status']);print(d['answer'][:200]);print([(c['doc_id'],c['article_label']) for c in d['citations']])"
+
+# 3) 带法域过滤 + 多轮
+curl -s "$BASE/v1/chat" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"guarantee 是什么"}],"top_k":3,"filters":{"jurisdictions":["WTO"]},"answer":{"enabled":true}}'
+
+# 4) 仓库脚本（自动读 .env）
+.venv/bin/python scripts/mercatoria_chat.py "独立保函的定义是什么" --top-k 3
+.venv/bin/python scripts/mercatoria_chat.py "guarantee" --jurisdiction WTO --top-k 3
+.venv/bin/python scripts/mercatoria_chat.py "在wto里，什么是guarantee" --no-answer --json
+```
+
+> 注意：`/v1/chat` 与知识助手是两条独立链路。助手用的是 `/v1/retrieve` + 豆包总结 + 出站闸/审计；
+> `/v1/chat` 由 Mercatoria 自己的模型生成，引用是 chunk 级，不经过助手的来源标记与审计。
+> 若要把 `/v1/chat` 接进助手（例如替代豆包总结），需要单独起一个 change。
 
 **回滚**：清空 `SMART_EDIT_STATUTE`（或设为 `0`）即回到词法-only；没有数据库迁移，历史运行记录不受影响。
 ```

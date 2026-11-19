@@ -34,6 +34,7 @@ THINKING_ENV = "SMART_EDIT_ASSISTANT_THINKING"
 STATUTE_ENV = "SMART_EDIT_STATUTE"
 STATUTE_BASE_URL_ENV = "MERCATORIA_BASE_URL"
 STATUTE_TOKEN_ENV = "MERCATORIA_API_TOKEN"
+CHAT_TIMEOUT_ENV = "MERCATORIA_CHAT_TIMEOUT"
 
 DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 # `None` means "resolve by priority" (`knowledge.json` → `knowledge.sample.json` → `egress.yaml`),
@@ -43,8 +44,10 @@ MODEL_PREFIX = "doubao:"
 WEB_PROVIDERS = ("off", "fixture", "http")
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off", ""}
-# Statute source defaults; the timeout is deliberately well above the measured ~151 ms round trip.
+# Statute source defaults; the retrieval timeout is deliberately well above the measured ~151 ms.
+# `/v1/chat` also runs a server-side LLM, so it needs a much larger budget.
 STATUTE_DEFAULT_TIMEOUT = 2.5
+CHAT_DEFAULT_TIMEOUT = 60.0
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,7 @@ class AssistantSettings:
     statute_base_url: str | None = None
     statute_api_token: str | None = None
     statute_timeout: float = STATUTE_DEFAULT_TIMEOUT
+    chat_timeout: float = CHAT_DEFAULT_TIMEOUT
 
     @property
     def model_provider(self) -> str | None:
@@ -128,6 +132,15 @@ class AssistantSettings:
             raise ValueError(f"{STATUTE_BASE_URL_ENV} is required when {STATUTE_ENV}=on")
         if statute_enabled and not statute_token:
             raise ValueError(f"{STATUTE_TOKEN_ENV} is required when {STATUTE_ENV}=on")
+        raw_chat_timeout = (values.get(CHAT_TIMEOUT_ENV) or "").strip()
+        try:
+            chat_timeout = float(raw_chat_timeout) if raw_chat_timeout else CHAT_DEFAULT_TIMEOUT
+        except ValueError as exc:
+            raise ValueError(
+                f"{CHAT_TIMEOUT_ENV} must be a number; got {raw_chat_timeout!r}"
+            ) from exc
+        if chat_timeout <= 0:
+            raise ValueError(f"{CHAT_TIMEOUT_ENV} must be greater than 0; got {chat_timeout!r}")
         return cls(
             model=model,
             base_url=(values.get(MODEL_BASE_URL_ENV) or DEFAULT_BASE_URL).strip(),
@@ -140,6 +153,7 @@ class AssistantSettings:
             statute=statute_enabled,
             statute_base_url=statute_base_url,
             statute_api_token=statute_token,
+            chat_timeout=chat_timeout,
             web=raw_web,
             web_endpoint=(values.get(WEB_ENDPOINT_ENV) or "").strip() or None,
             web_api_key=(values.get(WEB_API_KEY_ENV) or "").strip() or None,

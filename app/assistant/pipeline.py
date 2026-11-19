@@ -31,6 +31,20 @@ MODEL_REFUSED_FALLBACK_EN = (
     "The model declined to answer from the provided evidence; the claims below quote the evidence "
     "verbatim and add no inference."
 )
+CHAT_STRUCTURE_FAILED = (
+    "法规服务已生成草稿，但豆包未能完成结构化；以下结论直接摘录自法规证据原文。"
+)
+CHAT_STRUCTURE_FAILED_EN = (
+    "The statute service produced a draft, but the structuring pass failed; the claims below quote "
+    "the statute evidence verbatim."
+)
+CHAT_EVIDENCE_FALLBACK = (
+    "法规服务已返回条文证据，但豆包未能完成结构化；以下结论直接摘录自证据原文。"
+)
+CHAT_EVIDENCE_FALLBACK_EN = (
+    "The statute service returned evidence, but the structuring pass failed; the claims below quote "
+    "the evidence verbatim."
+)
 
 
 def _english(plan: QueryPlan) -> bool:
@@ -201,7 +215,12 @@ class EvidenceComposer:
     """
 
     def compose(
-        self, plan: QueryPlan, bundle: EvidenceBundle, context: dict[str, Any]
+        self,
+        plan: QueryPlan,
+        bundle: EvidenceBundle,
+        context: dict[str, Any],
+        *,
+        note: str | None = None,
     ) -> Composition:
         selected = list(bundle.candidates[:3])
         claims = [
@@ -214,7 +233,7 @@ class EvidenceComposer:
             for index, candidate in enumerate(selected, start=1)
         ]
         limitations = [
-            MODEL_REFUSED_FALLBACK_EN if _english(plan) else MODEL_REFUSED_FALLBACK
+            note or (MODEL_REFUSED_FALLBACK_EN if _english(plan) else MODEL_REFUSED_FALLBACK)
         ]
         if plan.intent == "trade_rule_explanation":
             limitations.append(TRADE_LIMITATION_EN if _english(plan) else TRADE_LIMITATION)

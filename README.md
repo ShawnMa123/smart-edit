@@ -123,15 +123,17 @@ raises `NotImplementedError`.
 
 ### Statute evidence (knowledge-statute-retrieval, off by default)
 
-The knowledge assistant answers from a real legal corpus instead of the synthetic
-one. It is opt-in and fails loudly: `SMART_EDIT_STATUTE=on` requires both `MERCATORIA_BASE_URL` and
-`MERCATORIA_API_TOKEN`, otherwise startup raises. The order is fixed: **RAG first, model summary
-second, web only when RAG returned nothing**. The service's diagnostics (`zero_reason`,
-`confidence`, `score`, `degraded`, `requested_uncovered`) annotate the answer instead of discarding
-it: hits are always passed to the model together with a "low confidence / jurisdiction not
-covered" caveat. Only a zero-chunk or failed response falls back to the general-web channel, which
-still sits behind the egress policy and is now on by default
-(`SMART_EDIT_ASSISTANT_WEB_DEFAULT=off` turns it off; "both found nothing" is stated explicitly).
+The knowledge assistant answers rule questions through Mercatoria's `/v1/chat` endpoint
+(retrieval + a server-side draft with chunk citations), then asks Doubao to structure/polish that
+draft; the final answer still goes through the local reviewer and the source marker. It is opt-in
+and fails loudly: `SMART_EDIT_STATUTE=on` requires both `MERCATORIA_BASE_URL` and
+`MERCATORIA_API_TOKEN`, otherwise startup raises. `/v1/retrieve` remains in the codebase for offline
+replay and rollback, but the pipeline no longer calls it. Product FAQs stay on the local corpus
+(chat would answer them from legal texts). `MERCATORIA_CHAT_TIMEOUT` (default 60s) bounds the chat
+call; the web fallback still runs only when chat returns no usable answer, behind the egress policy.
+References returned by chat are evidence even when chat's own `answer_status` is
+`unavailable`/`unsupported`; only a zero-reference response falls back to the web.
+Note that chat's generation happens on the Mercatoria side, outside this service's egress audit.
 
 ```bash
 export SMART_EDIT_STATUTE=on

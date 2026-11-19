@@ -601,6 +601,12 @@ export function statuteNotice(answer: Answer): string | null {
     if (detail === 'timeout') return 'Statute search timed out';
     return 'Statute search unavailable';
   }
+  if (detail === 'partial') {
+    return 'Statute answer is partial — the cited evidence is incomplete';
+  }
+  if (detail === 'unsupported' || detail === 'unavailable') {
+    return 'The statute service did not return a usable answer';
+  }
   if (detail.startsWith('uncovered:')) {
     return `Jurisdiction not covered: ${detail.slice('uncovered:'.length)}`;
   }

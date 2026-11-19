@@ -40,6 +40,12 @@ class StatuteOutcome:
     hits: int = 0
     # Which controlled terms were appended to the query (`statute-recall`).
     expansions: tuple[str, ...] = ()
+    # `/v1/chat` only (`knowledge-statute-chat`): the server-side draft, its status, which chunks
+    # it cited, and its coverage notes.
+    draft: str | None = None
+    answer_status: str | None = None
+    cited_ids: tuple[str, ...] = ()
+    coverage: dict[str, Any] = field(default_factory=dict)
 
     @property
     def usable(self) -> bool:
@@ -134,6 +140,7 @@ class StatuteRetriever:
         base_url: str,
         api_token: str,
         timeout: float = 2.5,
+        chat_timeout: float | None = None,
         client: httpx.Client | None = None,
         top_k: int = DEFAULT_TOP_K,
         expansions: dict[str, tuple[str, ...]] | None = None,
@@ -141,8 +148,10 @@ class StatuteRetriever:
         self.base_url = base_url.rstrip("/")
         self.api_token = api_token
         self.timeout = timeout
+        # `/v1/chat` runs retrieval plus a server-side LLM, so it needs its own (longer) budget.
+        self.chat_timeout = float(chat_timeout if chat_timeout is not None else timeout)
         self.top_k = max(1, int(top_k))
-        self.client = client or httpx.Client(timeout=timeout)
+        self.client = client or httpx.Client(timeout=max(timeout, self.chat_timeout))
         self.expansions = dict(expansions or {})
         self._health: dict[str, Any] | None = None
         self._health_at = 0.0
@@ -169,7 +178,7 @@ class StatuteRetriever:
             "filters": build_filters(plan, applicable_on),
         }
         try:
-            payload = self._post(body)
+            payload = self._post("/v1/retrieve", body)
         except _StatuteFailure as exc:
             return StatuteOutcome(status="failed", reason=exc.reason, expansions=tuple(terms))
         outcome = self.judge(payload, terms=set(getattr(plan, "retrieval_terms", None) or []))
@@ -184,6 +193,129 @@ class StatuteRetriever:
     @staticmethod
     def _hit_count(payload: dict[str, Any]) -> int:
         return len([chunk for chunk in (payload.get("chunks") or []) if isinstance(chunk, dict)])
+
+    # --- `/v1/chat` (knowledge-statute-chat) -------------------------------------------------
+    def chat_detailed(
+        self, principal: Principal, workspace_id: str, plan: Any, applicable_on: str | None
+    ) -> StatuteOutcome:
+        """Retrieval plus a server-side draft, with the same screening inputs as `search_detailed`."""
+        question = str(getattr(plan, "question", "") or "").strip()
+        if not question:
+            return StatuteOutcome(status="ok", reason="empty", answer_status="unavailable")
+        terms = expand_terms(question, self.expansions)
+        retrieval_query = f"{question} {' '.join(terms)}" if terms else question
+        body = {
+            "question": question,
+            "retrieval_query": retrieval_query,
+            "rewrite_query": False,
+            "top_k": self.top_k,
+            "filters": build_filters(plan, applicable_on),
+            "answer": {"enabled": True},
+        }
+        try:
+            payload = self._post("/v1/chat", body, timeout=self.chat_timeout)
+        except _StatuteFailure as exc:
+            return StatuteOutcome(
+                status="failed",
+                reason=exc.reason,
+                expansions=tuple(terms),
+                answer_status="error",
+            )
+        return self.judge_chat(
+            payload,
+            terms=set(getattr(plan, "retrieval_terms", None) or []),
+            expansions=tuple(terms),
+        )
+
+    def judge_chat(
+        self,
+        payload: dict[str, Any],
+        *,
+        terms: set[str],
+        expansions: tuple[str, ...] = (),
+    ) -> StatuteOutcome:
+        """Map `/v1/chat` to evidence + draft. Only `answered`/`partial` with a reference is usable."""
+        status = str(payload.get("answer_status") or "").strip().lower()
+        references = [
+            item for item in (payload.get("references") or []) if isinstance(item, dict)
+        ]
+        citations = [item for item in (payload.get("citations") or []) if isinstance(item, dict)]
+        chunks = [item for item in (payload.get("chunks") or []) if isinstance(item, dict)]
+        coverage = payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {}
+        cited_ids = tuple(
+            str(item.get("chunk_id")) for item in citations if item.get("chunk_id")
+        )
+        draft = payload.get("answer") if isinstance(payload.get("answer"), str) else None
+        hits = len(references) or len(chunks)
+        if not references:
+            # No text at all is the only "no RAG result" case; the status still explains why.
+            normalized = "unsupported" if status in ("answered", "partial") else (status or "unsupported")
+            return StatuteOutcome(
+                status="ok",
+                reason=normalized,
+                hits=hits,
+                expansions=expansions,
+                answer_status=normalized,
+                cited_ids=cited_ids,
+                coverage=coverage,
+            )
+        candidates = [
+            self._chat_candidate(item, rank, terms)
+            for rank, item in enumerate(references[: self.top_k], start=1)
+        ]
+        # The draft is only usable when the service itself answered/partial; for
+        # unavailable/unsupported/error the references are still evidence for our composer.
+        usable_draft = draft if status in ("answered", "partial") else None
+        return StatuteOutcome(
+            candidates,
+            status="ok",
+            reason=status or "unsupported",
+            hits=hits,
+            expansions=expansions,
+            draft=usable_draft,
+            answer_status=status or "unsupported",
+            cited_ids=cited_ids,
+            coverage=coverage,
+        )
+
+    def _chat_candidate(
+        self, reference: dict[str, Any], rank: int, terms: set[str]
+    ) -> EvidenceCandidate:
+        source_text = str(reference.get("text") or "")[:MAX_SOURCE_TEXT]
+        chunk_id = str(reference.get("chunk_id") or "")
+        doc_id = str(reference.get("doc_id") or "")
+        label = str(reference.get("article_label") or "")
+        jurisdiction = str(reference.get("jurisdiction") or "")
+        effective_from = reference.get("effective_from")
+        locator: dict[str, Any] = {
+            "chunk_id": chunk_id,
+            "doc_id": doc_id,
+            "article_id": reference.get("article_id"),
+            "article_label": label or None,
+            "jurisdiction": jurisdiction or None,
+            "effective_from": effective_from,
+            "effective_to": reference.get("effective_to"),
+            "score": reference.get("score"),
+        }
+        version = (
+            f"{label}@{effective_from}" if label and effective_from else (label or "unknown")
+        )
+        excerpt = _cut_excerpt(source_text, [], terms) or source_text[:_EXCERPT_CHARS]
+        return EvidenceCandidate(
+            citation_id=stable_citation_id("statute", doc_id, chunk_id),
+            source_type="statute",
+            title=str(reference.get("source_doc") or doc_id or "statute"),
+            source_version=version,
+            excerpt=excerpt,
+            locator=locator,
+            source_text=source_text,
+            source_id=doc_id or None,
+            version_id=chunk_id or None,
+            chunk_id=chunk_id or None,
+            effective_from=effective_from,
+            effective_to=reference.get("effective_to"),
+            score=round(1.0 - 0.01 * (rank - 1), 4),
+        )
 
     # --- decision --------------------------------------------------------------------------
     def judge(self, payload: dict[str, Any], *, terms: set[str]) -> StatuteOutcome:
@@ -282,13 +414,15 @@ class StatuteRetriever:
         )
 
     # --- transport -------------------------------------------------------------------------
-    def _post(self, body: dict[str, Any]) -> dict[str, Any]:
+    def _post(
+        self, path: str, body: dict[str, Any], *, timeout: float | None = None
+    ) -> dict[str, Any]:
         try:
             response = self.client.post(
-                f"{self.base_url}/v1/retrieve",
+                f"{self.base_url}{path}",
                 json=body,
                 headers={"Authorization": f"Bearer {self.api_token}"},
-                timeout=self.timeout,
+                timeout=timeout or self.timeout,
             )
         except httpx.TimeoutException as exc:
             raise _StatuteFailure("timeout") from exc

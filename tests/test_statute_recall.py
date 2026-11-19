@@ -155,6 +155,9 @@ class StubStatute:
     def search_detailed(self, principal, workspace_id, plan, applicable_on):
         return self.outcome
 
+    def chat_detailed(self, principal, workspace_id, plan, applicable_on):
+        return self.search_detailed(principal, workspace_id, plan, applicable_on)
+
     def health(self):
         return {
             "reachable": True,

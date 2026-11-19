@@ -692,6 +692,9 @@ describe('statute evidence (knowledge-statute-retrieval)', () => {
     ['policy_unavailable', 'blocked', /Statute search blocked by outbound policy/i],
     ['uncovered:SG', 'ok', /Jurisdiction not covered: SG/i],
     ['superseded', 'ok', /A cited statute has been superseded/i],
+    ['partial', 'ok', /Statute answer is partial/i],
+    ['unsupported', 'ok', /did not return a usable answer/i],
+    ['unavailable', 'ok', /did not return a usable answer/i],
     ['zero:no_match', 'ok', /No statute matched this question/i],
   ] as const)('labels the %s outcome distinctly', async (detail, status, expected) => {
     const answer = withStatute(

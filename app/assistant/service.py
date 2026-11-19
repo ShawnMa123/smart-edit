@@ -33,6 +33,10 @@ from app.assistant.pipeline import (
     WEB_INCOMPLETE_ZH,
     GENERAL_WEB_FALLBACK_EN,
     GENERAL_WEB_FALLBACK_ZH,
+    CHAT_STRUCTURE_FAILED,
+    CHAT_STRUCTURE_FAILED_EN,
+    CHAT_EVIDENCE_FALLBACK,
+    CHAT_EVIDENCE_FALLBACK_EN,
     NO_EVIDENCE_ANYWHERE_EN,
     NO_EVIDENCE_ANYWHERE_ZH,
     WEB_EMPTY_EN,
@@ -123,6 +127,20 @@ STATUTE_LOW_CONFIDENCE_EN = (
     "The statute corpus returned {count} match(es) at low confidence; use them as a reference only."
 )
 STATUTE_LOW_CONFIDENCE_ZH = "法规语料命中 {count} 条，置信度低，仅供参考。"
+STATUTE_PARTIAL_EN = (
+    "The statute service returned a partial answer: its cited evidence does not cover every part "
+    "of the question."
+)
+STATUTE_PARTIAL_ZH = "法规服务只给出部分依据，未覆盖问题的全部内容。"
+STATUTE_CHAT_UNUSABLE_EN = (
+    "The statute service did not return a usable answer; this response does not rely on statutes."
+)
+STATUTE_CHAT_UNUSABLE_ZH = "法规服务未给出可用答案，本回答未依赖法规。"
+STATUTE_CHAT_EVIDENCE_ONLY_EN = (
+    "The statute service's own answer was unavailable; this response uses only the statute "
+    "excerpts it returned."
+)
+STATUTE_CHAT_EVIDENCE_ONLY_ZH = "法规服务自身的回答不可用；本回答仅基于其返回的法规条文证据。"
 STATUTE_INTERNAL_EN = "This answer relies on internal sources only."
 STATUTE_INTERNAL_ZH = "本回答仅基于系统内部来源。"
 STATUTE_BLOCKED_EN = (
@@ -131,9 +149,9 @@ STATUTE_BLOCKED_EN = (
 )
 STATUTE_BLOCKED_ZH = "因出站策略未通过，本次未查询法规，本回答未覆盖法规。"
 
-# RAG is attempted for every knowledge question (`knowledge-rag-first-fallback` D1); the snapshot
-# path stays the only exception because a question about the selected passage is answered from it.
-STATUTE_INTENTS = frozenset({"trade_rule_explanation", "product_faq"})
+# RAG runs for rule questions and explicitly scoped questions. `/v1/chat` generates an answer from
+# the legal corpus, which would be wrong for product FAQs, so those stay on the local corpus.
+STATUTE_INTENTS = frozenset({"trade_rule_explanation"})
 
 
 @dataclass(frozen=True)
@@ -142,6 +160,11 @@ class LocalOutcome:
 
     candidates: list[EvidenceCandidate] = field(default_factory=list)
     layers: list[Any] = field(default_factory=list)
+    # `/v1/chat` draft (`knowledge-statute-chat`): carried to the composition stage.
+    draft: str | None = None
+    answer_status: str | None = None
+    cited_ids: tuple[str, ...] = ()
+    coverage: dict[str, Any] = field(default_factory=dict)
 
 
 class AssistantService:
@@ -392,19 +415,29 @@ class AssistantService:
     def _local_layer_name(self) -> str:
         return "rag" if type(self.retriever).__name__.startswith("Rag") else "local"
 
-    def _audit_decision(self, run_id: str, purpose: str, decision: EgressDecision) -> None:
+    def _audit_decision(
+        self,
+        run_id: str,
+        purpose: str,
+        decision: EgressDecision,
+        *,
+        endpoint: str | None = None,
+    ) -> None:
+        payload = {
+            "purpose": purpose,
+            "action": decision.action,
+            "reason": decision.reason_code,
+            "policy_version": decision.policy_version,
+            "query_digest": audit_events.query_digest(decision.outbound_query),
+        }
+        if endpoint:
+            payload["endpoint"] = endpoint
         self.audit.append(
             "",
             run_id,
             audit_events.EGRESS_ALLOWED if decision.allowed else audit_events.EGRESS_BLOCKED,
             "",
-            {
-                "purpose": purpose,
-                "action": decision.action,
-                "reason": decision.reason_code,
-                "policy_version": decision.policy_version,
-                "query_digest": audit_events.query_digest(decision.outbound_query),
-            },
+            payload,
         )
 
     def _search_decision(
@@ -446,7 +479,7 @@ class AssistantService:
                     provider="statute",
                 )
             )
-        self._audit_decision(run_id, "statute", decision)
+        self._audit_decision(run_id, "statute", decision, endpoint="chat")
         return decision
 
     def _compose(
@@ -457,6 +490,13 @@ class AssistantService:
         session: dict[str, Any],
         run_id: str,
         payload: RunCreate,
+        *,
+        draft: str | None = None,
+        draft_answer_status: str | None = None,
+        draft_cited_ids: tuple[str, ...] = (),
+        draft_coverage: dict[str, Any] | None = None,
+        chat_evidence: bool = False,
+        deadline_at: str | None = None,
     ) -> Composition:
         external = bool(getattr(self.settings, "model", None)) and isinstance(
             self.gateway, DoubaoGateway
@@ -465,6 +505,13 @@ class AssistantService:
             "snapshot": snapshot,
             "session": session,
             "conflicts": detect_conflicts(bundle.candidates),
+            # `/v1/chat` draft (`knowledge-statute-chat`): the composer may restructure it but
+            # must keep citations on the evidence ids.
+            "draft": draft,
+            "draft_answer_status": draft_answer_status,
+            "draft_cited_ids": list(draft_cited_ids),
+            "draft_coverage": dict(draft_coverage or {}),
+            "chat_evidence": chat_evidence,
         }
         if not external:
             self.logger.info(
@@ -499,25 +546,119 @@ class AssistantService:
                 403, "EGRESS_BLOCKED", f"model provider not approved: {decision.reason_code}"
             )
         self.logger.info(
-            "compose provider=doubao intent=%s evidence=%d",
-            plan.intent, len(bundle.candidates),
+            "compose provider=doubao intent=%s evidence=%d draft=%s",
+            plan.intent, len(bundle.candidates), "yes" if draft else "no",
         )
+        if (draft or chat_evidence) and not self._polish_allowed(deadline_at):
+            # Two model calls must fit inside the run deadline; skip the second one if it cannot.
+            self.logger.info("compose polish skipped run=%s reason=deadline", run_id)
+            return self._evidence_fallback(
+                plan,
+                bundle,
+                context,
+                run_id,
+                note=(
+                    CHAT_STRUCTURE_FAILED_EN
+                    if draft and plan.language == "en"
+                    else CHAT_STRUCTURE_FAILED
+                    if draft
+                    else CHAT_EVIDENCE_FALLBACK_EN
+                    if plan.language == "en"
+                    else CHAT_EVIDENCE_FALLBACK
+                ),
+                event="chat_polish_skipped",
+                metadata={"reason": "deadline"},
+            )
         try:
             return self.gateway.compose(plan, bundle, context)
         except ModelGatewayError as exc:
+            if not bundle.candidates:
+                raise
+            if draft is not None:
+                # The chat draft exists, so a failed structuring pass must not lose the evidence.
+                self.logger.warning(
+                    "chat draft could not be structured run=%s code=%s", run_id, exc.code
+                )
+                return self._evidence_fallback(
+                    plan,
+                    bundle,
+                    context,
+                    run_id,
+                    note=(
+                        CHAT_STRUCTURE_FAILED_EN
+                        if plan.language == "en"
+                        else CHAT_STRUCTURE_FAILED
+                    ),
+                    event="chat_structure_failed",
+                    metadata={"code": exc.code},
+                )
+            if chat_evidence:
+                # Chat returned evidence but no draft (its own answer was unavailable/unsupported).
+                self.logger.warning(
+                    "chat evidence could not be structured run=%s code=%s", run_id, exc.code
+                )
+                return self._evidence_fallback(
+                    plan,
+                    bundle,
+                    context,
+                    run_id,
+                    note=(
+                        CHAT_EVIDENCE_FALLBACK_EN
+                        if plan.language == "en"
+                        else CHAT_EVIDENCE_FALLBACK
+                    ),
+                    event="chat_structure_failed",
+                    metadata={"code": exc.code},
+                )
             # `knowledge-rag-first-fallback`: evidence exists, so a refusal must not reach the user.
-            # Quote the evidence verbatim instead of failing the run.
-            if exc.code != "MODEL_REFUSED_EVIDENCE" or not bundle.candidates:
+            if exc.code != "MODEL_REFUSED_EVIDENCE":
                 raise
             self.logger.warning(
                 "model refused despite evidence run=%s evidence=%d; quoting evidence",
                 run_id, len(bundle.candidates),
             )
-            self.audit.append(
-                "", run_id, "model_refused_evidence", "",
-                {"evidence": len(bundle.candidates)},
+            return self._evidence_fallback(
+                plan,
+                bundle,
+                context,
+                run_id,
+                note=None,
+                event="model_refused_evidence",
+                metadata={},
             )
-            return self.evidence_composer.compose(plan, bundle, context)
+
+    def _evidence_fallback(
+        self,
+        plan: QueryPlan,
+        bundle: EvidenceBundle,
+        context: dict[str, Any],
+        run_id: str,
+        *,
+        note: str | None,
+        event: str,
+        metadata: dict[str, Any],
+    ) -> Composition:
+        """Quote the evidence when the model cannot produce (or structure) the answer."""
+        composition = self.evidence_composer.compose(plan, bundle, context, note=note)
+        self.audit.append(
+            "", run_id, event, "", {**metadata, "evidence": len(bundle.candidates)}
+        )
+        return composition
+
+    def _polish_allowed(self, deadline_at: str | None) -> bool:
+        if not deadline_at:
+            return True
+        try:
+            remaining = (
+                datetime.fromisoformat(deadline_at) - datetime.fromisoformat(self.clock.now())
+            ).total_seconds()
+        except ValueError:
+            return True
+        return remaining >= 20
+
+    def _local_layer_budget(self) -> float:
+        """Local worker budget: `/v1/chat` needs its own timeout plus retrieval margin."""
+        return max(5.0, float(getattr(self.settings, "chat_timeout", 60.0)) + 10.0)
 
     def _processor_label(self) -> str:
         external = bool(getattr(self.settings, "model", None)) and isinstance(
@@ -922,7 +1063,15 @@ class AssistantService:
         hits = layer.hits if isinstance(layer.hits, int) else None
         notes: list[str] = []
         downgrade = False
-        if detail == "superseded":
+        statute_cited = any(
+            citation.source_type == "statute" for citation in answer.citations
+        )
+        if detail in ("unsupported", "unavailable", "error") and statute_cited:
+            # The service's own answer was unusable, but its references were used as evidence.
+            notes.append(
+                STATUTE_CHAT_EVIDENCE_ONLY_EN if english else STATUTE_CHAT_EVIDENCE_ONLY_ZH
+            )
+        elif detail == "superseded":
             notes.append(STATUTE_SUPERSEDED_EN if english else STATUTE_SUPERSEDED_ZH)
             downgrade = True
         elif layer.status == "blocked":
@@ -948,6 +1097,10 @@ class AssistantService:
         elif detail == "low_confidence":
             template = STATUTE_LOW_CONFIDENCE_EN if english else STATUTE_LOW_CONFIDENCE_ZH
             notes.append(template.format(count=hits if hits is not None else "some"))
+        elif detail == "partial":
+            notes.append(STATUTE_PARTIAL_EN if english else STATUTE_PARTIAL_ZH)
+        elif detail in ("unsupported", "unavailable", "error"):
+            notes.append(STATUTE_CHAT_UNUSABLE_EN if english else STATUTE_CHAT_UNUSABLE_ZH)
         elif detail.startswith("zero:"):
             notes.append(STATUTE_NONE_EN if english else STATUTE_NONE_ZH)
         if notes and answer.citations:
@@ -1011,12 +1164,12 @@ class AssistantService:
         run_id: str = "",
         selection_text: str | None = None,
     ) -> LocalOutcome:
-        """Statute first for rule questions; the local corpus stays the fallback and the default.
+        """`/v1/chat` first for rule questions; the local corpus stays the fallback and the default.
 
-        A statute outcome that is not usable is *not* an error: it means "no statute evidence",
-        so the caller sees no citations and the existing general-web fallback decides what is next.
-        A blocked outbound decision is different again: the request is never sent, and the layer
-        says why (`knowledge-statute-live` D2).
+        A chat answer that is not usable (`unsupported/unavailable/error`) is *not* an error: it
+        means "no statute evidence", so the caller sees no citations and the existing general-web
+        fallback decides what is next. A blocked outbound decision is different again: the request
+        is never sent, and the layer says why (`knowledge-statute-live` D2).
         """
         statute = self.statute
         if self._should_try_statute(plan, scope_declared=scope_declared):
@@ -1035,20 +1188,26 @@ class AssistantService:
                 return LocalOutcome(local, layers)
             call_plan = plan
             if decision.outbound_query and decision.outbound_query != plan.question:
-                # The adapter appends configured expansion terms; only the user's text is screened.
+                # `/v1/chat` builds its retrieval query from the screened question; only the
+                # user's text is screened, expansion terms come from configuration.
                 call_plan = replace(plan, question=decision.outbound_query)
-            outcome = statute.search_detailed(principal, workspace_id, call_plan, applicable_on)
+            outcome = statute.chat_detailed(principal, workspace_id, call_plan, applicable_on)
             status = "failed" if outcome.status == "failed" else "ok"
+            # Failures keep their transport reason (`timeout`/`corpus_updating`); successful calls
+            # expose the chat `answer_status` (`answered`/`partial`/`unsupported`).
+            detail = (
+                outcome.reason
+                if outcome.status == "failed"
+                else (outcome.answer_status or outcome.reason)
+            )
             layers = [
-                RetrievalLayer(
-                    layer="statute", status=status, detail=outcome.reason, hits=outcome.hits
-                )
+                RetrievalLayer(layer="statute", status=status, detail=detail, hits=outcome.hits)
             ]
-            # Which terms were appended and how many hits came back: without this the hit change is
-            # unexplainable, and "RAG returned nothing" cannot be verified from the logs.
+            # Which status the chat service reported and how many references came back: without
+            # this "RAG returned nothing" cannot be verified from the logs.
             self.logger.info(
-                "retrieval statute run=%s status=%s detail=%s hits=%d",
-                run_id, status, outcome.reason, outcome.hits,
+                "retrieval chat run=%s status=%s answer_status=%s hits=%d",
+                run_id, status, detail, outcome.hits,
             )
             if outcome.expansions:
                 self.audit.append(
@@ -1056,22 +1215,14 @@ class AssistantService:
                     {"expansions": list(outcome.expansions)},
                 )
             if outcome.candidates:
-                if plan.intent == "product_faq":
-                    # The product manual stays primary; statute hits join it instead of replacing it
-                    # (`knowledge-rag-first-fallback` D1).
-                    local = list(
-                        self.retriever.search(principal, workspace_id, plan, applicable_on)
-                    )
-                    # `merge_layers` keeps the highest scores, so leave room for the statute hits:
-                    # otherwise a full local page-list would push every statute hit out of the cap.
-                    room = max(0, MAX_EVIDENCE - len(outcome.candidates))
-                    layers.append(
-                        RetrievalLayer(
-                            layer=self._local_layer_name(), status="ok", detail="statute_merged"
-                        )
-                    )
-                    return LocalOutcome([*local[:room], *outcome.candidates], layers)
-                return LocalOutcome(list(outcome.candidates), layers)
+                return LocalOutcome(
+                    list(outcome.candidates),
+                    layers,
+                    draft=outcome.draft,
+                    answer_status=outcome.answer_status,
+                    cited_ids=outcome.cited_ids,
+                    coverage=dict(outcome.coverage),
+                )
             # Keep the run useful: fall back to the published corpus, but say statutes were not used.
             local = list(self.retriever.search(principal, workspace_id, plan, applicable_on))
             layers.append(
@@ -1079,7 +1230,12 @@ class AssistantService:
                     layer=self._local_layer_name(), status="ok", detail="statute_unavailable"
                 )
             )
-            return LocalOutcome(local, layers)
+            return LocalOutcome(
+                local,
+                layers,
+                answer_status=outcome.answer_status,
+                coverage=dict(outcome.coverage),
+            )
         return LocalOutcome(
             list(self.retriever.search(principal, workspace_id, plan, applicable_on)),
             [RetrievalLayer(layer=self._local_layer_name(), status="ok")],
@@ -1103,13 +1259,17 @@ class AssistantService:
         payload: RunCreate,
         run_id: str,
         web_decision: EgressDecision | None,
-    ) -> tuple[EvidenceBundle, list[RetrievalLayer]]:
+    ) -> tuple[EvidenceBundle, list[RetrievalLayer], dict[str, Any]]:
         """Run the local and web layers after the gate, in parallel, with per-layer budgets."""
         local_name = self._local_layer_name()
         layers: list[RetrievalLayer] = []
         local_candidates: list[EvidenceCandidate] = []
         web_found: list[EvidenceCandidate] = []
         local_error: Exception | None = None
+        retrieval_meta: dict[str, Any] = {}
+        # `/v1/chat` runs a server-side LLM, so the local worker needs a larger budget than the
+        # old 5s retrieval allowance (`knowledge-statute-chat` D6).
+        local_budget = self._local_layer_budget()
         pool = ThreadPoolExecutor(max_workers=2)
         try:
             local_future = pool.submit(
@@ -1126,9 +1286,22 @@ class AssistantService:
             if web_decision is not None and web_decision.allowed:
                 web_future = pool.submit(self._run_web, plan, web_decision)
             try:
-                local_outcome = local_future.result(timeout=5)
+                local_outcome = local_future.result(timeout=local_budget)
                 local_candidates = local_outcome.candidates
                 layers.extend(local_outcome.layers)
+                retrieval_meta = {
+                    "draft": local_outcome.draft,
+                    "answer_status": local_outcome.answer_status,
+                    "cited_ids": local_outcome.cited_ids,
+                    "coverage": dict(local_outcome.coverage),
+                    # Chat produced evidence even if its own answer was unavailable/unsupported;
+                    # the composer must still structure it (and fall back to quotes on failure).
+                    "chat_evidence": local_outcome.answer_status is not None
+                    and any(
+                        candidate.source_type == "statute"
+                        for candidate in local_outcome.candidates
+                    ),
+                }
             except FutureTimeout as exc:
                 local_error = exc
                 layers.append(RetrievalLayer(layer=local_name, status="failed", detail="timeout"))
@@ -1189,7 +1362,7 @@ class AssistantService:
                 "retrieval local layer failed run=%s error=%s",
                 run_id, type(local_error).__name__,
             )
-        return bundle, layers
+        return bundle, layers, retrieval_meta
 
     def _standard_answer(
         self,
@@ -1204,6 +1377,7 @@ class AssistantService:
         run_id = run["id"]
         layers: list[RetrievalLayer] = []
         web_decision: EgressDecision | None = None
+        retrieval_meta: dict[str, Any] = {}
         if payload.web_search:
             if self.web is None:
                 layers.append(
@@ -1265,7 +1439,7 @@ class AssistantService:
                     )
                 )
         else:
-            bundle, layer_reports = self._retrieve_layers(
+            bundle, layer_reports, retrieval_meta = self._retrieve_layers(
                 principal, session, plan, payload, run_id, web_decision
             )
             layers.extend(layer_reports)
@@ -1280,11 +1454,36 @@ class AssistantService:
                 )
 
         conflicts = detect_conflicts(bundle.candidates)
-        composition = self._compose(plan, bundle, snapshot, session, run_id, payload)
+        composition = self._compose(
+            plan,
+            bundle,
+            snapshot,
+            session,
+            run_id,
+            payload,
+            draft=retrieval_meta.get("draft"),
+            draft_answer_status=retrieval_meta.get("answer_status"),
+            draft_cited_ids=tuple(retrieval_meta.get("cited_ids") or ()),
+            draft_coverage=retrieval_meta.get("coverage") or {},
+            chat_evidence=bool(retrieval_meta.get("chat_evidence")),
+            deadline_at=run.get("deadline_at"),
+        )
         answer, issues = review_answer(composition.answer, bundle, snapshot)
         answer = self._canonical_citations(answer, bundle)
         answer = apply_layer_policy(answer, plan, bundle)
         annotated = self._annotate_statute(self._annotate_layers(answer, layers, payload), layers)
+        coverage_notes = [
+            str(note)
+            for note in (retrieval_meta.get("coverage") or {}).get("notes") or []
+        ]
+        if coverage_notes:
+            annotated = annotated.model_copy(
+                update={
+                    "limitations": list(
+                        dict.fromkeys([*annotated.limitations, *coverage_notes])
+                    )
+                }
+            )
         answer = annotated.model_copy(
             update={"retrieval": layers, "processor": self._processor_label()}
         )
@@ -1382,7 +1581,12 @@ class AssistantService:
                         answer = fallback_answer.model_copy(
                             update={"limitations": [*fallback_answer.limitations, note]}
                         )
-                        layers = fallback_layers
+                        # Keep the statute/local report: "RAG failed / returned nothing" must stay
+                        # visible even when the web fallback answers.
+                        layers = [
+                            *fallback_layers,
+                            *(item for item in layers if item.layer != "web"),
+                        ]
                         bundle = fallback_bundle
                         general_route = True
                         self.logger.info(

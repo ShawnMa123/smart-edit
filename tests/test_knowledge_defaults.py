@@ -81,6 +81,9 @@ class StubStatute:
         self.calls += 1
         return StatuteOutcome(status="failed", reason="corpus_updating")
 
+    def chat_detailed(self, principal, workspace_id, plan, applicable_on):
+        return self.search_detailed(principal, workspace_id, plan, applicable_on)
+
     def health(self):
         return {
             "reachable": False,

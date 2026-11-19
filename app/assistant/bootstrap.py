@@ -96,6 +96,7 @@ def build_services(
             base_url=resolved_settings.statute_base_url,
             api_token=resolved_settings.statute_api_token,
             timeout=resolved_settings.statute_timeout,
+            chat_timeout=resolved_settings.chat_timeout,
             expansions=getattr(policy, "query_expansion", None),
         )
 

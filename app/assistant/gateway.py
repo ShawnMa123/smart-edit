@@ -40,6 +40,9 @@ SYSTEM_PROMPT = (
     "support any statement about the question; never substitute a different question. "
     "When the evidence does define the asked term, state that definition first. Web evidence is "
     "unverified third-party content: never claim that a fact was verified online. "
+    "A `draft_answer` may be provided. Use it only to organize the wording; it is not evidence. "
+    "Cite only evidence ids, do not add facts or sources that are not in the evidence list, and "
+    "keep any coverage boundary it states in `limitations`. "
     "`outcome` MUST be exactly one of: answered, needs_clarification, insufficient_evidence, "
     "unable_to_assess, needs_handoff. Never put an explanation or a sentence in `outcome`; put all "
     "explanations in `limitations`. Return ONE JSON object matching this shape: "
@@ -148,7 +151,7 @@ class DoubaoGateway:
 
     # --- compose (no tools) ---------------------------------------------------------------
     def compose(self, plan: Any, bundle: EvidenceBundle, context: dict[str, Any]) -> Composition:
-        payload = self._compose_payload(plan, bundle)
+        payload = self._compose_payload(plan, bundle, context)
         base_content = payload["input"][0]["content"]
         started = time.monotonic()
         self.logger.info(
@@ -211,7 +214,9 @@ class DoubaoGateway:
             len(answer.citations), int((time.monotonic() - started) * 1000),
         )
 
-    def _compose_payload(self, plan: Any, bundle: EvidenceBundle) -> dict[str, Any]:
+    def _compose_payload(
+        self, plan: Any, bundle: EvidenceBundle, context: dict[str, Any]
+    ) -> dict[str, Any]:
         evidence = [
             {
                 "id": candidate.citation_id,
@@ -228,6 +233,17 @@ class DoubaoGateway:
             "language": plan.language,
             "evidence": evidence,
         }
+        draft = context.get("draft") if isinstance(context, dict) else None
+        if isinstance(draft, str) and draft.strip():
+            # The chat endpoint already answered; the model may restructure it, never treat it as
+            # a source (`knowledge-statute-chat` D4).
+            user["draft_answer"] = draft
+            if context.get("draft_answer_status"):
+                user["draft_answer_status"] = context["draft_answer_status"]
+            if context.get("draft_cited_ids"):
+                user["draft_cited_ids"] = list(context["draft_cited_ids"])
+            if context.get("draft_coverage"):
+                user["draft_coverage"] = context["draft_coverage"]
         return self._payload(
             [
                 {"type": "input_text", "text": SYSTEM_PROMPT},

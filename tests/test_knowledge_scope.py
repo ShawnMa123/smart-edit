@@ -85,6 +85,9 @@ class StubStatute:
         self.calls += 1
         return self.outcome
 
+    def chat_detailed(self, principal, workspace_id, plan, applicable_on):
+        return self.search_detailed(principal, workspace_id, plan, applicable_on)
+
     def health(self):
         return {
             "reachable": True,
@@ -105,12 +108,12 @@ class EmptyRetriever:
     [
         (RULE_QUESTION, False, True),        # rule intent, no scope
         (PRODUCT_QUESTION, True, True),      # product intent, explicit scope
-        (PRODUCT_QUESTION, False, True),     # product intent, no scope: RAG-first applies to all
+        (PRODUCT_QUESTION, False, False),    # product intent, no scope: local corpus only
         (HANDOFF_QUESTION, True, False),     # handoff, even with scope
     ],
     ids=["rule-no-scope", "product-scope", "product-no-scope", "handoff-scope"],
 )
-def test_statute_is_attempted_for_every_knowledge_question(tmp_path, question, scope, expected):
+def test_statute_is_attempted_only_for_rule_or_scoped_questions(tmp_path, question, scope, expected):
     service = make_service(tmp_path, statute=StubStatute(StatuteOutcome([], "ok", "ok")))
     plan = analyze(question)
 

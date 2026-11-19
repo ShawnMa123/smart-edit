@@ -110,6 +110,35 @@ def test_compose_prompt_requires_answering_from_non_empty_evidence():
     assert "Return 'insufficient_evidence' only when the evidence list is empty" in prompt
 
 
+def test_compose_includes_the_chat_draft_as_non_evidence():
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=responses_body(VALID_ANSWER))
+
+    gateway(handler).compose(
+        analyze("q"),
+        bundle(),
+        {
+            "draft": "Draft answer [cite_1]",
+            "draft_answer_status": "answered",
+            "draft_cited_ids": ["cite_1"],
+            "draft_coverage": {"notes": ["uncovered: SG"]},
+        },
+    )
+
+    prompt = seen["body"]["input"][0]["content"][0]["text"]
+    user = json.loads(seen["body"]["input"][0]["content"][1]["text"])
+    assert user["draft_answer"] == "Draft answer [cite_1]"
+    assert user["draft_answer_status"] == "answered"
+    assert user["draft_cited_ids"] == ["cite_1"]
+    assert user["draft_coverage"] == {"notes": ["uncovered: SG"]}
+    assert "Use it only to organize the wording; it is not evidence" in prompt
+    assert "Cite only evidence ids" in prompt
+    assert "keep any coverage boundary" in prompt
+
+
 def test_compose_accepts_top_level_output_text():
     body = {"output_text": json.dumps(VALID_ANSWER)}
 
