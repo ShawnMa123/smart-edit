@@ -24,6 +24,7 @@ from app.api.auth import router as auth_router
 from app.api.automation import router as automation_router
 from app.api.developer import router as developer_router
 from app.api.documents import router as documents_router
+from app.api.legal import router as legal_router
 from app.api.envelope import to_envelope
 from app.api.errors import ApiFailure, IncompleteResult, error_body
 from app.api.organization import router as organization_router
@@ -148,6 +149,7 @@ def create_app(
     app.include_router(assistant_router)
     app.include_router(documents_router)
     app.include_router(automation_router)
+    app.include_router(legal_router)
 
     @app.get("/health")
     def health() -> dict:
