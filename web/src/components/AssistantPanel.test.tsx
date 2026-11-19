@@ -1,4 +1,4 @@
-/** Assistant tabs: knowledge available, automation fixture-only, legal still labelled. */
+/** Assistant tabs: knowledge, automation and legal are all wired; audit stays the default. */
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -16,6 +16,7 @@ const automation = {
   onChange: vi.fn(),
   onVariableHandled: vi.fn(),
 };
+const legal = { documentId: 'doc-1' };
 
 const renderPanel = () =>
   render(
@@ -26,18 +27,19 @@ const renderPanel = () =>
       onStopWaiting={vi.fn()}
       knowledge={knowledge}
       automation={automation}
+      legal={legal}
     />,
   );
 
 describe('AssistantPanel', () => {
-  it('offers audit, knowledge and fixture-only automation; only legal is not implemented', () => {
+  it('offers audit, knowledge, fixture-only automation and legal tabs', () => {
     renderPanel();
 
     expect(screen.getByRole('tab', { name: 'Rule audit' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Knowledge Q&A' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: /Automation · fixture only/ })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Legal advice · not implemented/ })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: /Knowledge Q&A · not implemented/ })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Legal advice' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /Legal advice · not implemented/ })).toBeNull();
   });
 
   it('shows short visible labels with the build status as a separate tag', () => {
@@ -50,9 +52,9 @@ describe('AssistantPanel', () => {
     expect(automation.textContent).not.toContain('·');
     expect(automation.querySelector('.tab-status')?.getAttribute('aria-hidden')).toBe('true');
 
-    const legal = screen.getByRole('tab', { name: /Legal advice · not implemented/ });
+    const legal = screen.getByRole('tab', { name: 'Legal advice' });
     expect(legal.textContent).toContain('Legal');
-    expect(legal.textContent).toContain('Not implemented');
+    expect(legal.textContent).toContain('Full');
 
     const audit = screen.getByRole('tab', { name: 'Rule audit' });
     expect(audit.textContent).toContain('Audit');
@@ -89,22 +91,34 @@ describe('AssistantPanel', () => {
     expect(screen.queryByText(/Automation is not implemented in this build/i)).toBeNull();
   });
 
-  it('renders no sample answer for the remaining unimplemented tab', async () => {
+  it('renders the legal advice surface for the legal tab', async () => {
     renderPanel();
 
-    await userEvent.click(screen.getByRole('tab', { name: /Legal advice · not implemented/ }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Legal advice' }));
 
-    expect(screen.getByText(/Legal advice is not implemented in this build/i)).toBeTruthy();
-    expect(screen.queryByRole('table')).toBeNull();
-    expect(document.querySelectorAll('.finding')).toHaveLength(0);
-    expect(screen.queryByLabelText('Knowledge question')).toBeNull();
+    expect(screen.getByLabelText('Legal question')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ask' })).toBeTruthy();
+    expect(screen.getByText(/仅供参考/)).toBeTruthy();
+    expect(screen.queryByText(/Legal advice is not implemented in this build/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /Run spec audit/i })).toBeNull();
+  });
+
+  it('switches to the deterministic rule check with three fact states', async () => {
+    renderPanel();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Legal advice' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Rule check' }));
+
+    expect(screen.getByRole('button', { name: 'Amount missing' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Amount confirmed' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Amount unconfirmed' })).toBeTruthy();
+    expect(screen.queryByLabelText('Legal question')).toBeNull();
   });
 
   it('returns to the audit panel from the legal tab', async () => {
     renderPanel();
 
-    await userEvent.click(screen.getByRole('tab', { name: /Legal advice · not implemented/ }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Legal advice' }));
     await userEvent.click(screen.getByRole('tab', { name: 'Rule audit' }));
 
     expect(screen.getByRole('button', { name: /Run spec audit/i })).toBeTruthy();
