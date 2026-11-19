@@ -95,6 +95,21 @@ def test_compose_uses_responses_api_without_tools():
     assert composition.answer.citations[0].id == "cite_1"
 
 
+def test_compose_prompt_requires_answering_from_non_empty_evidence():
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=responses_body(VALID_ANSWER))
+
+    gateway(handler).compose(analyze("What does URDG 758 require?"), bundle(), {})
+
+    prompt = seen["body"]["input"][0]["content"][0]["text"]
+    assert "When the evidence list is NOT empty you MUST answer from it" in prompt
+    assert "State the coverage boundary in `limitations`" in prompt
+    assert "Return 'insufficient_evidence' only when the evidence list is empty" in prompt
+
+
 def test_compose_accepts_top_level_output_text():
     body = {"output_text": json.dumps(VALID_ANSWER)}
 
@@ -103,6 +118,76 @@ def test_compose_accepts_top_level_output_text():
     )
 
     assert composition.answer.claims
+
+
+def test_prose_in_outcome_is_repaired_from_the_structured_fields():
+    broken = json.loads(json.dumps(VALID_ANSWER))
+    broken["outcome"] = "limitations_and_explanation"
+
+    composition = gateway(lambda request: httpx.Response(200, json=responses_body(broken))).compose(
+        analyze("q"), bundle(), {}
+    )
+
+    assert composition.answer.outcome == "answered"
+    assert composition.answer.claims
+    assert composition.answer.citations[0].id == "cite_1"
+
+
+def test_prose_in_outcome_without_claims_becomes_insufficient():
+    broken = json.loads(json.dumps(VALID_ANSWER))
+    broken.update(
+        {
+            "outcome": "现有证据未覆盖 WTO 框架下的定义。",
+            "claims": [],
+            "citations": [],
+            "support_level": "insufficient",
+        }
+    )
+
+    composition = gateway(lambda request: httpx.Response(200, json=responses_body(broken))).compose(
+        analyze("q"), EvidenceBundle([]), {}
+    )
+
+    assert composition.answer.outcome == "insufficient_evidence"
+    assert not composition.answer.claims
+
+
+def test_invalid_output_is_retried_twice_before_failing():
+    calls: list[int] = []
+    broken = {key: value for key, value in VALID_ANSWER.items() if key != "outcome"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(200, json=responses_body(broken))
+
+    with pytest.raises(ModelGatewayError) as error:
+        gateway(handler).compose(analyze("q"), bundle(), {})
+
+    assert error.value.code == "MODEL_OUTPUT_INVALID"
+    assert len(calls) == 3, "one original attempt plus two corrective retries"
+
+
+def test_refusal_with_evidence_is_retried_twice_then_raises():
+    calls: list[int] = []
+    refusing = json.loads(json.dumps(VALID_ANSWER))
+    refusing.update(
+        {
+            "outcome": "insufficient_evidence",
+            "claims": [],
+            "citations": [],
+            "support_level": "insufficient",
+        }
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(200, json=responses_body(refusing))
+
+    with pytest.raises(ModelGatewayError) as error:
+        gateway(handler).compose(analyze("q"), bundle(), {})
+
+    assert error.value.code == "MODEL_REFUSED_EVIDENCE"
+    assert len(calls) == 3, "one original attempt plus two refusal retries"
 
 
 def test_invalid_schema_is_a_failure_not_a_best_effort_answer():

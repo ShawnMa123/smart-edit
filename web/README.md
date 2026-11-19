@@ -256,7 +256,7 @@ published corpus and the bound snapshot and makes no outbound request.
 | General web channel | `SMART_EDIT_ASSISTANT_GENERAL_WEB=1` | off | answers **out-of-scope, non-handoff** questions with exactly one read-only `web_search` tool; results are `general_web`, capped at `qualified` |
 | Web search keywords | `SMART_EDIT_ASSISTANT_WEB_SEARCH_MAX_KEYWORD` | 3 (1–5) | `max_keyword` sent to the provider's search tool |
 | Hidden reasoning | `SMART_EDIT_ASSISTANT_THINKING` | off | Ark `thinking` is disabled for latency; set `1` to let the model reason (10–60s per call) |
-| Web layer | `SMART_EDIT_ASSISTANT_WEB=off\|fixture\|http` (+ `…_WEB_ENDPOINT`) | off | per-run opt-in; only allow-listed domains survive |
+| Web layer | `SMART_EDIT_ASSISTANT_WEB=off\|fixture\|http` (+ `…_WEB_ENDPOINT`) | off | per-run opt-in; `approved_web` keeps only allow-listed domains, `general_web` cites any resolvable link and stays unverified |
 | Local RAG | `SMART_EDIT_ASSISTANT_RAG_ENDPOINT` (+ `…_RAG_API_KEY`) | empty (lexical corpus) | second layer; failures degrade visibly |
 | Egress policy | `SMART_EDIT_ASSISTANT_EGRESS_POLICY` | `app/configs/egress.yaml` | missing/broken file denies every web request |
 
@@ -271,8 +271,10 @@ Rules the implementation keeps:
   evidence bundle only when it is registered as an approved processor; otherwise the run fails with
   `EGRESS_BLOCKED` instead of silently falling back to the fixture composer.
 - **Web evidence is bounded**: `approved_web` citations carry `{url, domain, retrieved_at, provider,
-  rank}`, web-only claims cap `support_level` at `qualified`, rule version/applicability cannot come
-  from the web, and conflicts are kept rather than auto-resolved.
+  rank}` and are filtered to the allow-list; `general_web` citations carry the same locator but are
+  **not** filtered by domain — any resolvable link is citable because this channel is explicitly the
+  unverified one. Web-only claims cap `support_level` at `qualified`, rule version/applicability
+  cannot come from the web, and conflicts are kept rather than auto-resolved.
 - **Failures are stated**: a blocked or failed web layer adds a limitation and the UI shows
   `Web search blocked (<reason>)` or `Web search did not complete`; it never implies live verification.
 - **Fallback to general web**: when an in-scope question ends with `insufficient_evidence` and no
@@ -321,6 +323,47 @@ action. `web/src/api/assistant.ts` is the only module that talks to the assistan
 live in `web/src/api/assistantTypes.ts` and mirror the server DTOs.
 
 The demo corpus is **8 synthetic sources / 72 chunks** (Chinese 36 + English 36: 12 product manual, 12 trade-rule summaries, 8 internal-policy chunks, 4 help-guide chunks per language), all `synthetic: true`. The reproducible evaluation set is **33 questions** and is run with `python scripts/assistant_eval.py`; it measures citation hit, outcome accuracy and clarification accuracy only (no embeddings, reranking or model).
+
+**Statute evidence (`knowledge-statute-retrieval`, opt-in).** With `SMART_EDIT_STATUTE=on` and the
+legal-corpus endpoint + token configured, rule questions are answered from real statute text first.
+Each statute citation shows only checkable facts — `Statute` group, article label, jurisdiction,
+effective date, corpus precision (`exact` / `degraded` / `snapshot`) and whether it was superseded —
+never a relevance score. The service's own diagnostics decide usability: an empty result, a
+low-confidence/low-score hit, an uncovered jurisdiction or a corpus rebuild is reported as *statutes
+not covered* (one short label per outcome), never as "there is no such rule". A non-usable statute leg
+leaves the answer without citations, so the existing general-web channel takes over only when the user
+enabled web search. `python scripts/statute_eval.py` replays 15 recorded outcomes offline and prints
+the decision accuracy, the statute-citation rate and the distribution of unusable reasons; the same
+comparison is printed beside the 33-question baseline by `scripts/assistant_eval.py`.
+
+**Simple ask — `knowledge-simple-ask`.** The panel keeps one text box, one switch and one row of
+jurisdiction chips:
+
+- **Query path**: `POST /v1/retrieve` first (statute corpus). Only when that evidence is unusable does
+  the answer fall through to Doubao web search, and those results stay labelled unverified.
+- **Web switch defaults to on** and is controlled by the deployment
+  (`SMART_EDIT_ASSISTANT_WEB_DEFAULT=on|off`), not by the UI. The panel starts from
+  `capabilities.web.default_on`; once the user toggles it, their choice wins for that mounted panel.
+  Each run sends the effective value explicitly plus `web_search_source` (`user` / `default`), and the
+  run audit records both, so "did this question leave the building, and who decided" is provable.
+- **Jurisdiction chips** come from `capabilities.presets.jurisdictions` (loaded from the knowledge
+  config). When no preset is configured the whole row is hidden — the UI never offers a fabricated
+  list. Clicking a chip narrows statute retrieval; clicking it again clears it.
+- **Presets live in data**: `app/configs/knowledge.sample.json` holds the allowed domains, the
+  redaction rules, the jurisdiction presets and the suggested questions. Point
+  `SMART_EDIT_KNOWLEDGE_CONFIG` at a copy to change them without touching code.
+
+Guardrails on that config: a missing or broken file denies every outbound call; a rule that does not
+compile fails at start-up instead of being skipped; at most 32 rules of at most 512 characters each;
+and the "public rule ids must survive redaction" exemption is fixed in code, so a config can never
+whitelist an amount or a reference.
+
+**Term normalisation and rejected searches (`statute-recall`).** Before retrieval, generic words are
+rewritten into the corpus's controlled terms using `query_expansion` from the same config (for example
+`guarantee` → 独立保函 / 见索即付保函 / demand guarantee). The original wording is kept, the table is
+capped, and the terms actually used are recorded in the run audit. When the statute leg runs but is not
+usable, the answer states the hit count and the reason — even when the internal corpus answered — so a
+reader can always tell "we did not look" from "we looked and rejected it".
 
 On first open the knowledge tab shows an English **Can / Cannot / How** card and up to 3 English suggested
 questions (`What can you do?`, `What documents are required for the application?`,
@@ -440,8 +483,11 @@ Without either variable Playwright looks for its own bundled build, which needs 
 
 The document host is a **local/test** adapter only: one process, one writer, fake identity, no
 PostgreSQL/Worker/multi-tenant host, and no production deployment. There is still no structural diff,
-real semantic automation model, regulatory coverage, approved production identity/snapshot/model
-adapters, real models/embeddings/reranking, controlled web access, voice/screenshot or export.
+real semantic automation model, approved production identity/snapshot/model
+adapters, real models/embeddings/reranking for the local corpus, controlled web access,
+voice/screenshot or export. Statute text comes only from the **opt-in external source** described
+above and is off by default; the built-in corpus stays synthetic, so the knowledge tab keeps saying
+`Fixture-backed` until that source is enabled and configured.
 Automation is available only as a fixture-backed frontend workbench (template capture, variable fill
 and downstream mapping/payload preview) and is labelled `fixture only`; the real run core still exists
 behind the API but no longer owns the tab. Legal remains labelled "not implemented in this build". The

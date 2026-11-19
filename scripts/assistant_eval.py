@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import tempfile
 from pathlib import Path
 
@@ -41,6 +42,38 @@ def main() -> int:
             f"{case['id']} {mark:4} outcome={case['outcome']:<22} "
             f"expected={case['expected_outcome']:<22} citations={case['citation_chunk_ids']}"
         )
+
+    # Statute decision layer (offline, no network, no model) — printed beside the synthetic baseline
+    # so the two numbers are never confused: the baseline measures the local corpus, this one measures
+    # how often a statute-backed answer is possible at all.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        from statute_eval import run as run_statute_eval
+    except Exception:  # pragma: no cover - the statute fixture may be absent in a trimmed checkout
+        return 0
+    statute = run_statute_eval()
+    print("\nstatute comparison (offline decision layer):")
+    print(
+        json.dumps(
+            {
+                "synthetic_corpus_baseline": {
+                    "cases": summary["total"],
+                    "outcome_accuracy": summary["outcome_accuracy"],
+                    "citation_hit_rate": summary["citation_hit_rate"],
+                    "statute_citation_rate": 0.0,
+                    "note": "语料全部为合成来源，结构上不可能出现法规引用",
+                },
+                "statute_fixture": {
+                    "cases": statute["cases"],
+                    "reason_accuracy": statute["reason_accuracy"],
+                    "statute_citation_rate": statute["statute_citation_rate"],
+                    "unusable_reasons": statute["unusable_reasons"],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

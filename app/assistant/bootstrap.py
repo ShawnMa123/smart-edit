@@ -20,6 +20,7 @@ from app.assistant.gateway import DoubaoGateway
 from app.assistant.pipeline import FixtureComposer
 from app.assistant.retrieval import FixtureWebSearch, HttpWebSearch, RagHttpAdapter
 from app.assistant.settings import AssistantSettings
+from app.assistant.statute import StatuteRetriever
 from app.assistant.store import SQLiteStore
 from app.knowledge.retriever import LexicalRetriever
 from app.knowledge.seed import seed_knowledge
@@ -39,6 +40,7 @@ def build_services(
     web: object | None = None,
     gateway: object | None = None,
     egress: object | None = None,
+    statute: object | None = None,
 ) -> AssistantServices:
     resolved = resolve_mode(mode)
     resolved_settings = settings or AssistantSettings.from_env()
@@ -81,7 +83,21 @@ def build_services(
         else:
             model_gateway = FixtureComposer()
 
-    policy = egress or EgressPolicy.from_file(resolved_settings.egress_policy)
+    policy = egress or EgressPolicy.load(resolved_settings.egress_policy)
+
+    statute_layer = statute
+    if (
+        statute_layer is None
+        and resolved_settings.statute
+        and resolved_settings.statute_base_url
+        and resolved_settings.statute_api_token
+    ):
+        statute_layer = StatuteRetriever(
+            base_url=resolved_settings.statute_base_url,
+            api_token=resolved_settings.statute_api_token,
+            timeout=resolved_settings.statute_timeout,
+            expansions=getattr(policy, "query_expansion", None),
+        )
 
     logger = get_logger("bootstrap")
     if resolved != "test":
@@ -96,7 +112,7 @@ def build_services(
             )
         logger.info(
             "assistant: model=%s approved=%s general_web=%s approved_web=%s web=%s rag=%s "
-            "egress=%s",
+            "statute=%s egress=%s",
             resolved_settings.processor_label if resolved_settings.model else "fixture",
             resolved_settings.approved_processor,
             bool(resolved_settings.general_web)
@@ -105,6 +121,7 @@ def build_services(
             web_layer is not None,
             resolved_settings.web,
             bool(resolved_settings.rag_endpoint),
+            statute_layer is not None,
             getattr(policy, "version", "unset"),
         )
 
@@ -122,4 +139,5 @@ def build_services(
         egress=policy,
         web=web_layer,
         settings=resolved_settings,
+        statute=statute_layer,
     )

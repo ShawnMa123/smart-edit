@@ -82,7 +82,11 @@ export function KnowledgePanel({
   const [showExamples, setShowExamples] = useState(true);
   const [helpOpen, setHelpOpen] = useState(true);
   /** Per-run opt-in for the web layer; defaults to off and never persists (design D9). */
-  const [webSearch, setWebSearch] = useState(false);
+  const [webSearch, setWebSearch] = useState(true);
+  /** Explicit scope (`knowledge-simple-ask`): a jurisdiction chip, empty means "any". */
+  const [jurisdiction, setJurisdiction] = useState('');
+  /** True once the user touched the web switch, so a late capability response cannot override it. */
+  const webTouched = useRef(false);
   /** Deployment capability view; null means "not loaded / unavailable" (keep the toggle usable). */
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
@@ -122,7 +126,17 @@ export function KnowledgePanel({
   }, [selection]);
 
   const copy = useMemo(() => onboardingCopy(locale), [locale]);
-  const suggestions = useMemo(() => suggestionsFor(selection, locale), [selection, locale]);
+  const suggestions = useMemo(() => {
+    const presets = capabilities?.presets?.suggested_questions;
+    if (presets && presets.length) {
+      return presets.map((question, index) => ({
+        id: `preset-${index}`,
+        label: question,
+        question,
+      }));
+    }
+    return suggestionsFor(selection, locale);
+  }, [capabilities, selection, locale]);
 
   const chooseSuggestion = (nextQuestion: string) => {
     setQuestion(nextQuestion);
@@ -183,7 +197,15 @@ export function KnowledgePanel({
 
       const accepted = await client.createRun(
         active.id,
-        { question: trimmed, selection, web_search: webSearch },
+        {
+          question: trimmed,
+          selection,
+          web_search: webSearch,
+          // Omitted when empty: the server model forbids extra/`null` scope fields.
+          ...(jurisdiction ? { jurisdiction_codes: [jurisdiction] } : {}),
+          // The effective value is always explicit; the source says who decided it.
+          web_search_source: webTouched.current ? 'user' : 'default',
+        },
         newIdempotencyKey('run'),
         options,
       );
@@ -273,6 +295,13 @@ export function KnowledgePanel({
     }
   };
 
+  // Start from the deployment policy once capabilities arrive; a user choice always wins.
+  useEffect(() => {
+    if (!webTouched.current && capabilities) {
+      setWebSearch(Boolean(capabilities.web?.default_on));
+    }
+  }, [capabilities]);
+
   const busy = phase !== 'idle';
   const activeRun = run && !isTerminal(run.status);
   const webLayer = answer?.retrieval?.find((layer) => layer.layer === 'web');
@@ -286,6 +315,10 @@ export function KnowledgePanel({
   const generalOnly = capabilities
     ? !capabilities.layers.approved_web && capabilities.layers.general_web
     : false;
+  // Jurisdiction chips come from the configured presets, falling back to the measured catalogue.
+  const jurisdictionOptions =
+    capabilities?.presets?.jurisdictions ?? capabilities?.statute?.jurisdictions ?? [];
+  const jurisdictionMeasured = jurisdictionOptions.length > 0;
   const webSkippedNotice =
     webSummary?.requested && webSummary.status !== 'ok' && webSummary.status !== 'off';
 
@@ -294,6 +327,12 @@ export function KnowledgePanel({
       <p className="notice notice--warn tiny" role="status">
         Fixture-backed: answers use synthetic demo sources, not official legal texts.
       </p>
+      {webAvailable ? (
+        <p className="tiny muted" role="status">
+          Statute-backed answers. If nothing in the statute corpus matches, this question may go to
+          public web search (unverified) — you can switch that off below.
+        </p>
+      ) : null}
       {notice ? (
         <p className="notice notice--warn tiny" role="status">
           {notice}
@@ -360,7 +399,10 @@ export function KnowledgePanel({
             type="checkbox"
             checked={webSearch}
             disabled={busy || !webAvailable}
-            onChange={(event) => setWebSearch(event.target.checked)}
+            onChange={(event) => {
+              webTouched.current = true;
+              setWebSearch(event.target.checked);
+            }}
           />
           <span>
             {generalOnly ? 'Ask general web (unverified)' : 'Search the web for the latest'}
@@ -374,7 +416,7 @@ export function KnowledgePanel({
           <p className="tiny muted">
             {webSearch
               ? 'Will send: the screened question only. Questions outside the published knowledge base may be answered from the web (unverified). Will not send: document text, selected passage, amounts, counterparties or your identity.'
-              : 'Off: only published sources and the bound document snapshot are searched.'}
+              : 'Off: this run will not search the web (RAG and internal sources are still searched).'}
           </p>
         )}
         {capabilities && !capabilities.model.configured ? (
@@ -383,6 +425,26 @@ export function KnowledgePanel({
           </p>
         ) : null}
       </div>
+
+      {jurisdictionMeasured ? (
+        <div className="knowledge-scope" role="group" aria-label="Scope">
+          <span className="tiny muted">Scope</span>
+          <button type="button" aria-pressed={!jurisdiction} onClick={() => setJurisdiction('')}>
+            Any
+          </button>
+          {jurisdictionOptions.map((code) => (
+            <button
+              key={code}
+              type="button"
+              aria-pressed={jurisdiction === code}
+              onClick={() => setJurisdiction(jurisdiction === code ? '' : code)}
+            >
+              {code}
+            </button>
+          ))}
+          <span className="tiny muted">Statute search only.</span>
+        </div>
+      ) : null}
 
       <label className="tiny muted" htmlFor="knowledge-question">
         Question
@@ -446,6 +508,12 @@ export function KnowledgePanel({
         <p className="tiny muted">Answered from published sources · web not needed.</p>
       ) : null}
 
+      {answer?.web?.reason === 'rag_empty' ? (
+        <p className="notice notice--warn tiny" role="status">
+          RAG returned no result — searched the web automatically (unverified).
+        </p>
+      ) : null}
+
       {/* Older answers carry no `web` summary; fall back to the layer report. */}
       {!webSummary && webLayer?.status === 'blocked' ? (
         <p className="notice notice--warn tiny" role="status">
@@ -501,11 +569,53 @@ export function KnowledgePanel({
 }
 
 const SOURCE_GROUPS = [
+  { id: 'statute', label: 'Statute', types: ['statute'] },
   { id: 'published', label: 'Published corpus', types: ['product_manual', 'trade_rule', 'internal_policy'] },
   { id: 'web', label: 'Web', types: ['approved_web'] },
   { id: 'general', label: 'General web', types: ['general_web'] },
   { id: 'document', label: 'Document', types: ['document_snapshot', 'attachment'] },
 ] as const;
+
+/** Facts a reader can check; never a relevance score (design D3). */
+export function statuteBadge(citation: Citation): string {
+  const locator = citation.locator ?? {};
+  const parts: string[] = [];
+  if (locator.jurisdiction) parts.push(String(locator.jurisdiction));
+  if (locator.effective_from) parts.push(`effective ${String(locator.effective_from)}`);
+  if (locator.precision) parts.push(String(locator.precision));
+  if (locator.superseded_by) parts.push(`superseded by ${String(locator.superseded_by)}`);
+  return parts.length ? ` · ${parts.join(' · ')}` : '';
+}
+
+/** One short, distinct label per statute outcome so the four degradations never read alike. */
+export function statuteNotice(answer: Answer): string | null {
+  const layer = answer.retrieval?.find((item) => item.layer === 'statute');
+  if (!layer) return null;
+  const detail = layer.detail ?? '';
+  const hits = typeof layer.hits === 'number' ? layer.hits : null;
+  if (layer.status === 'blocked') {
+    return 'Statute search blocked by outbound policy — not covered';
+  }
+  if (layer.status === 'failed') {
+    if (detail === 'corpus_updating') return 'Statute corpus is being rebuilt';
+    if (detail === 'timeout') return 'Statute search timed out';
+    return 'Statute search unavailable';
+  }
+  if (detail.startsWith('uncovered:')) {
+    return `Jurisdiction not covered: ${detail.slice('uncovered:'.length)}`;
+  }
+  if (detail === 'degraded:keyword_only') return 'Keyword-only statute search';
+  if (detail === 'superseded') return 'A cited statute has been superseded';
+  // Stated even when the internal corpus answered: the reader must be able to tell
+  // "we did not look" from "we looked and rejected it" (`statute-recall`).
+  if (detail === 'low_confidence') {
+    return hits === null
+      ? 'Statute matches were low confidence — reference only'
+      : `${hits} statute match(es) at low confidence — reference only`;
+  }
+  if (detail.startsWith('zero:')) return 'No statute matched this question';
+  return null;
+}
 
 function sourceGroups(citations: Citation[]) {
   return SOURCE_GROUPS.map((group) => ({
@@ -535,6 +645,12 @@ function AnswerView({
       </div>
       <p className="tiny muted">Processor: {answer.processor ?? 'fixture'}</p>
       <p className="tiny muted">{SUPPORT_COPY[answer.support_level]}</p>
+
+      {statuteNotice(answer) ? (
+        <p className="notice notice--warn tiny" role="status">
+          {statuteNotice(answer)}
+        </p>
+      ) : null}
 
       {answer.claims.length ? (
         <ul className="knowledge-claims">
@@ -602,6 +718,7 @@ function AnswerView({
                               citation.locator.retrieved_at ?? 'unknown',
                             )} · Unverified third-party`
                           : ''}
+                        {citation.source_type === 'statute' ? statuteBadge(citation) : ''}
                       </button>
                     ))}
                   </div>

@@ -1,0 +1,663 @@
+{
+  "schema_version": "2",
+  "chunks": [
+    {
+      "chunk_id": "35cc2814f6fa408b",
+      "doc_id": "cn-independent-guarantee-2020",
+      "source_doc": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+      "text": "第一条 本规定所称的独立保函，是指银行或非银行金融机构作为开立人，以书面形式向受益人出具的，同意在受益人请求付款并提交符合保函要求的单据时，向其支付特定款项或在保函最高金额内付款的承诺。\n\n前款所称的单据，是指独立保函载明的受益人应提交的付款请求书、违约声明、第三方签发的文件、法院判决、仲裁裁决、汇票、发票等表明发生付款到期事件的书面文件。\n\n独立保函可以依保函申请人的申请而开立，也可以依另一金融机构的指示而开立。开立人依指示开立独立保函的，可以要求指示人向其开立用以保障追偿权的独立保函。",
+      "score": 0.847079,
+      "score_parts": {
+        "vector": 0.811639,
+        "keyword": 35.804814,
+        "vector_norm": 1.0,
+        "keyword_norm": 0.452545,
+        "first_stage": 0.890509,
+        "hybrid": 0.890509,
+        "rerank": 0.346383,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "第一条"
+      ],
+      "article_ids": [
+        "cn-independent-guarantee-2020:1"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "cn-independent-guarantee-2020:1",
+          "start": 0,
+          "end": 247
+        }
+      ],
+      "effective_from": "2020-12-29",
+      "effective_to": null,
+      "jurisdictions": [
+        "CN"
+      ],
+      "applies_to": [
+        "settlement",
+        "guarantee",
+        "trade_finance"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "独立",
+          "start": 10,
+          "end": 12,
+          "query_index": 0
+        },
+        {
+          "term": "立保",
+          "start": 11,
+          "end": 13,
+          "query_index": 0
+        },
+        {
+          "term": "保函",
+          "start": 12,
+          "end": 14,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "cn-independent-guarantee-2020",
+        "article_id": "cn-independent-guarantee-2020:1",
+        "jurisdiction": "CN",
+        "applies_to": [
+          "settlement",
+          "guarantee",
+          "trade_finance"
+        ],
+        "effective_from": "2020-12-29",
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 1
+    },
+    {
+      "chunk_id": "82dd9df4f894fccf",
+      "doc_id": "cn-independent-guarantee-2020",
+      "source_doc": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+      "text": "第三条 保函具有下列情形之一，当事人主张保函性质为独立保函的，人民法院应予支持，但保函未载明据以付款的单据和最高金额的除外：\n\n（一）保函载明见索即付；\n\n（二）保函载明适用国际商会《见索即付保函统一规则》等独立保函交易示范规则；\n\n（三）根据保函文本内容，开立人的付款义务独立于基础交易关系及保函申请法律关系，其仅承担相符交单的付款责任。\n\n当事人以独立保函记载了对应的基础交易为由，主张该保函性质为一般保证或连带保证的，人民法院不予支持。\n\n当事人主张独立保函适用民法典关于一般保证或连带保证规定的，人民法院不予支持",
+      "score": 0.608822,
+      "score_parts": {
+        "vector": 0.784362,
+        "keyword": 79.11876,
+        "vector_norm": 0.958435,
+        "keyword_norm": 1.0,
+        "first_stage": 0.966748,
+        "hybrid": 0.966748,
+        "rerank": 0.18638,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "第三条"
+      ],
+      "article_ids": [
+        "cn-independent-guarantee-2020:3"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "cn-independent-guarantee-2020:3",
+          "start": 0,
+          "end": 261
+        }
+      ],
+      "effective_from": "2020-12-29",
+      "effective_to": null,
+      "jurisdictions": [
+        "CN"
+      ],
+      "applies_to": [
+        "settlement",
+        "guarantee",
+        "trade_finance"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "保函",
+          "start": 4,
+          "end": 6,
+          "query_index": 0
+        },
+        {
+          "term": "独立",
+          "start": 25,
+          "end": 27,
+          "query_index": 0
+        },
+        {
+          "term": "立保",
+          "start": 26,
+          "end": 28,
+          "query_index": 0
+        },
+        {
+          "term": "见索",
+          "start": 71,
+          "end": 73,
+          "query_index": 0
+        },
+        {
+          "term": "索即",
+          "start": 72,
+          "end": 74,
+          "query_index": 0
+        },
+        {
+          "term": "即付",
+          "start": 73,
+          "end": 75,
+          "query_index": 0
+        },
+        {
+          "term": "付保",
+          "start": 95,
+          "end": 97,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "cn-independent-guarantee-2020",
+        "article_id": "cn-independent-guarantee-2020:3",
+        "jurisdiction": "CN",
+        "applies_to": [
+          "settlement",
+          "guarantee",
+          "trade_finance"
+        ],
+        "effective_from": "2020-12-29",
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 2
+    },
+    {
+      "chunk_id": "1008bee7f0c0b65f",
+      "doc_id": "cn-independent-guarantee-2020",
+      "source_doc": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+      "text": "第五条 独立保函载明适用《见索即付保函统一规则》等独立保函交易示范规则，或开立人和受益人在一审法庭辩论终结前一致援引的，人民法院应当认定交易示范规则的内容构成独立保函条款的组成部分。\n\n不具有前款情形，当事人主张独立保函适用相关交易示范规则的，人民法院不予支持。",
+      "score": 0.370519,
+      "score_parts": {
+        "vector": 0.709487,
+        "keyword": 76.956234,
+        "vector_norm": 0.84434,
+        "keyword_norm": 0.972667,
+        "first_stage": 0.870006,
+        "hybrid": 0.870006,
+        "rerank": 0.168278,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "第五条"
+      ],
+      "article_ids": [
+        "cn-independent-guarantee-2020:5"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "cn-independent-guarantee-2020:5",
+          "start": 0,
+          "end": 131
+        }
+      ],
+      "effective_from": "2020-12-29",
+      "effective_to": null,
+      "jurisdictions": [
+        "CN"
+      ],
+      "applies_to": [
+        "settlement",
+        "guarantee",
+        "trade_finance"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "独立",
+          "start": 4,
+          "end": 6,
+          "query_index": 0
+        },
+        {
+          "term": "立保",
+          "start": 5,
+          "end": 7,
+          "query_index": 0
+        },
+        {
+          "term": "保函",
+          "start": 6,
+          "end": 8,
+          "query_index": 0
+        },
+        {
+          "term": "见索",
+          "start": 13,
+          "end": 15,
+          "query_index": 0
+        },
+        {
+          "term": "索即",
+          "start": 14,
+          "end": 16,
+          "query_index": 0
+        },
+        {
+          "term": "即付",
+          "start": 15,
+          "end": 17,
+          "query_index": 0
+        },
+        {
+          "term": "付保",
+          "start": 16,
+          "end": 18,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "cn-independent-guarantee-2020",
+        "article_id": "cn-independent-guarantee-2020:5",
+        "jurisdiction": "CN",
+        "applies_to": [
+          "settlement",
+          "guarantee",
+          "trade_finance"
+        ],
+        "effective_from": "2020-12-29",
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 3
+    },
+    {
+      "chunk_id": "9f8cfea0efc847d5",
+      "doc_id": "cn-independent-guarantee-2020",
+      "source_doc": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+      "text": "第二条 本规定所称的独立保函纠纷，是指在独立保函的开立、撤销、修改、转让、付款、追偿等环节产生的纠纷。",
+      "score": 0.206318,
+      "score_parts": {
+        "vector": 0.712466,
+        "keyword": 35.865647,
+        "vector_norm": 0.848879,
+        "keyword_norm": 0.453314,
+        "first_stage": 0.769766,
+        "hybrid": 0.769766,
+        "rerank": 0.183355,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "第二条"
+      ],
+      "article_ids": [
+        "cn-independent-guarantee-2020:2"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "cn-independent-guarantee-2020:2",
+          "start": 0,
+          "end": 51
+        }
+      ],
+      "effective_from": "2020-12-29",
+      "effective_to": null,
+      "jurisdictions": [
+        "CN"
+      ],
+      "applies_to": [
+        "settlement",
+        "guarantee",
+        "trade_finance"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "独立",
+          "start": 10,
+          "end": 12,
+          "query_index": 0
+        },
+        {
+          "term": "立保",
+          "start": 11,
+          "end": 13,
+          "query_index": 0
+        },
+        {
+          "term": "保函",
+          "start": 12,
+          "end": 14,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "cn-independent-guarantee-2020",
+        "article_id": "cn-independent-guarantee-2020:2",
+        "jurisdiction": "CN",
+        "applies_to": [
+          "settlement",
+          "guarantee",
+          "trade_finance"
+        ],
+        "effective_from": "2020-12-29",
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 4
+    },
+    {
+      "chunk_id": "56309cd7c8061a07",
+      "doc_id": "cn-independent-guarantee-2020",
+      "source_doc": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+      "text": "第十条 独立保函未同时载明可转让和据以确定新受益人的单据，开立人主张受益人付款请求权的转让对其不发生效力的，人民法院应予支持。独立保函对受益人付款请求权的转让有特别约定的，从其约定。",
+      "score": 0.119861,
+      "score_parts": {
+        "vector": 0.707568,
+        "keyword": 33.811112,
+        "vector_norm": 0.841416,
+        "keyword_norm": 0.427346,
+        "first_stage": 0.758602,
+        "hybrid": 0.758602,
+        "rerank": 0.15715,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "第十条"
+      ],
+      "article_ids": [
+        "cn-independent-guarantee-2020:10"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "cn-independent-guarantee-2020:10",
+          "start": 0,
+          "end": 91
+        }
+      ],
+      "effective_from": "2020-12-29",
+      "effective_to": null,
+      "jurisdictions": [
+        "CN"
+      ],
+      "applies_to": [
+        "settlement",
+        "guarantee",
+        "trade_finance"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "独立",
+          "start": 4,
+          "end": 6,
+          "query_index": 0
+        },
+        {
+          "term": "立保",
+          "start": 5,
+          "end": 7,
+          "query_index": 0
+        },
+        {
+          "term": "保函",
+          "start": 6,
+          "end": 8,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "cn-independent-guarantee-2020",
+        "article_id": "cn-independent-guarantee-2020:10",
+        "jurisdiction": "CN",
+        "applies_to": [
+          "settlement",
+          "guarantee",
+          "trade_finance"
+        ],
+        "effective_from": "2020-12-29",
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 5
+    }
+  ],
+  "corpus": {
+    "status": "ready",
+    "version": "20261114-151703-157038-21cc6c676382",
+    "snapshot_date": "2026-11-01",
+    "documents": 143,
+    "article_count": 8191,
+    "chunk_count": 11562,
+    "jurisdictions": [
+      "AU",
+      "CN",
+      "EU",
+      "INT",
+      "JP",
+      "US",
+      "WTO"
+    ],
+    "precision": {
+      "US": "degraded",
+      "AU": "degraded",
+      "JP": "degraded",
+      "EU": "snapshot",
+      "INT": "snapshot",
+      "CN": "exact",
+      "WTO": "snapshot"
+    },
+    "built_at": "2026-11-14T15:25:51+00:00",
+    "embedding_model": "qwen3.7-text-embedding"
+  },
+  "temporal": {
+    "as_of": null,
+    "by_jurisdiction": {
+      "AU": {
+        "mode": "degraded",
+        "note": "无修订历史，按快照日推定；不按日期过滤"
+      },
+      "CN": {
+        "mode": "exact",
+        "note": null
+      },
+      "EU": {
+        "mode": "snapshot",
+        "note": "条约/单版本文本；不按日期过滤"
+      },
+      "INT": {
+        "mode": "snapshot",
+        "note": "条约/单版本文本；不按日期过滤"
+      },
+      "JP": {
+        "mode": "degraded",
+        "note": "无修订历史，按快照日推定；不按日期过滤"
+      },
+      "US": {
+        "mode": "degraded",
+        "note": "无修订历史，按快照日推定；不按日期过滤"
+      },
+      "WTO": {
+        "mode": "snapshot",
+        "note": "条约/单版本文本；不按日期过滤"
+      }
+    }
+  },
+  "diagnostics": {
+    "funnel": {
+      "total": 11562,
+      "after_jurisdiction": 11562,
+      "after_applies_to": 11562,
+      "after_as_of": 11417,
+      "after_doc": 11417,
+      "after_article": 11417,
+      "after_retrieval": 5
+    },
+    "zero_reason": null,
+    "requested_uncovered": {
+      "jurisdictions": [],
+      "applies_to": []
+    },
+    "embedding_cache_hits": 0,
+    "rerank": {
+      "enabled": true,
+      "applied": true,
+      "model": "gte-rerank-v2",
+      "candidates": 10,
+      "blend_weight": 0.5,
+      "fusion": "weighted",
+      "latency_ms": 162.22557611763477,
+      "error": null
+    },
+    "per_jurisdiction_k": null,
+    "confidence": "medium",
+    "timings_ms": {
+      "filter": 0.84,
+      "embed": 94.62,
+      "bm25": 0.77,
+      "vector": 11.92,
+      "rank": 0.3,
+      "total": 288.11
+    }
+  },
+  "index": {
+    "version": "20261114-151703-157038-21cc6c676382",
+    "built_at": "2026-11-14T15:25:51+00:00",
+    "chunk_count": 11562,
+    "embedding_model": "qwen3.7-text-embedding",
+    "chunking_hash": "21cc6c676382",
+    "snapshot_version": "2"
+  },
+  "field_matches": {
+    "jurisdictions": {
+      "requested": [],
+      "matched": [
+        "AU",
+        "CN",
+        "EU",
+        "INT",
+        "JP",
+        "US",
+        "WTO"
+      ],
+      "uncovered": []
+    },
+    "applies_to": {
+      "requested": [],
+      "matched": [
+        "advance_ruling",
+        "agriculture",
+        "audit",
+        "bonded",
+        "cisg",
+        "classification",
+        "contract",
+        "credit",
+        "customs",
+        "customs_valuation",
+        "declaration",
+        "dispute_settlement",
+        "entry",
+        "export_control",
+        "foreign_exchange",
+        "foreign_trade",
+        "guarantee",
+        "import_export",
+        "import_licensing",
+        "inspection",
+        "intellectual_property",
+        "investment",
+        "origin",
+        "penalty",
+        "rcep",
+        "sanctions",
+        "settlement",
+        "standards",
+        "tariff",
+        "technology_trade",
+        "trade",
+        "trade_facilitation",
+        "trade_finance",
+        "trade_remedy",
+        "wto"
+      ],
+      "uncovered": []
+    },
+    "as_of": {
+      "requested": null,
+      "precision": {
+        "AU": "degraded",
+        "CN": "exact",
+        "EU": "snapshot",
+        "INT": "snapshot",
+        "JP": "degraded",
+        "US": "degraded",
+        "WTO": "snapshot"
+      }
+    }
+  },
+  "snapshot_version": "2",
+  "index_version": "20261114-151703-157038-21cc6c676382",
+  "_recording": {
+    "purpose": "usable statute answer for 什么是guarantee (confidence=medium, top score 0.847)",
+    "source": "Mercatoria POST /v1/retrieve (deployment corpus 20261114-151703-157038-21cc6c676382)",
+    "captured_at": "2026-11-18",
+    "captured_via": "ssh tunnel team04-pg 127.0.0.1:18080 -> 127.0.0.1:8080",
+    "request": {
+      "queries": [
+        "什么是guarantee 独立保函 见索即付保函 demand guarantee URDG 758"
+      ],
+      "top_k": 5,
+      "filters": {}
+    },
+    "note": "Real Mercatoria /v1/retrieve response recorded through the team04-pg tunnel (127.0.0.1:18080 -> mercatoria:8080). Chunk text is truncated to excerpt length (<= 260 chars); the full statute text is never stored. Used as the offline replay contract for knowledge-statute-live."
+  }
+}

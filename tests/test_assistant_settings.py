@@ -14,7 +14,7 @@ def test_defaults_disable_every_external_call():
     assert settings.web == "off"
     assert settings.web_enabled is False
     assert settings.approved_processor is False
-    assert settings.egress_policy and settings.egress_policy.endswith("egress.yaml")
+    assert settings.egress_policy is None  # resolved by priority at load time (knowledge.json → sample → yaml)
     assert settings.processor_label == "fixture"
 
 

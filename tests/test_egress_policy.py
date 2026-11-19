@@ -178,3 +178,61 @@ def test_tool_search_keeps_the_selection_guard():
 
     assert decision.action == "deny"
     assert decision.reason_code == "contains_selection"
+
+
+# --- statute purpose (knowledge-statute-live D2) ----------------------------------------------
+
+
+def statute(question: str, **kwargs) -> EgressInput:
+    return EgressInput(
+        purpose="statute", question=question, candidate_query=question, **kwargs
+    )
+
+
+def test_statute_requests_allow_an_ordinary_question():
+    decision = demo_policy().check(statute("什么是guarantee"))
+
+    assert decision.action == "allow"
+    assert decision.outbound_query == "什么是guarantee"
+
+
+def test_statute_requests_are_redacted_like_any_other_search():
+    decision = demo_policy().check(
+        statute("Claim under BG-2026-0001 for USD 500,000.00 per URDG 758")
+    )
+
+    assert decision.action == "redact"
+    assert "500,000" not in (decision.outbound_query or "")
+    assert "BG-2026-0001" not in (decision.outbound_query or "")
+    assert "URDG 758" in (decision.outbound_query or "")
+    assert "amount_present" in decision.redactions
+
+
+def test_statute_requests_keep_the_selection_guard():
+    selection = (
+        "The aggregate liability under this guarantee shall not exceed USD 500,000.00 and is "
+        "payable on first written demand."
+    )
+    decision = demo_policy().check(
+        statute(f"请解释：{selection}", selection_text=selection)
+    )
+
+    assert decision.action == "deny"
+    assert decision.reason_code == "contains_selection"
+
+
+def test_statute_requests_fail_closed_without_a_policy():
+    decision = EgressPolicy.from_file(Path("/definitely/not/here.yaml")).check(
+        statute("什么是guarantee")
+    )
+
+    assert decision.action == "deny"
+    assert decision.reason_code == "policy_unavailable"
+
+
+def test_statute_requests_skip_the_public_domain_allowlist():
+    # The corpus is usually reached through a loopback tunnel; the allowlist is about the web.
+    decision = demo_policy().check(statute("什么是guarantee", provider_host="127.0.0.1"))
+
+    assert decision.allowed
+    assert decision.outbound_query == "什么是guarantee"

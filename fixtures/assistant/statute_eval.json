@@ -1,0 +1,174 @@
+{
+  "note": "Offline statute-evaluation set for knowledge-statute-retrieval. Each case is a recorded *outcome shape* from the legal-corpus service, not a live call: `scripts/statute_eval.py` rebuilds the response from these fields and runs the availability judge. It measures the decision layer only (no model, no network) so the numbers are reproducible offline. 15 cases: 6 positive, 3 negative, 3 low-confidence, 2 superseded, 1 uncovered.",
+  "defaults": {
+    "doc_id": "cn-customs-law-2021",
+    "source_doc": "中华人民共和国海关法",
+    "article_label": "第五十五条",
+    "jurisdiction": "CN",
+    "effective_from": "2021-04-29",
+    "precision": "exact"
+  },
+  "cases": [
+    {
+      "id": "S01",
+      "kind": "positive",
+      "question": "进口货物的完税价格由哪些项目组成？",
+      "expected_reason": "ok",
+      "score": 1.0,
+      "confidence": "medium",
+      "text": "第五十五条 进出口货物的完税价格，由海关以该货物的成交价格为基础审查确定。进口货物的完税价格包括货物的货价、货物运抵中华人民共和国境内输入地点起卸前的运输及其相关费用、保险费。",
+      "matched": "完税价格"
+    },
+    {
+      "id": "S02",
+      "kind": "positive",
+      "question": "出口货物的完税价格是否扣除出口关税？",
+      "expected_reason": "ok",
+      "score": 0.93,
+      "confidence": "high",
+      "text": "第五十五条 出口货物的完税价格包括货物的货价、货物运至中华人民共和国境内输出地点装载前的运输及其相关费用、保险费，但是其中包含的出口关税税额，应当予以扣除。",
+      "matched": "出口关税"
+    },
+    {
+      "id": "S03",
+      "kind": "positive",
+      "question": "成交价格无法确定时完税价格如何估定？",
+      "expected_reason": "ok",
+      "score": 0.88,
+      "confidence": "medium",
+      "text": "第五条 进口货物的完税价格，由海关以该货物的成交价格为基础审查确定，并且应当包括货物运抵中华人民共和国境内输入地点起卸前的运输及其相关费用、保险费。",
+      "matched": "成交价格"
+    },
+    {
+      "id": "S04",
+      "kind": "positive",
+      "question": "进出境物品的完税价格由谁确定？",
+      "expected_reason": "ok",
+      "score": 0.81,
+      "confidence": "high",
+      "text": "第五十五条 进出境物品的完税价格，由海关依法确定。",
+      "matched": "进出境物品"
+    },
+    {
+      "id": "S05",
+      "kind": "positive",
+      "question": "申报时需要提交哪些随附单证？",
+      "expected_reason": "ok",
+      "score": 0.75,
+      "confidence": "medium",
+      "text": "第二十四条 进口货物的收货人、出口货物的发货人应当向海关如实申报，交验进出口许可证件和有关单证。",
+      "matched": "单证"
+    },
+    {
+      "id": "S06",
+      "kind": "positive",
+      "question": "What does URDG 758 article 20 require for claims?",
+      "expected_reason": "ok",
+      "score": 0.68,
+      "confidence": "medium",
+      "text": "Article 20 A demand shall be supported by a statement of breach and such other documents as the guarantee requires.",
+      "matched": "demand",
+      "jurisdiction": "INT",
+      "precision": "snapshot",
+      "doc_id": "urdg-758",
+      "source_doc": "URDG 758",
+      "article_label": "Article 20"
+    },
+    {
+      "id": "S07",
+      "kind": "negative",
+      "question": "新加坡公司的年审费用是多少？",
+      "expected_reason": "zero:no_match",
+      "score": 0.0,
+      "confidence": "low",
+      "text": null
+    },
+    {
+      "id": "S08",
+      "kind": "negative",
+      "question": "2026 年 12 月生效的新估价规则有什么变化？",
+      "expected_reason": "zero:no_temporal",
+      "score": 0.0,
+      "confidence": "low",
+      "text": null
+    },
+    {
+      "id": "S09",
+      "kind": "negative",
+      "question": "这份合同的违约金比例是否合规？",
+      "expected_reason": "zero:empty",
+      "score": 0.0,
+      "confidence": "low",
+      "text": null
+    },
+    {
+      "id": "S10",
+      "kind": "low_confidence",
+      "question": "海关对滞报金的具体计算方式是什么？",
+      "expected_reason": "low_confidence",
+      "score": 0.42,
+      "confidence": "low",
+      "text": "第二十四条 进口货物的收货人应当自运输工具申报进境之日起十四日内向海关申报。",
+      "matched": "申报"
+    },
+    {
+      "id": "S11",
+      "kind": "low_confidence",
+      "question": "保税仓库的账册核销周期是多久？",
+      "expected_reason": "low_confidence",
+      "score": 0.3,
+      "confidence": "low",
+      "text": "保税仓库应当按照海关规定的期限办理核销手续。",
+      "matched": "保税仓库"
+    },
+    {
+      "id": "S15",
+      "kind": "low_confidence",
+      "question": "When must a claim under a demand guarantee be presented?",
+      "expected_reason": "low_confidence",
+      "score": 1.0,
+      "confidence": "low",
+      "text": "§ 172.4 Demand on surety. A demand for liquidated damages must be made on the surety within the time stated in the bond.",
+      "matched": "demand",
+      "jurisdiction": "US",
+      "precision": "degraded",
+      "doc_id": "us-cfr-19-172",
+      "source_doc": "19 CFR Part 172 — CLAIMS FOR LIQUIDATED DAMAGES",
+      "article_label": "§ 172.4",
+      "note": "回归用例：服务给 confidence=low 但首条 score=1.0，命中与问题无关（美国罚金条款），必须判为不可用并交回本地语料"
+    },
+    {
+      "id": "S12",
+      "kind": "superseded",
+      "question": "完税价格的审定办法是哪一版适用？",
+      "expected_reason": "superseded",
+      "score": 0.9,
+      "confidence": "high",
+      "text": "第五条 进口货物的完税价格由海关以成交价格为基础审查确定。",
+      "matched": "完税价格",
+      "superseded_by": "cn-customs-valuation-measures-2026:5"
+    },
+    {
+      "id": "S13",
+      "kind": "superseded",
+      "question": "旧版报关单填制规范还有效吗？",
+      "expected_reason": "superseded",
+      "score": 0.86,
+      "confidence": "medium",
+      "text": "报关单填制应当符合海关总署公告的规定。",
+      "matched": "报关单",
+      "superseded_by": "cn-customs-declaration-2025:3"
+    },
+    {
+      "id": "S14",
+      "kind": "uncovered",
+      "question": "新加坡进口货物的完税价格如何确定？",
+      "expected_reason": "uncovered:SG",
+      "score": 0.9,
+      "confidence": "high",
+      "text": "第五条 进口货物的完税价格由海关以成交价格为基础审查确定。",
+      "matched": "完税价格",
+      "uncovered": { "jurisdictions": ["SG"], "applies_to": [] }
+    }
+  ]
+}

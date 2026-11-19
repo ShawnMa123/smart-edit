@@ -75,6 +75,28 @@ def test_intents_are_deterministic_and_inside_the_enum():
     assert analyze("请解释这段文字", selection_text="保函文本").intent == "document_explanation"
 
 
+def test_a_selected_word_does_not_override_a_question_about_a_topic():
+    # Regression for run_c12c9af814d5: "guarantee" was selected in the editor while the question
+    # asked what the term means in trade. The selection used to win the intent, so only that single
+    # word reached the composer and the published definition was never retrieved.
+    for question, selection in (
+        ("guarantee 在贸易里说什么", "guarantee"),
+        ("what does guarantee mean in trade?", "guarantee"),
+        ("国际贸易里的guarantee是什么？", "guarantee"),
+    ):
+        assert analyze(question, selection_text=selection).intent == "trade_rule_explanation"
+
+    # Questions that point at the passage keep the document path, as does a question with no topic.
+    for question in (
+        "请解释这段文字",
+        "这段条款是什么意思？",
+        "Explain this passage",
+        "what does this clause mean?",
+        "这是什么意思",
+    ):
+        assert analyze(question, selection_text="保函文本").intent == "document_explanation"
+
+
 def test_edit_audit_and_regulatory_requests_are_handed_off():
     assert analyze("帮我改写这段条款").handoff_target == "automation"
     assert analyze("帮我检查这份文档").handoff_target == "standards_audit"

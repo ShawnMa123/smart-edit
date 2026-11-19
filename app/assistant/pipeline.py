@@ -24,6 +24,13 @@ DOCUMENT_LIMITATION_EN = (
     "This answer only explains the current document snapshot; it does not mean the document was "
     "submitted, approved or reviewed."
 )
+MODEL_REFUSED_FALLBACK = (
+    "模型未在给定证据上作答；以下结论直接摘录自已发布/法规证据原文，未作推断。"
+)
+MODEL_REFUSED_FALLBACK_EN = (
+    "The model declined to answer from the provided evidence; the claims below quote the evidence "
+    "verbatim and add no inference."
+)
 
 
 def _english(plan: QueryPlan) -> bool:
@@ -185,6 +192,45 @@ class FixtureComposer:
         return Composition(answer, {candidate.citation_id: candidate for candidate in selected})
 
 
+class EvidenceComposer:
+    """Deterministic fallback for "evidence exists but the model still refused".
+
+    It quotes each evidence excerpt verbatim (no version echo, so the reviewer's entity check
+    passes) and cites the quoted item. The service labels the answer as an excerpt fallback so the
+    reader knows the model did not compose it (`knowledge-rag-first-fallback`).
+    """
+
+    def compose(
+        self, plan: QueryPlan, bundle: EvidenceBundle, context: dict[str, Any]
+    ) -> Composition:
+        selected = list(bundle.candidates[:3])
+        claims = [
+            Claim(
+                id=f"claim_{index}",
+                text=candidate.excerpt[:400],
+                kind="fact",
+                citation_ids=[candidate.citation_id],
+            )
+            for index, candidate in enumerate(selected, start=1)
+        ]
+        limitations = [
+            MODEL_REFUSED_FALLBACK_EN if _english(plan) else MODEL_REFUSED_FALLBACK
+        ]
+        if plan.intent == "trade_rule_explanation":
+            limitations.append(TRADE_LIMITATION_EN if _english(plan) else TRADE_LIMITATION)
+        answer = Answer(
+            outcome="answered",
+            language=plan.language,
+            support_level="qualified",
+            claims=claims,
+            citations=[Citation(**bundle.citation(candidate)) for candidate in selected],
+            limitations=limitations,
+        )
+        return Composition(
+            answer, {candidate.citation_id: candidate for candidate in selected}
+        )
+
+
 WEB_ONLY_LIMITATION_ZH = "联网结果为未核验的第三方内容；执行前请以已发布来源为准。"
 WEB_ONLY_LIMITATION_EN = (
     "Web results are unverified third-party content; rely on published sources before acting."
@@ -215,9 +261,9 @@ WEB_TOOL_NOT_OPEN_EN = (
     "Web search is not enabled for this account, so no live results were used. Activate the "
     "web_search plugin in the Volcengine console first."
 )
-GENERAL_WEB_NO_SOURCE_ZH = "本次联网结果没有落在准入域名内，未生成任何可引用来源。"
+GENERAL_WEB_NO_SOURCE_ZH = "本次联网结果没有生成可引用来源，因此没有可发布的结论。"
 GENERAL_WEB_NO_SOURCE_EN = (
-    "None of the web results came from an approved domain, so no citation was produced."
+    "No web result produced a usable source link, so no citation was produced."
 )
 GENERAL_WEB_FALLBACK_ZH = (
     "已发布语料未能回答该问题；以下内容来自通用联网检索（未核验第三方内容），不构成规则依据。"
@@ -225,6 +271,14 @@ GENERAL_WEB_FALLBACK_ZH = (
 GENERAL_WEB_FALLBACK_EN = (
     "The published corpus could not answer this question; the answer below comes from general web "
     "search (unverified third-party content) and is not a rule source."
+)
+WEB_EMPTY_ZH = "联网搜索未返回可用结果；以上回答基于内部来源。"
+WEB_EMPTY_EN = (
+    "The web search returned no usable result; this answer relies on internal sources."
+)
+NO_EVIDENCE_ANYWHERE_ZH = "知识库检索与联网搜索都没有找到可用证据。"
+NO_EVIDENCE_ANYWHERE_EN = (
+    "Neither the knowledge base nor the web search returned usable evidence."
 )
 
 
@@ -248,15 +302,19 @@ def review_general_answer(answer: Answer, known_ids: set[str]) -> tuple[Answer, 
 
 
 def apply_general_web_policy(
-    answer: Answer, *, has_approved_citation: bool, language: str
+    answer: Answer, *, has_url_citation: bool, language: str
 ) -> Answer:
-    """General web answers are capped and always carry the unverified limitation."""
+    """General web answers are capped and always carry the unverified limitation.
+
+    The gate is "does at least one citation carry a resolvable link", not "is the domain approved":
+    the unverified label is what carries trust on this channel (`general-web-citations`).
+    """
     english = language == "en"
     limitations = [
         *answer.limitations,
         GENERAL_WEB_LIMITATION_EN if english else GENERAL_WEB_LIMITATION_ZH,
     ]
-    if not has_approved_citation or (answer.outcome == "answered" and not answer.claims):
+    if not has_url_citation or (answer.outcome == "answered" and not answer.claims):
         return answer.model_copy(
             update={
                 "outcome": "insufficient_evidence",

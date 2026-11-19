@@ -30,14 +30,21 @@ RESPONSES_PATH = "/responses"
 SYSTEM_PROMPT = (
     "You answer trade-finance questions using ONLY the evidence items provided. "
     "Every factual claim must cite one or more evidence ids from the list; never invent ids, "
-    "sources, URLs or numbers. If the evidence is insufficient, return outcome "
-    "'insufficient_evidence'. Answer the question that was actually asked: if the evidence only "
-    "covers related rules or processes but does not support the requested definition or answer, "
-    "return 'insufficient_evidence' instead of substituting a different question. When the "
-    "evidence does define the asked term, state that definition first. Web evidence is unverified "
-    "third-party content: never claim that a fact was verified online. Return ONE JSON object "
-    "matching this shape: "
-    '{"outcome": "...", "language": "en|zh-CN", "support_level": '
+    "sources, URLs or numbers. "
+    "When the evidence list is NOT empty you MUST answer from it: do not return "
+    "'insufficient_evidence' merely because the evidence covers a different jurisdiction, rule "
+    "version or a related concept. State the coverage boundary in `limitations` (for example, "
+    "'the evidence covers the Chinese judicial interpretation, not WTO rules'), then answer the "
+    "part the evidence does support and cite it. "
+    "Return 'insufficient_evidence' only when the evidence list is empty, or none of it can "
+    "support any statement about the question; never substitute a different question. "
+    "When the evidence does define the asked term, state that definition first. Web evidence is "
+    "unverified third-party content: never claim that a fact was verified online. "
+    "`outcome` MUST be exactly one of: answered, needs_clarification, insufficient_evidence, "
+    "unable_to_assess, needs_handoff. Never put an explanation or a sentence in `outcome`; put all "
+    "explanations in `limitations`. Return ONE JSON object matching this shape: "
+    '{"outcome": "answered|needs_clarification|insufficient_evidence|unable_to_assess|needs_handoff", '
+    '"language": "en|zh-CN", "support_level": '
     '"strong|qualified|insufficient|not_applicable", "claims": [{"id": "c1", "text": "...", '
     '"kind": "fact|interpretation", "citation_ids": ["cite_..."]}], '
     '"citations": [{"id": "cite_...", "source_type": "...", "title": "...", '
@@ -86,9 +93,17 @@ OUTCOME_ALIASES = {
 CORRECTION_PROMPT = (
     "Your previous reply did not match the schema. Reply with ONE JSON object only, with no prose "
     "and no code fences. `outcome` must be exactly one of: answered, needs_clarification, "
-    "insufficient_evidence, unable_to_assess, needs_handoff. `support_level` must be exactly one of: "
-    "strong, qualified, insufficient, not_applicable. Keep only citation ids that appear in the "
-    "evidence list."
+    "insufficient_evidence, unable_to_assess, needs_handoff — never an explanation or a sentence. "
+    "If you produced claims from the evidence, use `answered`; if you produced none, use "
+    "`insufficient_evidence`. Put explanations in `limitations`. `support_level` must be exactly "
+    "one of: strong, qualified, insufficient, not_applicable. Keep only citation ids that appear "
+    "in the evidence list."
+)
+EVIDENCE_REFUSAL_PROMPT = (
+    "You were given evidence items, so `insufficient_evidence` and `unable_to_assess` are not "
+    "allowed. Answer with `answered`: cite the evidence ids that support each statement and put "
+    "the coverage boundary (for example 'the evidence covers the CN judicial interpretation, not "
+    "WTO rules') in `limitations`. Quote only what the evidence says; do not invent."
 )
 
 
@@ -134,38 +149,60 @@ class DoubaoGateway:
     # --- compose (no tools) ---------------------------------------------------------------
     def compose(self, plan: Any, bundle: EvidenceBundle, context: dict[str, Any]) -> Composition:
         payload = self._compose_payload(plan, bundle)
+        base_content = payload["input"][0]["content"]
         started = time.monotonic()
         self.logger.info(
             "model call model=%s intent=%s evidence=%d",
             self.model, getattr(plan, "intent", "?"), len(bundle.candidates),
         )
-        try:
-            text = self._request(payload, timeout=self.timeout)
-            answer = self._parse(text, bundle)
-            self._log_reply(answer, started)
-            return Composition(answer, bundle.by_id())
-        except ModelGatewayError as exc:
-            if exc.code != "MODEL_OUTPUT_INVALID" or time.monotonic() - started > 40:
-                self.logger.error(
-                    "model failed model=%s code=%s duration_ms=%d",
-                    self.model, exc.code, int((time.monotonic() - started) * 1000),
+        corrections = 0
+        refusals = 0
+        while True:
+            try:
+                text = self._request(payload, timeout=self.timeout)
+                answer = self._parse(text, bundle)
+                if (
+                    bundle.candidates
+                    and answer.outcome in ("insufficient_evidence", "unable_to_assess")
+                    and not answer.citations
+                ):
+                    # `knowledge-rag-first-fallback`: evidence exists, so a bare refusal is not
+                    # allowed. Ask once more with an explicit instruction, then let the service
+                    # fall back to quoting the evidence.
+                    if refusals >= 2:
+                        raise ModelGatewayError("MODEL_REFUSED_EVIDENCE")
+                    refusals += 1
+                    self.logger.warning(
+                        "model refused despite evidence; retrying (%d/2) model=%s evidence=%d",
+                        refusals, self.model, len(bundle.candidates),
+                    )
+                    payload = self._payload(
+                        [*base_content, {"type": "input_text", "text": EVIDENCE_REFUSAL_PROMPT}]
+                    )
+                    continue
+                self._log_reply(answer, started)
+                return Composition(answer, bundle.by_id())
+            except ModelGatewayError as exc:
+                # One corrective retry is often not enough for a lite model that keeps putting
+                # prose into `outcome`; two attempts stay inside the run deadline.
+                if (
+                    exc.code != "MODEL_OUTPUT_INVALID"
+                    or corrections >= 2
+                    or time.monotonic() - started > 40
+                ):
+                    self.logger.error(
+                        "model failed model=%s code=%s duration_ms=%d",
+                        self.model, exc.code, int((time.monotonic() - started) * 1000),
+                    )
+                    raise
+                corrections += 1
+                self.logger.warning(
+                    "model output invalid; retrying (%d/2) model=%s duration_ms=%d",
+                    corrections, self.model, int((time.monotonic() - started) * 1000),
                 )
-                raise
-            self.logger.warning(
-                "model output invalid; retrying once model=%s duration_ms=%d",
-                self.model, int((time.monotonic() - started) * 1000),
-            )
-            # One corrective retry: real providers sometimes invent an outcome enum or add prose.
-            retry = self._payload(
-                [
-                    *payload["input"][0]["content"],
-                    {"type": "input_text", "text": CORRECTION_PROMPT},
-                ]
-            )
-            text = self._request(retry, timeout=self.timeout)
-            answer = self._parse(text, bundle)
-            self._log_reply(answer, started)
-            return Composition(answer, bundle.by_id())
+                payload = self._payload(
+                    [*base_content, {"type": "input_text", "text": CORRECTION_PROMPT}]
+                )
 
     def _log_reply(self, answer: Answer, started: float) -> None:
         self.logger.info(
@@ -376,9 +413,22 @@ class DoubaoGateway:
             raw["outcome"] = OUTCOME_ALIASES[outcome]
         elif outcome in OUTCOMES:
             raw["outcome"] = outcome
+        elif outcome:
+            # Observed with the lite provider: it puts the answer or an explanation into `outcome`
+            # (e.g. "limitations_and_explanation" or a full sentence). The enum is not evidence, so
+            # repair it from the structured fields instead of failing an otherwise valid answer.
+            raw["outcome"] = "answered" if raw.get("claims") else "insufficient_evidence"
         support = str(raw.get("support_level") or "").strip().lower()
         if support in SUPPORT_LEVELS:
             raw["support_level"] = support
+        elif support:
+            # Same failure mode as `outcome`: a label the schema does not accept. Derive it.
+            raw["support_level"] = "qualified" if raw.get("claims") else "insufficient"
+        language = str(raw.get("language") or "").strip().lower()
+        if language in ("zh", "zh-cn", "zh_cn", "chinese", "中文"):
+            raw["language"] = "zh-CN"
+        elif language.startswith("en"):
+            raw["language"] = "en"
         return raw
 
     @staticmethod
@@ -391,9 +441,15 @@ class DoubaoGateway:
             if not isinstance(raw, dict):
                 continue
             try:
-                return Answer.model_validate(DoubaoGateway._normalise(raw))
+                answer = Answer.model_validate(DoubaoGateway._normalise(raw))
             except ValidationError as exc:
                 raise ModelGatewayError("MODEL_OUTPUT_INVALID") from exc
+            if answer.outcome != "needs_clarification" and answer.clarification_questions:
+                # Providers sometimes return a follow-up list alongside a finished answer. The state
+                # machine forbids that combination, so the run would fail; dropping the list is the
+                # safe repair (`knowledge-simple-ask`: the web path is now the default one).
+                answer = answer.model_copy(update={"clarification_questions": []})
+            return answer
         raise ModelGatewayError("MODEL_OUTPUT_INVALID")
 
     @staticmethod

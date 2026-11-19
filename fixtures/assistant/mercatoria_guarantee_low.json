@@ -1,0 +1,556 @@
+{
+  "schema_version": "2",
+  "chunks": [
+    {
+      "chunk_id": "ae442d764aa4e7b2",
+      "doc_id": "eu-ucc-2013",
+      "source_doc": "Regulation (EU) No 952/2013 (Union Customs Code)",
+      "text": "## Article 92\n\nProvision of a guarantee\n1. A guarantee may be provided in one of the following forms:\n(a)\nby a cash deposit or by any other means of payment recognised by the customs authorities as being equivalent to a cash deposit, made in euro or in the cur",
+      "score": 1.0,
+      "score_parts": {
+        "vector": 0.58178,
+        "keyword": 11.443544,
+        "vector_norm": 0.985521,
+        "keyword_norm": 0.983361,
+        "first_stage": 0.985089,
+        "hybrid": 0.985089,
+        "rerank": 0.189432,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "Article 92"
+      ],
+      "article_ids": [
+        "eu-ucc-2013:art-92"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "eu-ucc-2013:art-92",
+          "start": 0,
+          "end": 900
+        }
+      ],
+      "effective_from": null,
+      "effective_to": null,
+      "jurisdictions": [
+        "EU"
+      ],
+      "applies_to": [
+        "customs",
+        "tariff",
+        "origin"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "guarantee",
+          "start": 30,
+          "end": 39,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "eu-ucc-2013",
+        "article_id": "eu-ucc-2013:art-92",
+        "jurisdiction": "EU",
+        "applies_to": [
+          "customs",
+          "tariff",
+          "origin"
+        ],
+        "effective_from": null,
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 1
+    },
+    {
+      "chunk_id": "e0e9abaa5384e47b",
+      "doc_id": "eu-ucc-2013",
+      "source_doc": "Regulation (EU) No 952/2013 (Union Customs Code)",
+      "text": "blished in the customs territory of the Union. The guarantor shall be approved by the customs authorities requiring the guarantee, unless the guarantor is a credit institution, financial institution or insurance company accredited in the Union in accordance wi",
+      "score": 0.850251,
+      "score_parts": {
+        "vector": 0.588383,
+        "keyword": 9.597124,
+        "vector_norm": 1.0,
+        "keyword_norm": 0.824696,
+        "first_stage": 0.964939,
+        "hybrid": 0.964939,
+        "rerank": 0.178133,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "Article 94"
+      ],
+      "article_ids": [
+        "eu-ucc-2013:art-94"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "eu-ucc-2013:art-94",
+          "start": 0,
+          "end": 823
+        }
+      ],
+      "effective_from": null,
+      "effective_to": null,
+      "jurisdictions": [
+        "EU"
+      ],
+      "applies_to": [
+        "customs",
+        "tariff",
+        "origin"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "guarantee",
+          "start": 120,
+          "end": 129,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "eu-ucc-2013",
+        "article_id": "eu-ucc-2013:art-94",
+        "jurisdiction": "EU",
+        "applies_to": [
+          "customs",
+          "tariff",
+          "origin"
+        ],
+        "effective_from": null,
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 2
+    },
+    {
+      "chunk_id": "6afdca89975bfc0d",
+      "doc_id": "eu-ucc-2013",
+      "source_doc": "Regulation (EU) No 952/2013 (Union Customs Code)",
+      "text": "## Article 93\n\nChoice of guarantee\nThe person required to provide a guarantee may choose between the forms of guarantee laid down in Article 92(1).\nHowever, the customs authorities may refuse to accept the form of guarantee chosen where it is incompatible with",
+      "score": 0.527414,
+      "score_parts": {
+        "vector": 0.552826,
+        "keyword": 11.637173,
+        "vector_norm": 0.922033,
+        "keyword_norm": 1.0,
+        "first_stage": 0.937626,
+        "hybrid": 0.937626,
+        "rerank": 0.145971,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "Article 93"
+      ],
+      "article_ids": [
+        "eu-ucc-2013:art-93"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "eu-ucc-2013:art-93",
+          "start": 0,
+          "end": 426
+        }
+      ],
+      "effective_from": null,
+      "effective_to": null,
+      "jurisdictions": [
+        "EU"
+      ],
+      "applies_to": [
+        "customs",
+        "tariff",
+        "origin"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "guarantee",
+          "start": 25,
+          "end": 34,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "eu-ucc-2013",
+        "article_id": "eu-ucc-2013:art-93",
+        "jurisdiction": "EU",
+        "applies_to": [
+          "customs",
+          "tariff",
+          "origin"
+        ],
+        "effective_from": null,
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 3
+    },
+    {
+      "chunk_id": "cebff67406ff31d7",
+      "doc_id": "eu-ucc-2013",
+      "source_doc": "Regulation (EU) No 952/2013 (Union Customs Code)",
+      "text": "## Article 89\n\nGeneral provisions\n1. This Chapter shall apply to guarantees both for customs debts which have been incurred and for those which may be incurred, unless otherwise specified.\n2. Where the customs authorities require a guarantee for a potential or",
+      "score": 0.516238,
+      "score_parts": {
+        "vector": 0.581615,
+        "keyword": 11.227521,
+        "vector_norm": 0.98516,
+        "keyword_norm": 0.964798,
+        "first_stage": 0.981087,
+        "hybrid": 0.981087,
+        "rerank": 0.123371,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "Article 89"
+      ],
+      "article_ids": [
+        "eu-ucc-2013:art-89"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "eu-ucc-2013:art-89",
+          "start": 0,
+          "end": 1702
+        }
+      ],
+      "effective_from": null,
+      "effective_to": null,
+      "jurisdictions": [
+        "EU"
+      ],
+      "applies_to": [
+        "customs",
+        "tariff",
+        "origin"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "guarantee",
+          "start": 65,
+          "end": 74,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "eu-ucc-2013",
+        "article_id": "eu-ucc-2013:art-89",
+        "jurisdiction": "EU",
+        "applies_to": [
+          "customs",
+          "tariff",
+          "origin"
+        ],
+        "effective_from": null,
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 4
+    },
+    {
+      "chunk_id": "e275c6a8af294676",
+      "doc_id": "eu-ucc-2013",
+      "source_doc": "Regulation (EU) No 952/2013 (Union Customs Code)",
+      "text": "## Article 90\n\nCompulsory guarantee\n1. Where it is compulsory for a guarantee to be provided, the customs authorities shall fix the amount of such guarantee at a level equal to the precise amount of import or export duty corresponding to the customs debt and o",
+      "score": 0.449973,
+      "score_parts": {
+        "vector": 0.548454,
+        "keyword": 11.306082,
+        "vector_norm": 0.912447,
+        "keyword_norm": 0.971549,
+        "first_stage": 0.924267,
+        "hybrid": 0.924267,
+        "rerank": 0.14155,
+        "fusion_bonus": 0.0
+      },
+      "articles": [
+        "Article 90"
+      ],
+      "article_ids": [
+        "eu-ucc-2013:art-90"
+      ],
+      "article_offsets": [
+        {
+          "article_id": "eu-ucc-2013:art-90",
+          "start": 0,
+          "end": 1013
+        }
+      ],
+      "effective_from": null,
+      "effective_to": null,
+      "jurisdictions": [
+        "EU"
+      ],
+      "applies_to": [
+        "customs",
+        "tariff",
+        "origin"
+      ],
+      "superseded_by": null,
+      "matched_by": [
+        "vec",
+        "kw"
+      ],
+      "matched_queries": [
+        0
+      ],
+      "matched_terms": [
+        {
+          "term": "guarantee",
+          "start": 26,
+          "end": 35,
+          "query_index": 0
+        }
+      ],
+      "matched_fields": {
+        "doc_id": "eu-ucc-2013",
+        "article_id": "eu-ucc-2013:art-90",
+        "jurisdiction": "EU",
+        "applies_to": [
+          "customs",
+          "tariff",
+          "origin"
+        ],
+        "effective_from": null,
+        "effective_to": null,
+        "requested_jurisdictions": [],
+        "requested_applies_to": [],
+        "as_of": null
+      },
+      "rank": 5
+    }
+  ],
+  "corpus": {
+    "status": "ready",
+    "version": "20261114-151703-157038-21cc6c676382",
+    "snapshot_date": "2026-11-01",
+    "documents": 143,
+    "article_count": 8191,
+    "chunk_count": 11562,
+    "jurisdictions": [
+      "AU",
+      "CN",
+      "EU",
+      "INT",
+      "JP",
+      "US",
+      "WTO"
+    ],
+    "precision": {
+      "US": "degraded",
+      "AU": "degraded",
+      "JP": "degraded",
+      "EU": "snapshot",
+      "INT": "snapshot",
+      "CN": "exact",
+      "WTO": "snapshot"
+    },
+    "built_at": "2026-11-14T15:25:51+00:00",
+    "embedding_model": "qwen3.7-text-embedding"
+  },
+  "temporal": {
+    "as_of": null,
+    "by_jurisdiction": {
+      "AU": {
+        "mode": "degraded",
+        "note": "无修订历史，按快照日推定；不按日期过滤"
+      },
+      "CN": {
+        "mode": "exact",
+        "note": null
+      },
+      "EU": {
+        "mode": "snapshot",
+        "note": "条约/单版本文本；不按日期过滤"
+      },
+      "INT": {
+        "mode": "snapshot",
+        "note": "条约/单版本文本；不按日期过滤"
+      },
+      "JP": {
+        "mode": "degraded",
+        "note": "无修订历史，按快照日推定；不按日期过滤"
+      },
+      "US": {
+        "mode": "degraded",
+        "note": "无修订历史，按快照日推定；不按日期过滤"
+      },
+      "WTO": {
+        "mode": "snapshot",
+        "note": "条约/单版本文本；不按日期过滤"
+      }
+    }
+  },
+  "diagnostics": {
+    "funnel": {
+      "total": 11562,
+      "after_jurisdiction": 11562,
+      "after_applies_to": 11562,
+      "after_as_of": 11417,
+      "after_doc": 11417,
+      "after_article": 11417,
+      "after_retrieval": 5
+    },
+    "zero_reason": null,
+    "requested_uncovered": {
+      "jurisdictions": [],
+      "applies_to": []
+    },
+    "embedding_cache_hits": 1,
+    "rerank": {
+      "enabled": true,
+      "applied": true,
+      "model": "gte-rerank-v2",
+      "candidates": 10,
+      "blend_weight": 0.5,
+      "fusion": "weighted",
+      "latency_ms": 109.49802910909057,
+      "error": null
+    },
+    "per_jurisdiction_k": null,
+    "confidence": "low",
+    "timings_ms": {
+      "filter": 0.99,
+      "embed": 0.06,
+      "bm25": 0.82,
+      "vector": 14.35,
+      "rank": 0.1,
+      "total": 151.37
+    },
+    "cache_hit": true
+  },
+  "index": {
+    "version": "20261114-151703-157038-21cc6c676382",
+    "built_at": "2026-11-14T15:25:51+00:00",
+    "chunk_count": 11562,
+    "embedding_model": "qwen3.7-text-embedding",
+    "chunking_hash": "21cc6c676382",
+    "snapshot_version": "2"
+  },
+  "field_matches": {
+    "jurisdictions": {
+      "requested": [],
+      "matched": [
+        "AU",
+        "CN",
+        "EU",
+        "INT",
+        "JP",
+        "US",
+        "WTO"
+      ],
+      "uncovered": []
+    },
+    "applies_to": {
+      "requested": [],
+      "matched": [
+        "advance_ruling",
+        "agriculture",
+        "audit",
+        "bonded",
+        "cisg",
+        "classification",
+        "contract",
+        "credit",
+        "customs",
+        "customs_valuation",
+        "declaration",
+        "dispute_settlement",
+        "entry",
+        "export_control",
+        "foreign_exchange",
+        "foreign_trade",
+        "guarantee",
+        "import_export",
+        "import_licensing",
+        "inspection",
+        "intellectual_property",
+        "investment",
+        "origin",
+        "penalty",
+        "rcep",
+        "sanctions",
+        "settlement",
+        "standards",
+        "tariff",
+        "technology_trade",
+        "trade",
+        "trade_facilitation",
+        "trade_finance",
+        "trade_remedy",
+        "wto"
+      ],
+      "uncovered": []
+    },
+    "as_of": {
+      "requested": null,
+      "precision": {
+        "AU": "degraded",
+        "CN": "exact",
+        "EU": "snapshot",
+        "INT": "snapshot",
+        "JP": "degraded",
+        "US": "degraded",
+        "WTO": "snapshot"
+      }
+    }
+  },
+  "snapshot_version": "2",
+  "index_version": "20261114-151703-157038-21cc6c676382",
+  "_recording": {
+    "purpose": "low-confidence rejection for the unexpanded question (confidence=low, 5 hits)",
+    "source": "Mercatoria POST /v1/retrieve (deployment corpus 20261114-151703-157038-21cc6c676382)",
+    "captured_at": "2026-11-18",
+    "captured_via": "ssh tunnel team04-pg 127.0.0.1:18080 -> 127.0.0.1:8080",
+    "request": {
+      "queries": [
+        "什么是guarantee"
+      ],
+      "top_k": 5,
+      "filters": {}
+    },
+    "note": "Real Mercatoria /v1/retrieve response recorded through the team04-pg tunnel (127.0.0.1:18080 -> mercatoria:8080). Chunk text is truncated to excerpt length (<= 260 chars); the full statute text is never stored. Used as the offline replay contract for knowledge-statute-live."
+  }
+}

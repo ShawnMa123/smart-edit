@@ -63,6 +63,14 @@ const MESSAGES: Record<string, string> = {
   ASSISTANT_FAILED:
     'The knowledge assistant could not complete this run. This is a technical failure, not a statement that no knowledge exists.',
   RUN_TIMEOUT: 'The assistant run passed its deadline, so it stopped without publishing an answer.',
+  MODEL_OUTPUT_INVALID:
+    'The model reply did not match the required schema after retries, so no conclusion was published. This is a model failure, not a statement that no knowledge exists; ask again.',
+  MODEL_TIMEOUT:
+    'The model did not answer before its timeout, so no conclusion was published. Try again.',
+  PROVIDER_UNAVAILABLE:
+    'The model provider could not be reached, so no conclusion was published. This is a technical failure, not a knowledge gap.',
+  MODEL_REFUSED_EVIDENCE:
+    'The model did not answer from the retrieved evidence and the excerpt fallback could not be applied, so no conclusion was published.',
   RUN_INTERRUPTED: 'The assistant process restarted while this run was active, so the run ended.',
   SESSION_MISSING: 'The conversation this run belongs to no longer exists.',
   HELP_SOURCE_UNAVAILABLE:

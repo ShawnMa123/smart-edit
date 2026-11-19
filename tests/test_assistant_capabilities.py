@@ -52,9 +52,30 @@ def test_defaults_report_nothing_external(tmp_path):
         "label": None,
         "approved_processor": False,
     }
-    assert body["layers"] == {"local": True, "approved_web": False, "general_web": False}
-    assert body["web"] == {"provider": "off"}
-    assert body["egress"]["loaded"] is False
+    assert body["layers"] == {
+        "local": True,
+        "approved_web": False,
+        "general_web": False,
+        "statute": False,
+    }
+    assert body["statute"] == {
+        "enabled": False,
+        "reachable": False,
+        "documents": None,
+        "chunks": None,
+        "index_version": None,
+        "jurisdictions": None,
+    }
+    # This helper builds services without a settings object, so the deployment default is unknown and
+    # reported conservatively as off; `test_capabilities_publish_the_deployment_default` covers both
+    # explicit values.
+    assert body["web"] == {"provider": "off", "default_on": False}
+    # The repo ships `knowledge.sample.json`, so a default deployment does have a policy loaded —
+    # it is a preset (domains + redaction rules), not an external call. The panel still defaults to
+    # no web search unless `SMART_EDIT_ASSISTANT_WEB_DEFAULT` says otherwise.
+    assert body["egress"]["loaded"] is True
+    assert body["egress"]["allowed_domains"] >= 1
+    assert "http://" not in json.dumps(body) and "https://" not in json.dumps(body)
 
 
 def test_configured_general_channel_is_reported(tmp_path):

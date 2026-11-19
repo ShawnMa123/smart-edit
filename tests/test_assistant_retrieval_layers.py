@@ -132,6 +132,46 @@ def test_unapproved_domains_are_dropped_not_cited(tmp_path):
     run = _run(client, session["id"], QUESTION, web_search=True)
 
     assert all(citation["source_type"] != "approved_web" for citation in run["result"]["citations"])
+
+
+def test_an_incidental_word_selection_still_reads_the_published_definition(tmp_path):
+    """Regression for run_c12c9af814d5.
+
+    The demo asked "guarantee 在贸易里说什么" while the word "guarantee" was selected. The run
+    was routed to document_explanation, so the only evidence was that nine-character slice, the
+    corpus definition was never retrieved, and the answer could only be insufficient_evidence.
+    """
+    text = (
+        "Payment terms: the buyer shall provide a guarantee from an issuing bank before shipment."
+    )
+    client, _ = _client(tmp_path, web=FixtureWebSearch([PAGE]))
+    snapshot = register_snapshot(client, text=text)
+    session = _session(
+        client,
+        {
+            "workspace_id": WORKSPACE,
+            "locale": "zh-CN",
+            "document_id": "doc-1",
+            "snapshot_id": snapshot["id"],
+        },
+    )
+    start = text.index("guarantee")
+    selection = {
+        "node_id": "block_0",
+        "start_offset": start,
+        "end_offset": start + len("guarantee"),
+        "selected_text": "guarantee",
+    }
+    run = _run(client, session["id"], "guarantee 在贸易里说什么", selection=selection)
+
+    result = run["result"]
+    assert result["outcome"] == "answered"
+    assert result["citations"], result["limitations"]
+    assert all(citation["source_type"] == "trade_rule" for citation in result["citations"])
+    assert all(layer["detail"] != "document_snapshot" for layer in result["retrieval"])
+    assert any("保函" in claim["text"] for claim in result["claims"])
+
+
 def test_selection_text_blocks_the_web_layer(tmp_path):
     text = (
         "This guarantee is governed by URDG 758 and payable on first written demand at the "

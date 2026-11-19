@@ -142,6 +142,8 @@ export interface RunInput {
   rule_version?: string | null;
   /** Per-run opt-in for the web retrieval layer; omitted means off. */
   web_search?: boolean;
+  /** Who chose `web_search` (`knowledge-simple-ask`): the toggle or the deployment default. */
+  web_search_source?: 'user' | 'default';
 }
 
 const toServerSelection = (selection: AssistantSelection): Record<string, unknown> => ({
@@ -164,6 +166,7 @@ export function createRun(
     ...(input.jurisdiction_codes?.length ? { jurisdiction_codes: input.jurisdiction_codes } : {}),
     ...(input.rule_version ? { rule_version: input.rule_version } : {}),
     ...(input.web_search ? { web_search: true } : {}),
+    ...(input.web_search_source ? { web_search_source: input.web_search_source } : {}),
   };
   return requestJson(`/sessions/${encodeURIComponent(sessionId)}/runs`, {
     ...options,

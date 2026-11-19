@@ -22,15 +22,29 @@ WEB_API_KEY_ENV = "SMART_EDIT_ASSISTANT_WEB_API_KEY"
 RAG_ENDPOINT_ENV = "SMART_EDIT_ASSISTANT_RAG_ENDPOINT"
 RAG_API_KEY_ENV = "SMART_EDIT_ASSISTANT_RAG_API_KEY"
 EGRESS_POLICY_ENV = "SMART_EDIT_ASSISTANT_EGRESS_POLICY"
+# Knowledge presets may live in one JSON file (`knowledge-simple-ask`); this points at it.
+KNOWLEDGE_CONFIG_ENV = "SMART_EDIT_KNOWLEDGE_CONFIG"
+# Whether the web fallback starts enabled. Deployment policy, not a UI decision.
+WEB_DEFAULT_ENV = "SMART_EDIT_ASSISTANT_WEB_DEFAULT"
 GENERAL_WEB_ENV = "SMART_EDIT_ASSISTANT_GENERAL_WEB"
 WEB_SEARCH_MAX_KEYWORD_ENV = "SMART_EDIT_ASSISTANT_WEB_SEARCH_MAX_KEYWORD"
 THINKING_ENV = "SMART_EDIT_ASSISTANT_THINKING"
+# Statute evidence source (knowledge-statute-retrieval). Off by default: an enabled source without
+# an endpoint or a token fails at startup instead of silently returning "no statute evidence".
+STATUTE_ENV = "SMART_EDIT_STATUTE"
+STATUTE_BASE_URL_ENV = "MERCATORIA_BASE_URL"
+STATUTE_TOKEN_ENV = "MERCATORIA_API_TOKEN"
 
 DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
-DEFAULT_EGRESS_POLICY = "app/configs/egress.yaml"
+# `None` means "resolve by priority" (`knowledge.json` → `knowledge.sample.json` → `egress.yaml`),
+# so an explicit `SMART_EDIT_ASSISTANT_EGRESS_POLICY` still wins but the shipped preset is usable.
+DEFAULT_EGRESS_POLICY: str | None = None
 MODEL_PREFIX = "doubao:"
 WEB_PROVIDERS = ("off", "fixture", "http")
 _TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off", ""}
+# Statute source defaults; the timeout is deliberately well above the measured ~151 ms round trip.
+STATUTE_DEFAULT_TIMEOUT = 2.5
 
 
 @dataclass(frozen=True)
@@ -49,9 +63,16 @@ class AssistantSettings:
     egress_policy: str | None = DEFAULT_EGRESS_POLICY
     # General web channel (knowledge-general-web): a second, explicit opt-in.
     general_web: bool = False
+    # Whether the web fallback starts enabled (`knowledge-simple-ask`); default on, user can switch off.
+    web_default: bool = True
     web_search_max_keyword: int = 3
     # Hidden reasoning costs 10-60s per call; off unless explicitly enabled.
     thinking: bool = False
+    # Statute evidence source (`knowledge-statute-retrieval`): disabled unless explicitly turned on.
+    statute: bool = False
+    statute_base_url: str | None = None
+    statute_api_token: str | None = None
+    statute_timeout: float = STATUTE_DEFAULT_TIMEOUT
 
     @property
     def model_provider(self) -> str | None:
@@ -92,20 +113,39 @@ class AssistantSettings:
                 f"{WEB_SEARCH_MAX_KEYWORD_ENV} must be an integer; got {raw_keywords!r}"
             ) from exc
         max_keyword = max(1, min(5, max_keyword))
+        raw_web_default = (values.get(WEB_DEFAULT_ENV) or "").strip().lower()
+        if raw_web_default and raw_web_default not in _TRUE and raw_web_default not in _FALSE:
+            raise ValueError(f"{WEB_DEFAULT_ENV} must be 'on' or 'off'; got {raw_web_default!r}")
+        web_default = True if not raw_web_default else raw_web_default in _TRUE
+        raw_statute = (values.get(STATUTE_ENV) or "").strip().lower()
+        if raw_statute not in _TRUE and raw_statute not in _FALSE:
+            raise ValueError(f"{STATUTE_ENV} must be 'on' or 'off'; got {raw_statute!r}")
+        statute_enabled = raw_statute in _TRUE
+        statute_base_url = (values.get(STATUTE_BASE_URL_ENV) or "").strip().rstrip("/") or None
+        statute_token = (values.get(STATUTE_TOKEN_ENV) or "").strip() or None
+        if statute_enabled and not statute_base_url:
+            # Fail loudly: an enabled source that cannot be addressed must not read as "no statutes".
+            raise ValueError(f"{STATUTE_BASE_URL_ENV} is required when {STATUTE_ENV}=on")
+        if statute_enabled and not statute_token:
+            raise ValueError(f"{STATUTE_TOKEN_ENV} is required when {STATUTE_ENV}=on")
         return cls(
             model=model,
             base_url=(values.get(MODEL_BASE_URL_ENV) or DEFAULT_BASE_URL).strip(),
             api_key=(values.get(MODEL_API_KEY_ENV) or "").strip() or None,
             approved_processor=(values.get(PROCESSOR_ENV) or "").strip().lower() in _TRUE,
             general_web=(values.get(GENERAL_WEB_ENV) or "").strip().lower() in _TRUE,
+            web_default=web_default,
             web_search_max_keyword=max_keyword,
             thinking=(values.get(THINKING_ENV) or "").strip().lower() in _TRUE,
+            statute=statute_enabled,
+            statute_base_url=statute_base_url,
+            statute_api_token=statute_token,
             web=raw_web,
             web_endpoint=(values.get(WEB_ENDPOINT_ENV) or "").strip() or None,
             web_api_key=(values.get(WEB_API_KEY_ENV) or "").strip() or None,
             rag_endpoint=(values.get(RAG_ENDPOINT_ENV) or "").strip() or None,
             rag_api_key=(values.get(RAG_API_KEY_ENV) or "").strip() or None,
-            egress_policy=(values.get(EGRESS_POLICY_ENV) or DEFAULT_EGRESS_POLICY).strip() or None,
+            egress_policy=(values.get(KNOWLEDGE_CONFIG_ENV) or values.get(EGRESS_POLICY_ENV) or DEFAULT_EGRESS_POLICY or "").strip() or None,
         )
 
 

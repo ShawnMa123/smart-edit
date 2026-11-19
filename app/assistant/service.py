@@ -11,6 +11,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Callable
 from urllib.parse import urlparse
@@ -32,10 +33,15 @@ from app.assistant.pipeline import (
     WEB_INCOMPLETE_ZH,
     GENERAL_WEB_FALLBACK_EN,
     GENERAL_WEB_FALLBACK_ZH,
+    NO_EVIDENCE_ANYWHERE_EN,
+    NO_EVIDENCE_ANYWHERE_ZH,
+    WEB_EMPTY_EN,
+    WEB_EMPTY_ZH,
     WEB_SKIPPED_EN,
     WEB_SKIPPED_ZH,
     WEB_TOOL_NOT_OPEN_EN,
     WEB_TOOL_NOT_OPEN_ZH,
+    EvidenceComposer,
     FixtureComposer,
     apply_general_web_policy,
     apply_layer_policy,
@@ -45,6 +51,7 @@ from app.assistant.pipeline import (
 )
 from app.assistant.ports import Composition, EvidenceBundle, EvidenceCandidate, Principal
 from app.assistant.retrieval import (
+    MAX_EVIDENCE,
     RetrievalError,
     merge_layers,
     web_candidates,
@@ -57,6 +64,8 @@ from app.assistant.schemas import (
     EgressCapability,
     LayerCapability,
     ModelCapability,
+    StatuteCapability,
+    KnowledgePresets,
     WebCapability,
     WebSummary,
     ErrorBody,
@@ -79,6 +88,7 @@ from app.logging_setup import get_logger
 
 WEB_HINTS = {
     "web_unavailable": "This server has no web provider configured.",
+    "statute_answered": "RAG returned results, so the web was not searched.",
     "tool_search_disabled": "General web is disabled on this server.",
     "processor_not_approved": "The model provider is not approved for outbound content.",
     "contains_selection": "Remove the document passage, then ask again.",
@@ -93,6 +103,47 @@ WEB_HINTS = {
 }
 
 
+# Statute layer notes (`knowledge-statute-retrieval`). Every failure mode keeps its own wording so
+# "we could not check" never reads as "there is no such rule".
+STATUTE_TIMEOUT_EN = "Statute search timed out — this answer does not cover statutes."
+STATUTE_TIMEOUT_ZH = "法规检索超时，本回答未覆盖法规。"
+STATUTE_UPDATING_EN = (
+    "The statute corpus is being rebuilt — statutes are not covered in this answer."
+)
+STATUTE_UPDATING_ZH = "法规库正在重建，本回答未覆盖法规。"
+STATUTE_UNAVAILABLE_EN = "Statute search is unavailable — this answer does not cover statutes."
+STATUTE_UNAVAILABLE_ZH = "法规检索不可用，本回答未覆盖法规。"
+STATUTE_UNCOVERED_EN = "The requested jurisdiction is not covered by the statute corpus."
+STATUTE_UNCOVERED_ZH = "所请求的法域未被法规语料覆盖。"
+STATUTE_NONE_EN = "No statute matched this question."
+STATUTE_NONE_ZH = "没有匹配到相关法规。"
+STATUTE_SUPERSEDED_EN = "A cited statute has been superseded; this answer is qualified."
+STATUTE_SUPERSEDED_ZH = "引用的法规已被替代，本回答的可信度为有保留。"
+STATUTE_LOW_CONFIDENCE_EN = (
+    "The statute corpus returned {count} match(es) at low confidence; use them as a reference only."
+)
+STATUTE_LOW_CONFIDENCE_ZH = "法规语料命中 {count} 条，置信度低，仅供参考。"
+STATUTE_INTERNAL_EN = "This answer relies on internal sources only."
+STATUTE_INTERNAL_ZH = "本回答仅基于系统内部来源。"
+STATUTE_BLOCKED_EN = (
+    "Statute search was not run because outbound screening blocked the question; this answer does "
+    "not cover statutes."
+)
+STATUTE_BLOCKED_ZH = "因出站策略未通过，本次未查询法规，本回答未覆盖法规。"
+
+# RAG is attempted for every knowledge question (`knowledge-rag-first-fallback` D1); the snapshot
+# path stays the only exception because a question about the selected passage is answered from it.
+STATUTE_INTENTS = frozenset({"trade_rule_explanation", "product_faq"})
+
+
+@dataclass(frozen=True)
+class LocalOutcome:
+    """Local-layer result: the evidence plus the layer records this attempt produced."""
+
+    candidates: list[EvidenceCandidate] = field(default_factory=list)
+    layers: list[Any] = field(default_factory=list)
+
+
 class AssistantService:
     def __init__(self, services: AssistantServices, *, deadline_seconds: int = 120) -> None:
         self.store = services.store
@@ -103,8 +154,10 @@ class AssistantService:
         self.audit = services.audit
         self.clock = services.clock
         self.retriever = services.retriever
+        self.statute = getattr(services, "statute", None)
         self.gateway = services.gateway
         self.fixture_composer = FixtureComposer()
+        self.evidence_composer = EvidenceComposer()
         self.ids = services.ids
         self.mode = services.mode
         self.deadline_seconds = deadline_seconds
@@ -113,7 +166,7 @@ class AssistantService:
         self.web = getattr(services, "web", None)
         egress = getattr(services, "egress", None)
         configured_policy = getattr(settings, "egress_policy", None) if settings else None
-        self.egress = egress if egress is not None else EgressPolicy.from_file(configured_policy)
+        self.egress = egress if egress is not None else EgressPolicy.load(configured_policy)
 
     # --- helpers ----------------------------------------------------------------------------
     def principal(self, request) -> Principal:
@@ -372,6 +425,30 @@ class AssistantService:
         self._audit_decision(run_id, "search", decision)
         return decision
 
+    def _statute_decision(
+        self, plan: QueryPlan, selection_text: str | None, run_id: str
+    ) -> EgressDecision:
+        """Screen the user text before it reaches the statute corpus (`knowledge-statute-live` D2).
+
+        The expanded query is built from configuration inside the adapter, so the gate runs on the
+        question itself. A missing policy denies: "we did not check" must never look like "no rule".
+        """
+        if self.egress is None:
+            decision = EgressDecision("deny", "policy_unavailable", None, "unset")
+        else:
+            decision = self.egress.check(
+                EgressInput(
+                    purpose="statute",
+                    question=plan.question,
+                    candidate_query=plan.question,
+                    selection_text=selection_text,
+                    entities=tuple(plan.entities),
+                    provider="statute",
+                )
+            )
+        self._audit_decision(run_id, "statute", decision)
+        return decision
+
     def _compose(
         self,
         plan: QueryPlan,
@@ -425,9 +502,22 @@ class AssistantService:
             "compose provider=doubao intent=%s evidence=%d",
             plan.intent, len(bundle.candidates),
         )
-        return self.gateway.compose(
-            plan, bundle, context
-        )
+        try:
+            return self.gateway.compose(plan, bundle, context)
+        except ModelGatewayError as exc:
+            # `knowledge-rag-first-fallback`: evidence exists, so a refusal must not reach the user.
+            # Quote the evidence verbatim instead of failing the run.
+            if exc.code != "MODEL_REFUSED_EVIDENCE" or not bundle.candidates:
+                raise
+            self.logger.warning(
+                "model refused despite evidence run=%s evidence=%d; quoting evidence",
+                run_id, len(bundle.candidates),
+            )
+            self.audit.append(
+                "", run_id, "model_refused_evidence", "",
+                {"evidence": len(bundle.candidates)},
+            )
+            return self.evidence_composer.compose(plan, bundle, context)
 
     def _processor_label(self) -> str:
         external = bool(getattr(self.settings, "model", None)) and isinstance(
@@ -448,11 +538,15 @@ class AssistantService:
             return "handoff"
         if general_route:
             return "general_web"
-        if answer.outcome != "answered":
-            return "none"
-        if plan.intent == "document_explanation" and payload.selection and snapshot:
-            return "document"
-        return "published"
+        # Citations decide the route: a low-confidence statute answer is still a statute answer,
+        # and an answer with any citation must never report `none` (`knowledge-rag-first` D5).
+        if answer.citations:
+            if any(citation.source_type == "statute" for citation in answer.citations):
+                return "statute"
+            if plan.intent == "document_explanation" and payload.selection and snapshot:
+                return "document"
+            return "published"
+        return "none"
 
     @staticmethod
     def _web_summary(payload: RunCreate, layers: list[RetrievalLayer]) -> WebSummary:
@@ -488,6 +582,18 @@ class AssistantService:
         if provider not in ("off", "fixture", "http"):
             provider = "off"
         policy = self.egress
+        statute_view = StatuteCapability(enabled=self.statute is not None)
+        if self.statute is not None:
+            info = self.statute.health()
+            statute_view = StatuteCapability(
+                enabled=True,
+                reachable=bool(info.get("reachable")),
+                documents=info.get("documents"),
+                chunks=info.get("chunks"),
+                index_version=info.get("index_version"),
+                # Passed through untouched: `None` must stay "not measured" all the way to the UI.
+                jurisdictions=info.get("jurisdictions"),
+            )
         return Capabilities(
             model=ModelCapability(
                 configured=model_configured,
@@ -498,13 +604,44 @@ class AssistantService:
                 local=True,
                 approved_web=self.web is not None,
                 general_web=general,
+                statute=self.statute is not None,
             ),
             egress=EgressCapability(
                 policy_version=str(getattr(policy, "version", "unset")),
                 allowed_domains=len(getattr(policy, "allowed_domains", []) or []),
                 loaded=bool(getattr(policy, "loaded", False)),
             ),
-            web=WebCapability(provider=provider),  # type: ignore[arg-type]
+            web=WebCapability(  # type: ignore[arg-type]
+                provider=provider,
+                default_on=bool(getattr(settings, "web_default", False)),
+            ),
+            statute=statute_view,
+            presets=KnowledgePresets(
+                jurisdictions=getattr(policy, "jurisdictions", None),
+                suggested_questions=getattr(policy, "suggested_questions", None),
+            ),
+        )
+
+    @staticmethod
+    def _scope_declared(payload: RunCreate) -> bool:
+        """True when the user explicitly narrowed the question (jurisdiction, trade date or rule).
+
+        This is the strongest intent signal we have, so it also decides whether the statute leg is
+        allowed to run for questions the keyword classifier sent elsewhere.
+        """
+        return bool(payload.jurisdiction_codes or payload.applicable_on or payload.rule_version)
+
+    def _should_try_statute(self, plan: QueryPlan, *, scope_declared: bool) -> bool:
+        """RAG runs first for every knowledge question, never for a passage-only question.
+
+        The selected passage is the subject of `document_explanation`: answering it from a statute
+        corpus would replace what the user pointed at (`knowledge-rag-first-fallback` D1).
+        """
+        return (
+            self.statute is not None
+            and plan.handoff_target is None
+            and not (plan.intent == "document_explanation" and plan.selection_text)
+            and (plan.intent in STATUTE_INTENTS or scope_declared)
         )
 
     def _general_available(self) -> bool:
@@ -514,25 +651,60 @@ class AssistantService:
             and self.egress is not None
         )
 
-    def _should_fallback(
-        self, plan: QueryPlan, payload: RunCreate, answer: Answer
+    @staticmethod
+    def _statute_layer(layers: list[RetrievalLayer]) -> RetrievalLayer | None:
+        return next((item for item in layers if item.layer == "statute"), None)
+
+    def _rag_returned_nothing(
+        self, bundle: EvidenceBundle, layers: list[RetrievalLayer]
     ) -> bool:
-        """In-scope questions fall back to general web only when the corpus gave nothing citable."""
-        return (
+        """True only when RAG was attempted this run and produced no evidence text.
+
+        The layer's `hits` is the service's own count and stubs may omit it, so the evidence bundle
+        decides: any statute candidate means RAG returned text (`knowledge-rag-first-fallback` D4).
+        """
+        if self._statute_layer(layers) is None:
+            return False
+        return not any(
+            candidate.source_type == "statute" for candidate in bundle.candidates
+        )
+
+    def _should_fallback(
+        self,
+        plan: QueryPlan,
+        payload: RunCreate,
+        answer: Answer,
+        layers: list[RetrievalLayer],
+        bundle: EvidenceBundle,
+    ) -> bool:
+        """General web runs when RAG returned no text, or when nothing citable exists at all.
+
+        Once RAG returned any text, the web must not run: the answer comes from that evidence and
+        its caveats (`knowledge-rag-first-fallback` D4). Without a RAG attempt the old rule stays:
+        only an empty, uncited answer falls back.
+        """
+        if not (
             payload.web_search
             and plan.handoff_target is None
-            and plan.intent in (
+            and plan.intent
+            in (
                 "trade_rule_explanation",
                 "product_faq",
                 "document_explanation",
             )
-            and answer.outcome in ("insufficient_evidence", "unable_to_assess")
-            and not answer.citations
             and self._general_available()
-        )
+        ):
+            return False
+        if self._statute_layer(layers) is not None:
+            return self._rag_returned_nothing(bundle, layers)
+        return answer.outcome in ("insufficient_evidence", "unable_to_assess") and not answer.citations
 
     def _general_route(self, plan: QueryPlan, payload: RunCreate) -> bool:
-        """The general channel: out-of-scope, not a handoff, explicitly enabled, and configured."""
+        """The general channel: out-of-scope, not a handoff, explicitly enabled, and configured.
+
+        An explicitly scoped question never arrives here: it is relabelled to a rule question before
+        routing, so it gets a statute attempt first (design D6).
+        """
         return (
             payload.web_search
             and bool(getattr(self.settings, "general_web", False))
@@ -634,7 +806,6 @@ class AssistantService:
             )
 
         retrieved_at = self.clock.now()
-        allowed = getattr(self.egress, "allowed_domains", []) if self.egress is not None else []
         annotations = {
             str(annotation.get("url")): annotation
             for annotation in result.annotations
@@ -642,13 +813,17 @@ class AssistantService:
         }
         kept: list[Citation] = []
         candidates: list[EvidenceCandidate] = []
-        dropped = 0
+        # `general_web` is the unverified channel: any publicly reachable link is citable, and the
+        # unverified label carries the trust signal. Only `approved_web` filters by allowed domain
+        # (`general-web-citations`).
+        unusable_hosts: list[str] = []
         for citation in result.answer.citations:
             locator = dict(citation.locator or {})
             url = str(locator.get("url") or "")
-            host = (urlparse(url).hostname or "").lower()
-            if not self._domain_allowed(host, allowed):
-                dropped += 1
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme not in ("http", "https") or not host:
+                unusable_hosts.append(host or "<no-link>")
                 continue
             annotation = annotations.get(url, {})
             locator.update(
@@ -681,12 +856,12 @@ class AssistantService:
         answer = result.answer.model_copy(update={"citations": kept})
         answer, removed = review_general_answer(answer, {citation.id for citation in kept})
         answer = apply_general_web_policy(
-            answer, has_approved_citation=bool(kept), language=plan.language
+            answer, has_url_citation=bool(kept), language=plan.language
         )
-        if dropped:
+        if unusable_hosts:
             self.audit.append(
                 "", run_id, audit_events.WEB_EVIDENCE_DROPPED, "",
-                {"channel": "general_web", "dropped": dropped},
+                {"channel": "general_web", "hosts": sorted(set(unusable_hosts))},
             )
         if removed:
             self.audit.append(
@@ -697,8 +872,8 @@ class AssistantService:
             RetrievalLayer(layer="web", status="ok", detail="general_web", retrieved_at=retrieved_at)
         ]
         self.logger.info(
-            "general_web done run=%s citations=%d dropped=%d removed=%d outcome=%s duration_ms=%d",
-            run_id, len(kept), dropped, removed, answer.outcome,
+            "general_web done run=%s citations=%d unusable=%d removed=%d outcome=%s duration_ms=%d",
+            run_id, len(kept), len(unusable_hosts), removed, answer.outcome,
             int((time.monotonic() - started) * 1000),
         )
         return answer, layers, EvidenceBundle(candidates)
@@ -707,9 +882,16 @@ class AssistantService:
         self, answer: Answer, layers: list[RetrievalLayer], payload: RunCreate
     ) -> Answer:
         """State the web layer's outcome; never let a failed search read as 'verified online'."""
-        if not payload.web_search:
-            return answer
         english = answer.language == "en"
+        if not payload.web_search:
+            # With the fallback off by default no longer true, an empty answer must say *why* it stayed
+            # internal — otherwise it reads as "there is nothing to find" (`knowledge-simple-ask`).
+            if answer.outcome in ("insufficient_evidence", "unable_to_assess"):
+                note = WEB_SKIPPED_EN if english else WEB_SKIPPED_ZH
+                return answer.model_copy(
+                    update={"limitations": list(dict.fromkeys([*answer.limitations, note]))}
+                )
+            return answer
         notes: list[str] = []
         for layer in layers:
             if layer.layer != "web":
@@ -725,11 +907,183 @@ class AssistantService:
         deduped = list(dict.fromkeys([*answer.limitations, *notes]))
         return answer.model_copy(update={"limitations": deduped})
 
+    def _annotate_statute(self, answer: Answer, layers: list[Any]) -> Answer:
+        """State what the statute layer actually did; a failure must never read as "no such rule".
+
+        Transparency is unconditional (`statute-recall`): if the statute leg ran and was not usable,
+        the answer says so **even when the local corpus answered** — otherwise the reader cannot tell
+        "we did not look" from "we looked and rejected it".
+        """
+        layer = next((item for item in layers if item.layer == "statute"), None)
+        if layer is None:
+            return answer
+        english = answer.language == "en"
+        detail = layer.detail or ""
+        hits = layer.hits if isinstance(layer.hits, int) else None
+        notes: list[str] = []
+        downgrade = False
+        if detail == "superseded":
+            notes.append(STATUTE_SUPERSEDED_EN if english else STATUTE_SUPERSEDED_ZH)
+            downgrade = True
+        elif layer.status == "blocked":
+            notes.append(STATUTE_BLOCKED_EN if english else STATUTE_BLOCKED_ZH)
+        elif layer.status == "failed":
+            if detail == "corpus_updating":
+                notes.append(STATUTE_UPDATING_EN if english else STATUTE_UPDATING_ZH)
+            elif detail == "timeout":
+                notes.append(STATUTE_TIMEOUT_EN if english else STATUTE_TIMEOUT_ZH)
+            else:
+                notes.append(STATUTE_UNAVAILABLE_EN if english else STATUTE_UNAVAILABLE_ZH)
+        elif detail.startswith("uncovered:"):
+            notes.append(STATUTE_UNCOVERED_EN if english else STATUTE_UNCOVERED_ZH)
+        elif detail == "zero:no_jurisdiction":
+            # A filter excluded everything: that is "not covered", not "no such rule".
+            notes.append(STATUTE_UNCOVERED_EN if english else STATUTE_UNCOVERED_ZH)
+        elif detail == "degraded:keyword_only":
+            notes.append(
+                "Statute search ran keyword-only — semantic matching was unavailable."
+                if english
+                else "法规检索降级为关键词匹配，语义匹配不可用。"
+            )
+        elif detail == "low_confidence":
+            template = STATUTE_LOW_CONFIDENCE_EN if english else STATUTE_LOW_CONFIDENCE_ZH
+            notes.append(template.format(count=hits if hits is not None else "some"))
+        elif detail.startswith("zero:"):
+            notes.append(STATUTE_NONE_EN if english else STATUTE_NONE_ZH)
+        if notes and answer.citations:
+            # The answer exists, but it does not come from statutes — say that explicitly.
+            notes.append(STATUTE_INTERNAL_EN if english else STATUTE_INTERNAL_ZH)
+        updates: dict[str, Any] = {}
+        if notes:
+            updates["limitations"] = list(dict.fromkeys([*answer.limitations, *notes]))
+        if downgrade and answer.support_level == "strong":
+            updates["support_level"] = "qualified"
+        return answer.model_copy(update=updates) if updates else answer
+
+    @staticmethod
+    def _canonical_citations(answer: Answer, bundle: EvidenceBundle) -> Answer:
+        """Citations are server-derived: a model may choose ids, never text, titles or locators.
+
+        Composed answers echo whatever the provider wrote into `locator` (usually `{}`), which would
+        strip the jurisdiction / effective range / precision a statute citation is supposed to show.
+        Providers also sometimes cite an evidence id in a claim but omit that citation object; the
+        server completes it from the bundle instead of failing the run
+        (`claim_unknown_citation`).
+        """
+        by_id = bundle.by_id()
+        citations = []
+        for citation in answer.citations:
+            candidate = by_id.get(citation.id)
+            if candidate is None:
+                citations.append(citation)
+                continue
+            citations.append(
+                citation.model_copy(
+                    update={
+                        "source_type": candidate.source_type,
+                        "title": candidate.title,
+                        "source_version": candidate.source_version,
+                        "locator": candidate.locator,
+                    }
+                )
+            )
+        present = {citation.id for citation in citations}
+        for claim in answer.claims:
+            for citation_id in claim.citation_ids:
+                if citation_id in present:
+                    continue
+                candidate = by_id.get(citation_id)
+                if candidate is None:
+                    # Unknown ids are rejected by the gateway; leave them for the reviewer.
+                    continue
+                citations.append(Citation(**bundle.citation(candidate)))
+                present.add(citation_id)
+        return answer.model_copy(update={"citations": citations})
+
     # --- layer workers (run inside a thread pool) -------------------------------------------
     def _run_local(
-        self, principal: Principal, workspace_id: str, plan: QueryPlan, applicable_on: str | None
-    ) -> list[EvidenceCandidate]:
-        return list(self.retriever.search(principal, workspace_id, plan, applicable_on))
+        self,
+        principal: Principal,
+        workspace_id: str,
+        plan: QueryPlan,
+        applicable_on: str | None,
+        scope_declared: bool = False,
+        run_id: str = "",
+        selection_text: str | None = None,
+    ) -> LocalOutcome:
+        """Statute first for rule questions; the local corpus stays the fallback and the default.
+
+        A statute outcome that is not usable is *not* an error: it means "no statute evidence",
+        so the caller sees no citations and the existing general-web fallback decides what is next.
+        A blocked outbound decision is different again: the request is never sent, and the layer
+        says why (`knowledge-statute-live` D2).
+        """
+        statute = self.statute
+        if self._should_try_statute(plan, scope_declared=scope_declared):
+            decision = self._statute_decision(plan, selection_text, run_id)
+            layers: list[RetrievalLayer] = []
+            if not decision.allowed:
+                layers.append(
+                    RetrievalLayer(layer="statute", status="blocked", detail=decision.reason_code)
+                )
+                local = list(self.retriever.search(principal, workspace_id, plan, applicable_on))
+                layers.append(
+                    RetrievalLayer(
+                        layer=self._local_layer_name(), status="ok", detail="statute_blocked"
+                    )
+                )
+                return LocalOutcome(local, layers)
+            call_plan = plan
+            if decision.outbound_query and decision.outbound_query != plan.question:
+                # The adapter appends configured expansion terms; only the user's text is screened.
+                call_plan = replace(plan, question=decision.outbound_query)
+            outcome = statute.search_detailed(principal, workspace_id, call_plan, applicable_on)
+            status = "failed" if outcome.status == "failed" else "ok"
+            layers = [
+                RetrievalLayer(
+                    layer="statute", status=status, detail=outcome.reason, hits=outcome.hits
+                )
+            ]
+            # Which terms were appended and how many hits came back: without this the hit change is
+            # unexplainable, and "RAG returned nothing" cannot be verified from the logs.
+            self.logger.info(
+                "retrieval statute run=%s status=%s detail=%s hits=%d",
+                run_id, status, outcome.reason, outcome.hits,
+            )
+            if outcome.expansions:
+                self.audit.append(
+                    "", run_id, "statute_expanded", "",
+                    {"expansions": list(outcome.expansions)},
+                )
+            if outcome.candidates:
+                if plan.intent == "product_faq":
+                    # The product manual stays primary; statute hits join it instead of replacing it
+                    # (`knowledge-rag-first-fallback` D1).
+                    local = list(
+                        self.retriever.search(principal, workspace_id, plan, applicable_on)
+                    )
+                    # `merge_layers` keeps the highest scores, so leave room for the statute hits:
+                    # otherwise a full local page-list would push every statute hit out of the cap.
+                    room = max(0, MAX_EVIDENCE - len(outcome.candidates))
+                    layers.append(
+                        RetrievalLayer(
+                            layer=self._local_layer_name(), status="ok", detail="statute_merged"
+                        )
+                    )
+                    return LocalOutcome([*local[:room], *outcome.candidates], layers)
+                return LocalOutcome(list(outcome.candidates), layers)
+            # Keep the run useful: fall back to the published corpus, but say statutes were not used.
+            local = list(self.retriever.search(principal, workspace_id, plan, applicable_on))
+            layers.append(
+                RetrievalLayer(
+                    layer=self._local_layer_name(), status="ok", detail="statute_unavailable"
+                )
+            )
+            return LocalOutcome(local, layers)
+        return LocalOutcome(
+            list(self.retriever.search(principal, workspace_id, plan, applicable_on)),
+            [RetrievalLayer(layer=self._local_layer_name(), status="ok")],
+        )
 
     def _run_web(self, plan: QueryPlan, decision: EgressDecision):
         pages, retrieved_at = self.web.search(decision.outbound_query or "")
@@ -759,14 +1113,22 @@ class AssistantService:
         pool = ThreadPoolExecutor(max_workers=2)
         try:
             local_future = pool.submit(
-                self._run_local, principal, session["workspace_id"], plan, payload.applicable_on
+                self._run_local,
+                principal,
+                session["workspace_id"],
+                plan,
+                payload.applicable_on,
+                self._scope_declared(payload),
+                run_id,
+                payload.selection.selected_text if payload.selection else None,
             )
             web_future = None
             if web_decision is not None and web_decision.allowed:
                 web_future = pool.submit(self._run_web, plan, web_decision)
             try:
-                local_candidates = local_future.result(timeout=5)
-                layers.append(RetrievalLayer(layer=local_name, status="ok"))
+                local_outcome = local_future.result(timeout=5)
+                local_candidates = local_outcome.candidates
+                layers.extend(local_outcome.layers)
             except FutureTimeout as exc:
                 local_error = exc
                 layers.append(RetrievalLayer(layer=local_name, status="failed", detail="timeout"))
@@ -920,8 +1282,10 @@ class AssistantService:
         conflicts = detect_conflicts(bundle.candidates)
         composition = self._compose(plan, bundle, snapshot, session, run_id, payload)
         answer, issues = review_answer(composition.answer, bundle, snapshot)
+        answer = self._canonical_citations(answer, bundle)
         answer = apply_layer_policy(answer, plan, bundle)
-        answer = self._annotate_layers(answer, layers, payload).model_copy(
+        annotated = self._annotate_statute(self._annotate_layers(answer, layers, payload), layers)
+        answer = annotated.model_copy(
             update={"retrieval": layers, "processor": self._processor_label()}
         )
         return answer, layers, bundle, conflicts, issues
@@ -968,8 +1332,26 @@ class AssistantService:
                 "run plan run=%s intent=%s language=%s web_search=%s",
                 run_id, plan.intent, plan.language, payload.web_search,
             )
+            # An explicitly scoped question *is* a rule question. Relabelling here (instead of
+            # patching every downstream branch) is what lets it retrieve, compose and fall back
+            # like any other rule question (`knowledge-scope-inputs` design D6).
+            if (
+                self._scope_declared(payload)
+                and plan.intent == "out_of_scope"
+                and plan.handoff_target is None
+                and not plan.needs_clarification
+            ):
+                plan = replace(plan, intent="trade_rule_explanation")
+                self.logger.info(
+                    "run scope boosted run=%s jurisdictions=%s as_of=%s rule=%s",
+                    run_id,
+                    payload.jurisdiction_codes,
+                    payload.applicable_on,
+                    payload.rule_version,
+                )
 
             general_route = self._general_route(plan, payload)
+            web_fallback_reason: str | None = None
             if general_route:
                 answer, layers, bundle = self._run_general_web(plan, payload, run)
                 conflicts: list[dict[str, Any]] = []
@@ -978,13 +1360,19 @@ class AssistantService:
                 answer, layers, bundle, conflicts, issues = self._standard_answer(
                     principal, session, plan, payload, snapshot, run
                 )
-                if self._should_fallback(plan, payload, answer):
+                rag_empty = self._rag_returned_nothing(bundle, layers)
+                if self._should_fallback(plan, payload, answer, layers, bundle):
                     self.logger.info(
-                        "general_web fallback run=%s reason=corpus_insufficient", run_id
+                        "general_web fallback run=%s reason=%s",
+                        run_id, "rag_empty" if rag_empty else "corpus_insufficient",
                     )
                     fallback_answer, fallback_layers, fallback_bundle = self._run_general_web(
                         plan, payload, run
                     )
+                    if rag_empty:
+                        # The UI needs to say the web was searched *because* RAG was empty,
+                        # whether or not the web produced citations.
+                        web_fallback_reason = "rag_empty"
                     if fallback_answer.citations:
                         note = (
                             GENERAL_WEB_FALLBACK_EN
@@ -1004,25 +1392,48 @@ class AssistantService:
                     else:
                         # Keep the corpus-level answer, but report why the fallback did not help.
                         stale = {WEB_SKIPPED_EN, WEB_SKIPPED_ZH}
+                        english = plan.language == "en"
+                        notes = [
+                            item for item in answer.limitations if item not in stale
+                        ]
+                        notes.extend(fallback_answer.limitations)
+                        if rag_empty:
+                            notes.append(WEB_EMPTY_EN if english else WEB_EMPTY_ZH)
+                        if not answer.citations:
+                            notes.append(
+                                NO_EVIDENCE_ANYWHERE_EN if english else NO_EVIDENCE_ANYWHERE_ZH
+                            )
                         answer = answer.model_copy(
-                            update={
-                                "limitations": [
-                                    *[item for item in answer.limitations if item not in stale],
-                                    *fallback_answer.limitations,
-                                ]
-                            }
+                            update={"limitations": list(dict.fromkeys(notes))}
                         )
                         layers = [
                             *fallback_layers,
                             *(item for item in layers if item.layer != "web"),
                         ]
             answer = reconcile_answer(answer)
+            web_summary = self._web_summary(payload, layers)
+            if (
+                web_summary.reason == "web_unavailable"
+                and payload.web_search
+                and self._statute_layer(layers) is not None
+                and not self._rag_returned_nothing(bundle, layers)
+            ):
+                # RAG answered, so the web was skipped on purpose — not because no provider exists.
+                web_summary = web_summary.model_copy(
+                    update={
+                        "reason": "statute_answered",
+                        "hint": WEB_HINTS["statute_answered"],
+                    }
+                )
+            if web_fallback_reason:
+                # The UI shows "RAG returned nothing — searched the web" from this marker.
+                web_summary = web_summary.model_copy(update={"reason": web_fallback_reason})
             answer = answer.model_copy(
                 update={
                     "retrieval": layers,
                     "processor": self._processor_label(),
                     "route": self._route_for(plan, general_route, snapshot, payload, answer),
-                    "web": self._web_summary(payload, layers),
+                    "web": web_summary,
                 }
             )
             if issues:
@@ -1063,7 +1474,9 @@ class AssistantService:
                     "chunk_id": candidate.chunk_id, "effective_from": candidate.effective_from,
                     "effective_to": candidate.effective_to, "synthetic": candidate.synthetic,
                 })
-                if candidate.source_id:
+                if candidate.source_id and candidate.source_type != "statute":
+                    # Statute evidence lives in an external corpus: it cannot be revoked locally, and
+                    # its freshness is re-checked by that service on every retrieval (as_of + superseded).
                     dependencies.append({
                         "resource_type": "knowledge_source", "resource_id": candidate.source_id,
                         "resource_version": candidate.version_id,
@@ -1073,7 +1486,8 @@ class AssistantService:
             self._authorize(principal, session["workspace_id"])
             for citation in citations:
                 version_id = citation.get("version_id")
-                if citation["source_type"] == "document_snapshot" or not version_id:
+                if citation["source_type"] in ("document_snapshot", "statute") or not version_id:
+                    # Statute ids are not local knowledge versions; the external corpus owns their state.
                     continue
                 version = self.store.get_knowledge_version(version_id)
                 if not version or version["status"] != "published":
@@ -1090,6 +1504,9 @@ class AssistantService:
                         "outcome": answer.outcome, "support_level": answer.support_level,
                         "citation_ids": [citation["citation_id"] for citation in citations],
                         "synthetic": any(citation["synthetic"] for citation in citations),
+                        # Who allowed the outbound search this run (`knowledge-simple-ask`).
+                        "web_search": payload.web_search,
+                        "web_source": payload.web_search_source or "unknown",
                     },
                 },
             )

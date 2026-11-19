@@ -47,9 +47,16 @@ _HELP_EN = re.compile(
 # A's help sources are fixtures; C can replace this with a configured per-language mapping.
 HELP_SOURCE_IDS = {"zh-CN": "KS-HELP-001", "en": "KS-HELP-002"}
 HELP_SOURCE_ID = HELP_SOURCE_IDS["zh-CN"]
+# Words that point at the passage itself rather than at a topic. Only these (plus a question that
+# names no topic at all) make a selection the subject of the question, see `_names_a_topic`.
+_DEICTIC = (
+    r"this document|selected text|selected passage|the selected text|selection|the document"
+    r"|this passage|this text|this clause|this paragraph|this sentence|the passage"
+    r"|highlighted text"
+)
 _DOCUMENT = re.compile(
-    _L + r"(this document|selected text|selection|the document)" + _R
-    + r"|这段|本文|选区|当前文档",
+    _L + r"(" + _DEICTIC + r")" + _R
+    + r"|这段|这句话|这句|本文|选区|选中|当前文档|上述",
     re.IGNORECASE,
 )
 _RULE = re.compile(
@@ -65,6 +72,16 @@ _PRODUCT = re.compile(
     re.IGNORECASE,
 )
 _APPLICABILITY = re.compile(r"\b(appl(y|ies|icable)|scope)\b|适用|是否适用|适用于", re.IGNORECASE)
+
+
+def _names_a_topic(question: str, found: list[str]) -> bool:
+    """True when the question names a rule or product topic on its own.
+
+    A selection is context, not necessarily the subject: "guarantee 在贸易里说什么" asked while the
+    word "guarantee" happens to be selected is a rule question. Letting the selection win there
+    would hand the composer a nine-character excerpt and hide the published definition.
+    """
+    return bool(_RULE.search(question) or found or _PRODUCT.search(question))
 
 
 @dataclass
@@ -124,7 +141,11 @@ def analyze(
         intent = "product_faq"
         capability_help = True
         help_source_id = HELP_SOURCE_IDS.get(language)
-    elif selection_text or (has_snapshot and _DOCUMENT.search(question)):
+    elif selection_text and (_DOCUMENT.search(question) or not _names_a_topic(question, found)):
+        # A selection only makes the passage the subject when the question points at it or names no
+        # topic of its own; otherwise the topic decides and the published corpus is retrieved.
+        intent = "document_explanation"
+    elif has_snapshot and _DOCUMENT.search(question):
         intent = "document_explanation"
     elif _RULE.search(question) or found:
         intent = "trade_rule_explanation"

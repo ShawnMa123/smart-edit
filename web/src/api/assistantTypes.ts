@@ -36,7 +36,8 @@ export type SourceType =
   | 'document_snapshot'
   | 'attachment'
   | 'approved_web'
-  | 'general_web';
+  | 'general_web'
+  | 'statute';
 
 export interface AssistantSelection {
   nodeId: string;
@@ -61,13 +62,21 @@ export interface Citation {
 }
 
 export interface RetrievalLayer {
-  layer: 'local' | 'rag' | 'web';
+  layer: 'local' | 'rag' | 'web' | 'statute';
   status: 'ok' | 'failed' | 'skipped' | 'blocked';
   detail: string | null;
   retrieved_at: string | null;
+  /** How many items this layer returned; `null`/absent means "not measured". */
+  hits?: number | null;
 }
 
-export type AnswerRoute = 'published' | 'document' | 'general_web' | 'handoff' | 'none';
+export type AnswerRoute =
+  | 'published'
+  | 'statute'
+  | 'document'
+  | 'general_web'
+  | 'handoff'
+  | 'none';
 
 export interface WebSummary {
   requested: boolean;
@@ -78,9 +87,21 @@ export interface WebSummary {
 
 export interface Capabilities {
   model: { configured: boolean; label: string | null; approved_processor: boolean };
-  layers: { local: boolean; approved_web: boolean; general_web: boolean };
+  layers: { local: boolean; approved_web: boolean; general_web: boolean; statute: boolean };
   egress: { policy_version: string; allowed_domains: number; loaded: boolean };
-  web: { provider: 'off' | 'fixture' | 'http' };
+  web: { provider: 'off' | 'fixture' | 'http'; default_on?: boolean };
+  presets?: {
+    jurisdictions: string[] | null;
+    suggested_questions: string[] | null;
+  };
+  statute?: {
+    enabled: boolean;
+    reachable: boolean;
+    documents: number | null;
+    chunks: number | null;
+    index_version: string | null;
+    jurisdictions: string[] | null;
+  };
 }
 
 export interface Answer {

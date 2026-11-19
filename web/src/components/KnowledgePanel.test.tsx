@@ -4,7 +4,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AssistantClient } from '../api/assistant';
+import type { AssistantClient, RunInput } from '../api/assistant';
 import type { Answer, AssistantSelection, Capabilities, Run, Session } from '../api/assistantTypes';
 import { ApiError, explainError } from '../api/errors';
 import { KnowledgePanel } from './KnowledgePanel';
@@ -423,36 +423,35 @@ describe('web layer opt-in (knowledge-retrieval-layers)', () => {
   const toggle = () =>
     screen.getByRole('checkbox', { name: /Search the web for the latest/i }) as HTMLInputElement;
 
-  it('is off by default, explains the boundary, and sends web_search false', async () => {
+  it('is on by default, explains the boundary, and sends web_search true', async () => {
     const client = fakeClient();
     renderPanel(client);
-
-    expect(toggle().checked).toBe(false);
-    expect(screen.getByText(/Off: only published sources/i)).toBeTruthy();
-
-    await ask();
-    expect(client.createRun).toHaveBeenCalledWith(
-      'sess_1',
-      expect.objectContaining({ web_search: false }),
-      expect.any(String),
-      expect.anything(),
-    );
-  });
-
-  it('previews what will and will not be sent when enabled', async () => {
-    const client = fakeClient();
-    renderPanel(client);
-
-    await userEvent.click(toggle());
 
     expect(toggle().checked).toBe(true);
     expect(screen.getByText(/Will send: the screened question only/i)).toBeTruthy();
-    expect(screen.getByText(/Will not send: document text/i)).toBeTruthy();
 
     await ask();
     expect(client.createRun).toHaveBeenCalledWith(
       'sess_1',
       expect.objectContaining({ web_search: true }),
+      expect.any(String),
+      expect.anything(),
+    );
+  });
+
+  it('lets the user opt out and then sends web_search false', async () => {
+    const client = fakeClient();
+    renderPanel(client);
+
+    await userEvent.click(toggle());
+
+    expect(toggle().checked).toBe(false);
+    expect(screen.getByText(/Off: this run will not search the web/i)).toBeTruthy();
+
+    await ask();
+    expect(client.createRun).toHaveBeenCalledWith(
+      'sess_1',
+      expect.objectContaining({ web_search: false }),
       expect.any(String),
       expect.anything(),
     );
@@ -555,7 +554,7 @@ describe('web layer opt-in (knowledge-retrieval-layers)', () => {
 
 const CAPABILITIES = (over: Partial<Capabilities> = {}): Capabilities => ({
   model: { configured: false, label: null, approved_processor: false },
-  layers: { local: true, approved_web: false, general_web: false },
+  layers: { local: true, approved_web: false, general_web: false, statute: false },
   egress: { policy_version: 'v1', allowed_domains: 5, loaded: true },
   web: { provider: 'off' },
   ...over,
@@ -574,7 +573,7 @@ describe('capabilities and provenance (assistant-transparency)', () => {
   it('relabels the toggle when only the general channel exists', async () => {
     const client = fakeClient({
       getCapabilities: vi.fn(async () =>
-        CAPABILITIES({ layers: { local: true, approved_web: false, general_web: true } }),
+        CAPABILITIES({ layers: { local: true, approved_web: false, general_web: true, statute: false } }),
       ),
     });
     renderPanel(client);
@@ -582,6 +581,33 @@ describe('capabilities and provenance (assistant-transparency)', () => {
     expect(
       await screen.findByRole('checkbox', { name: /Ask general web \(unverified\)/i }),
     ).toBeTruthy();
+  });
+
+  it('says when RAG returned nothing and the web was searched automatically', async () => {
+    const answer: Answer = {
+      ...ANSWER,
+      route: 'general_web',
+      web: { requested: true, status: 'ok', reason: 'rag_empty', hint: null },
+    };
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(answer)) }));
+
+    await ask();
+
+    expect(
+      await screen.findByText(/RAG returned no result — searched the web automatically/i),
+    ).toBeTruthy();
+  });
+
+  it('honours a server default that turns the web off', async () => {
+    const client = fakeClient({
+      getCapabilities: vi.fn(async () =>
+        CAPABILITIES({ web: { provider: 'http', default_on: false } }),
+      ),
+    });
+    renderPanel(client);
+
+    const toggle = await screen.findByRole('checkbox', { name: /Search the web for the latest/i });
+    await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false));
   });
 
   it('explains a skipped web search from the answer summary', async () => {
@@ -612,5 +638,230 @@ describe('capabilities and provenance (assistant-transparency)', () => {
 
     expect(screen.queryByText(/web not needed/i)).toBeNull();
     expect(screen.queryByText(/Web search skipped/i)).toBeNull();
+  });
+});
+describe('statute evidence (knowledge-statute-retrieval)', () => {
+  const statuteCitation = {
+    id: 'cite_statute',
+    source_type: 'statute' as const,
+    title: '中华人民共和国海关法',
+    source_version: '第五十五条@2021-04-29',
+    locator: {
+      chunk_id: 'f583078a58c014ca',
+      doc_id: 'cn-customs-law-2021',
+      article_id: 'cn-customs-law-2021:55',
+      article_label: '第五十五条',
+      jurisdiction: 'CN',
+      effective_from: '2021-04-29',
+      effective_to: null,
+      precision: 'exact',
+    },
+  };
+
+  const withStatute = (
+    detail: string,
+    status: 'ok' | 'failed' | 'blocked' = 'ok',
+    over: Partial<Answer> = {},
+  ): Answer => ({
+    ...ANSWER,
+    claims: [
+      { id: 'claim_s', text: '完税价格包括货价与运保费。', kind: 'fact', citation_ids: ['cite_statute'] },
+    ],
+    citations: [statuteCitation],
+    limitations: [],
+    retrieval: [{ layer: 'statute', status, detail, retrieved_at: null }],
+    ...over,
+  });
+
+  it('shows checkable statute facts and never a relevance score', async () => {
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(withStatute('ok'))) }));
+
+    await ask();
+    await screen.findByText('Answer · answered');
+
+    expect(screen.getByText('Statute (1)')).toBeTruthy();
+    const button = screen.getByRole('button', { name: /Open citation 中华人民共和国海关法/i });
+    expect(button.textContent).toContain('CN · effective 2021-04-29 · exact');
+    expect(button.textContent).not.toMatch(/score/i);
+    expect(button.textContent).not.toMatch(/\d\.\d\d/);
+  });
+
+  it.each([
+    ['corpus_updating', 'failed', /Statute corpus is being rebuilt/i],
+    ['timeout', 'failed', /Statute search timed out/i],
+    ['policy_unavailable', 'blocked', /Statute search blocked by outbound policy/i],
+    ['uncovered:SG', 'ok', /Jurisdiction not covered: SG/i],
+    ['superseded', 'ok', /A cited statute has been superseded/i],
+    ['zero:no_match', 'ok', /No statute matched this question/i],
+  ] as const)('labels the %s outcome distinctly', async (detail, status, expected) => {
+    const answer = withStatute(
+      detail,
+      status,
+      detail.startsWith('zero:') ? { citations: [], claims: [] } : {},
+    );
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(answer)) }));
+
+    await ask();
+
+    expect(await screen.findByText(expected)).toBeTruthy();
+    expect(screen.queryByText(/no such rule|没有相关规定/i)).toBeNull();
+  });
+
+  it('reports how many statute matches were rejected, even with an internal answer', async () => {
+    const answer = withStatute('low_confidence', 'ok', {
+      retrieval: [
+        { layer: 'statute', status: 'ok', detail: 'low_confidence', retrieved_at: null, hits: 3 },
+      ],
+    });
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(answer)) }));
+
+    await ask();
+
+    expect(
+      await screen.findByText(/3 statute match\(es\) at low confidence — reference only/i),
+    ).toBeTruthy();
+  });
+
+  it('never calls a statute answer "published sources - web not needed"', async () => {
+    const answer = withStatute('ok', 'ok', {
+      route: 'statute',
+      web: {
+        requested: true,
+        status: 'skipped',
+        reason: 'web_unavailable',
+        hint: 'This server has no web provider configured.',
+      },
+    });
+    renderPanel(fakeClient({ getRun: vi.fn(async () => runSucceeded(answer)) }));
+
+    await ask();
+
+    expect(await screen.findByText(/Web search skipped \(web_unavailable\)/i)).toBeTruthy();
+    expect(screen.queryByText(/Answered from published sources · web not needed/i)).toBeNull();
+  });
+});
+describe('scope and web policy (knowledge-simple-ask)', () => {
+  const CAPABILITIES_WITH = (
+    jurisdictions: string[] | null,
+    defaultOn = true,
+  ): Capabilities =>
+    CAPABILITIES({
+      web: { provider: 'http', default_on: defaultOn },
+      presets: { jurisdictions, suggested_questions: null },
+    });
+
+  const runSpy = () =>
+    vi.fn(async (_sessionId: string, _input: RunInput, _key: string) => ({
+      ...queuedRun,
+      poll_after_ms: 0,
+    }));
+
+  it('sends the selected jurisdiction chip and no longer sends date or rule', async () => {
+    const createRun = runSpy();
+    renderPanel(
+      fakeClient({
+        getCapabilities: vi.fn(async () => CAPABILITIES_WITH(['CN', 'EU', 'WTO'])),
+        createRun,
+      }),
+    );
+
+    const chip = await screen.findByRole('button', { name: 'WTO' });
+    await userEvent.click(chip);
+
+    await ask();
+
+    const payload = createRun.mock.calls[0][1];
+    expect(payload.jurisdiction_codes).toEqual(['WTO']);
+    expect('applicable_on' in payload).toBe(false);
+    expect('rule_version' in payload).toBe(false);
+  });
+
+  it('hides the scope row when no jurisdiction preset is configured', async () => {
+    renderPanel(
+      fakeClient({
+        getCapabilities: vi.fn(async () => CAPABILITIES_WITH(null, true)),
+        createRun: runSpy(),
+      }),
+    );
+
+    await screen.findByRole('checkbox', { name: /web/i });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'CN' })).toBeNull());
+    expect(screen.queryByRole('group', { name: 'Scope' })).toBeNull();
+  });
+
+  it('starts the web switch from the deployment default and labels the source', async () => {
+    const createRun = runSpy();
+    renderPanel(
+      fakeClient({
+        getCapabilities: vi.fn(async () => CAPABILITIES_WITH(['CN'], true)),
+        createRun,
+      }),
+    );
+
+    const toggle = (await screen.findByRole('checkbox', { name: /web/i })) as HTMLInputElement;
+    await waitFor(() => expect(toggle.checked).toBe(true));
+
+    await ask();
+
+    const payload = createRun.mock.calls[0][1];
+    expect(payload.web_search).toBe(true);
+    expect(payload.web_search_source).toBe('default');
+  });
+
+  it('respects a deployment that switches the fallback off', async () => {
+    renderPanel(
+      fakeClient({
+        getCapabilities: vi.fn(async () => CAPABILITIES_WITH(['CN'], false)),
+        createRun: runSpy(),
+      }),
+    );
+
+    const toggle = (await screen.findByRole('checkbox', { name: /web/i })) as HTMLInputElement;
+    await waitFor(() => expect(toggle.checked).toBe(false));
+  });
+
+  it('keeps a user choice even when capabilities arrive late', async () => {
+    const createRun = runSpy();
+    let resolveCapabilities: (value: Capabilities) => void = () => {};
+    const pending = new Promise<Capabilities>((resolve) => {
+      resolveCapabilities = resolve;
+    });
+    renderPanel(
+      fakeClient({
+        getCapabilities: vi.fn(() => pending),
+        createRun,
+      }),
+    );
+
+    const toggle = (await screen.findByRole('checkbox', { name: /web/i })) as HTMLInputElement;
+    await userEvent.click(toggle); // the user turns it off before capabilities land
+    expect(toggle.checked).toBe(false);
+
+    resolveCapabilities(CAPABILITIES_WITH(['CN'], false));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'CN' })).not.toBeNull());
+
+    expect(toggle.checked).toBe(false);
+    await ask();
+    expect(createRun.mock.calls[0][1].web_search_source).toBe('user');
+  });
+
+  it('uses the configured suggested questions when the config provides them', async () => {
+    renderPanel(
+      fakeClient({
+        getCapabilities: vi.fn(async () =>
+          CAPABILITIES({
+            web: { provider: 'http', default_on: true },
+            presets: {
+              jurisdictions: ['CN'],
+              suggested_questions: ['What rules apply to customs value?'],
+            },
+          }),
+        ),
+      }),
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'What rules apply to customs value?' }),
+    ).toBeTruthy();
   });
 });

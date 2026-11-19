@@ -1,0 +1,56 @@
+{
+  "_note": "Sample knowledge-assistant configuration (`knowledge-simple-ask`). Copy to app/configs/knowledge.json or point SMART_EDIT_KNOWLEDGE_CONFIG at a copy. Missing or invalid file = every outbound call is denied.",
+  "version": "2026-11-18.1",
+  "egress": {
+    "allowed_domains": [
+      "iccwbo.org",
+      "ecb.europa.eu",
+      "bis.org",
+      "wto.org",
+      "uncitral.un.org"
+    ],
+    "max_query_chars": 400,
+    "selection_overlap_chars": 40,
+    "redaction_budget_ms": 250,
+    "redactions": [
+      {
+        "reason": "amount_present",
+        "pattern": "(?i)(?:USD|EUR|CNY|HKD|GBP|JPY|SGD|AUD)\\s?[\\d,]+(?:\\.\\d+)?|[\\d,]{3,}(?:\\.\\d+)?\\s?(?:USD|EUR|CNY|HKD|GBP|JPY|SGD|AUD)"
+      },
+      {
+        "reason": "reference_present",
+        "pattern": "\\b[A-Z]{2,6}-\\d{3,}(?:-\\d+)?\\b"
+      },
+      {
+        "reason": "account_number_present",
+        "pattern": "\\b\\d{8,}\\b"
+      },
+      {
+        "reason": "email_present",
+        "pattern": "[\\w.+-]+@[\\w-]+\\.[\\w.]+"
+      },
+      {
+        "reason": "url_present",
+        "pattern": "https?://\\S+"
+      },
+      {
+        "reason": "variable_placeholder",
+        "pattern": "\\{\\{[^{}]+\\}\\}"
+      }
+    ],
+    "extra_sensitive_terms": []
+  },
+  "scope_presets": {
+    "jurisdictions": ["CN", "EU", "INT", "US", "WTO"]
+  },
+  "query_expansion": {
+    "guarantee": ["独立保函", "见索即付保函", "demand guarantee", "URDG 758"],
+    "guarantees": ["独立保函", "见索即付保函", "demand guarantee"],
+    "保函": ["独立保函", "见索即付保函", "demand guarantee"],
+    "escrow": ["第三方托管", "escrow account"]
+  },
+  "suggested_questions": [
+    "What rules apply to the customs value of imported goods?",
+    "What does URDG 758 article 20 require for claims?"
+  ]
+}

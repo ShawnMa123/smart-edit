@@ -336,22 +336,30 @@ needs_handoff）、`support_level`（strong / qualified / insufficient / not_app
 
 ### 8.1 联网 / 本地 RAG / 出站闸门（knowledge-assistant-web-rag）
 
-默认全部关闭：不配置 provider 时，知识助手仍只查本地已发布语料与文档快照，**不会发出任何外部请求**。
+检索顺序是固定的：**先查法规语料（RAGFlow / Mercatoria）→ 豆包总结 → 只有语料零结果才自动联网**。
+没有配置任何外部 provider 时，知识助手仍只查本地已发布语料与文档快照，**不会发出任何外部请求**。
 
 | 能力 | 环境变量 | 默认 | 说明 |
 |---|---|---|---|
 | 真实模型 | `SMART_EDIT_ASSISTANT_MODEL=doubao:<model>` + `SMART_EDIT_ASSISTANT_API_KEY` | 空（fixture composer） | Ark **Responses API**（`POST /responses`、`stream:false`、无 tools）；输出必须通过 schema 校验 |
 | 处理方批准 | `SMART_EDIT_ASSISTANT_PROCESSOR_APPROVED=1` | 0 | 只有登记为 approved processor 才允许发送“问题 + 证据包”；未登记一律拒绝 |
-| 通用联网 | `SMART_EDIT_ASSISTANT_GENERAL_WEB=1` | 0 | 只回答"范围外且非转交"的问题，且只挂一个只读 `web_search` 工具；结果标 `general_web`，等级封顶 `qualified` |
+| 通用联网 | `SMART_EDIT_ASSISTANT_GENERAL_WEB=1` | 0 | 提供只读 `web_search` 工具；结果标 `general_web`，等级封顶 `qualified` |
 | 检索关键字上限 | `SMART_EDIT_ASSISTANT_WEB_SEARCH_MAX_KEYWORD` | 3（1–5） | 传给提供方搜索工具的 `max_keyword` |
 | 隐藏推理 | `SMART_EDIT_ASSISTANT_THINKING` | 0 | 默认关闭以降低延迟（单次 10–60s）；需要更强推理时设为 1 |
-| 联网层 | `SMART_EDIT_ASSISTANT_WEB=off\|fixture\|http` + `SMART_EDIT_ASSISTANT_WEB_ENDPOINT` | off | 每轮由用户勾选才执行；结果只保留准入域名内的页面 |
+| 联网层 | `SMART_EDIT_ASSISTANT_WEB=off\|fixture\|http` + `SMART_EDIT_ASSISTANT_WEB_ENDPOINT` | off | 自建 provider；结果只保留准入域名内的页面 |
+| 联网默认开关 | `SMART_EDIT_ASSISTANT_WEB_DEFAULT=on\|off` | **on** | 面板开关的初始值；关闭即本次不联网（仍查 RAG 与本地语料） |
 | 本地 RAG | `SMART_EDIT_ASSISTANT_RAG_ENDPOINT`（可选 `…_RAG_API_KEY`） | 空（用本地词法检索） | 作为第二层；失败会显式降级，不会冒充“两层都查过” |
 | 出站策略 | `SMART_EDIT_ASSISTANT_EGRESS_POLICY` | `app/configs/egress.yaml` | 文件缺失/损坏 = 拒绝所有联网请求；判定结果写审计 |
 
-界面路径：**Knowledge Q&A → 勾选 `Search the web for the latest`** → 面板显示“将发送 / 不会发送”；
-回答的引用按 `Published corpus` / `Web` / `General web` / `Document` 分区；网页条目显示域名、抓取时间与
-`Unverified third-party`；被拦截时显示 `Web search blocked (<reason>)`，不会伪装成“没搜到”。
+**RAG 优先**：法规命中（包括 `confidence=low`、`requested_uncovered`）不再被丢弃，统一交给豆包总结并附
+“低置信，仅供参考 / 该法域未被语料覆盖”的限定说明。只有 `/v1/retrieve` 返回**零条文本、失败或超时**时，
+系统才自动走豆包联网；联网同样过出站策略、写审计，并标注“未核验第三方内容”。
+
+**界面路径**：`Knowledge Q&A` → 联网开关默认勾选，可显式关闭 → 提问。面板显示“将发送 / 不会发送”；
+引用按 `Published corpus` / `Statute` / `Web` / `General web` / `Document` 分区；网页条目显示域名、抓取时间与
+`Unverified third-party`；RAG 零结果自动联网时显示
+`RAG returned no result — searched the web automatically (unverified)`；被拦截时显示
+`Web search blocked (<reason>)`，不会伪装成“没搜到”。
 
 通用联网通道（`GENERAL_WEB=1`）对**范围外且不转交**的问题生效（例如“今天有什么热点新闻”），
 并在 **in-scope 问题本地语料给不出任何可引用证据时回退**（回答会同时标注“已发布语料未能回答”和
@@ -384,14 +392,87 @@ sqlite3 runs/assistant.db \
   "select id, json_extract(result_json,'\$.processor') from assistant_runs order by created_at desc limit 5;"
 ```
 
-回答本身也会带 `route`（`published / document / general_web / handoff / none`）与
+回答本身也会带 `route`（`published / statute / document / general_web / handoff / none`）与
 `web` 摘要（`requested / status / reason / hint`）：面板据此显示
 `Web search skipped (web_unavailable)` 或 `Answered from published sources · web not needed`，
 两种开关都不具备时联网开关会直接置灰。
 
 回滚：把 `SMART_EDIT_ASSISTANT_WEB` 改回 `off`、`GENERAL_WEB` 置 0、清空模型配置即可回到原行为。
 
-**Sample input from UI
+### 8.2 法规检索腿（Mercatoria `/v1/retrieve`，`knowledge-statute-live`）
+
+默认关闭。开启后，**所有知识类问题先查法规语料**（规则解释、产品 FAQ、显式声明的法域/交易日/规则版本），
+命中（含低置信、法域未覆盖）一律交给豆包总结并以法规原文作答（`source_type="statute"`、`route="statute"`）；
+只有 `/v1/retrieve` **返回零条文本、失败或超时**时才自动联网，绝不把命中丢掉再写成“没有相关规定”。
+
+| 环境变量 | 值 | 说明 |
+|---|---|---|
+| `SMART_EDIT_STATUTE` | `1` | 总开关；缺 URL 或 token 时**启动失败**，不静默降级 |
+| `MERCATORIA_BASE_URL` | 例：`http://127.0.0.1:18080` | 法规语料服务地址（通常经 SSH 隧道） |
+| `MERCATORIA_API_TOKEN` | `<token>` | Bearer token，只放服务端 |
+
+```bash
+# 1) 起隧道（实测：mercatoria 容器在 team04-pg 上发布 8080；本地 18080 只是本地端口）
+ssh -f -N -L 127.0.0.1:18080:127.0.0.1:8080 team04-pg
+#    其他部署把后两段换成 <mercatoria-host>:<port>
+curl -s http://127.0.0.1:18080/health | head -c 200   # 应返回 {"status":"ready",...}
+
+# 2) 配置并重启后端
+#    .env 里加：SMART_EDIT_STATUTE=1 / MERCATORIA_BASE_URL=http://127.0.0.1:18080 / MERCATORIA_API_TOKEN=...
+./scripts/dev.sh
+
+# 3) 启动日志必须出现 statute=True（同时能看到 rag / web 的实际状态）
+grep "assistant: model=" runs/logs/backend-*.log | tail -1
+# assistant: model=doubao:... web=off rag=False statute=True egress=2026-11-18.1
+```
+
+**界面路径**：浏览器打开 `http://127.0.0.1:5173` → 右侧助手面板的 **`Knowledge Q&A`** 标签 → 法域 chips 保持
+**`Any`（任意）** → 联网开关默认勾选（可关闭；关闭后仍查 RAG 与本地语料）→ 输入问题 → `Ask`。界面上没有
+“法规腿”单独开关，它由服务端 `.env` 决定；打开后知识类问题（含产品 FAQ）都会先查法规。回答里：
+
+- 法规命中：引用区分组出现 **`Statute (N)`**，徽章带 `jurisdiction / effective <date>`，点开只看获准摘录与条号；
+  不再出现 `Answered from published sources · web not needed`。
+- 低置信 / 法域未覆盖：命中**照样被使用**，结论上方提示 **`N statute match(es) at low confidence — reference only`**
+  或 `Jurisdiction not covered: …`，并在 limitations 写明覆盖边界。
+- RAG 零结果：自动联网，显示 **`RAG returned no result — searched the web automatically (unverified)`**，
+  联网引用标 `General web` + `Unverified third-party`。
+- 出站被拒：**`Statute search blocked by outbound policy — not covered`**，本次没有任何法规出站。
+- 重建中 / 超时：分别显示 `Statute corpus is being rebuilt` / `Statute search timed out`，随后自动联网。
+
+> 注意：`Any` 是推荐值。实测（`knowledge-statute-live` 5.2）定义类问题带法域反而更差：选 `WTO` 后 top chunk
+> 变成 WTO 贸易便利化条文且 `confidence=low`；不带法域 + 扩展词才能命中《独立保函规定》。
+
+**触发条件**：规则解释（如 `什么是guarantee`、`URDG 758 第 20 条…`）、产品 FAQ，以及显式选了法域/交易日/规则版本的问题；
+唯一例外是"选中文字并问这段/这句"——该问题以选区快照为证据，不查法规。编辑器里选中一个词**不会**再把主题问题判成文档解释（`knowledge-statute-live` D1）。
+
+**出站闸**：法规调用与联网共用一套判定（用途 `statute`）——金额/单号/账号/邮箱会被脱敏，规则号保留；
+问题与选中文本重叠达到 40 字会被拒绝；隧道/内网地址不参与公网域名白名单。判定结果写审计
+（`egress_allowed` / `egress_blocked`，只存 query digest）。被拒绝时不发请求，法规层状态为 `blocked`，
+回答里写明“因出站策略未查询法规”。
+
+**两种结局都可在运行结果里自证**：
+
+```bash
+# 最近一次法规层记录：status / detail / hits
+sqlite3 runs/assistant.db \
+  "select json_extract(result_json,'\$.route'),
+          json_extract(result_json,'\$.retrieval')
+   from assistant_runs order by created_at desc limit 3;"
+```
+
+| 结局 | 你会看到 | 含义 |
+|---|---|---|
+| 采信 | `route="statute"`、`statute/ok/ok`、引用徽章 `Statute`、locator 带条号/法域/生效日 | 答案来自法规原文 |
+| 低置信 / 未覆盖 | `route="statute"`、`statute/ok/low_confidence`（或 `uncovered:*`）+ `hits=N`，附“仅供参考 / 覆盖边界” | 命中照样使用，只降级说明 |
+| RAG 零结果 | `statute/ok/zero:*`（或 `failed/*`）→ 自动联网，`route="general_web"`、`web.reason="rag_empty"` | 只有此时才联网 |
+| 两处皆空 | 零引用 + “知识库检索与联网搜索都没有找到可用证据” | 如实说明，不编造 |
+| 出站被拒 | `statute/blocked/policy_unavailable`（或缺策略） | 本次根本没有出站 |
+
+**术语归一化**：`app/configs/knowledge.sample.json` 的 `query_expansion` 会把 `guarantee` 等通用词扩成
+`见索即付保函 / 独立保函 / demand guarantee / URDG 758`；每键 ≤4 条、总字符 ≤120，越界由加载器拦截。
+想调整召回，改这张表并重启，不需要改代码。
+
+**回滚**：清空 `SMART_EDIT_STATUTE`（或设为 `0`）即回到词法-only；没有数据库迁移，历史运行记录不受影响。
 ```
 建议直接试这些问题（fixture 都能命中）
 目的	问题	预期

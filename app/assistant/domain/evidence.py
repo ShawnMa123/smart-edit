@@ -70,13 +70,18 @@ def rule_entities(text: str) -> set[str]:
 
 
 def detect_conflicts(candidates: list[EvidenceCandidate]) -> list[dict[str, Any]]:
-    """Two authorized sources citing the same rule but saying different things are a conflict."""
-    groups: dict[str, list[EvidenceCandidate]] = {}
+    """Two authorized sources citing the same rule but saying different things are a conflict.
+
+    Comparison stays inside one `source_type`: a statute and a synthetic summary describe the same
+    rule in different words by construction, and reporting that as a conflict would make every
+    answer needlessly cautious (`knowledge-statute-retrieval` design D4).
+    """
+    groups: dict[tuple[str, str], list[EvidenceCandidate]] = {}
     for candidate in candidates:
         for entity in rule_entities(f"{candidate.title} {candidate.excerpt}"):
-            groups.setdefault(entity, []).append(candidate)
+            groups.setdefault((entity, candidate.source_type), []).append(candidate)
     conflicts: list[dict[str, Any]] = []
-    for entity, group in groups.items():
+    for (entity, _source_type), group in groups.items():
         by_source: dict[str, EvidenceCandidate] = {}
         for candidate in group:
             by_source.setdefault(str(candidate.source_id), candidate)

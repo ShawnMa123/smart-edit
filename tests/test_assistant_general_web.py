@@ -10,9 +10,15 @@ import httpx
 from app.assistant.domain.query import analyze
 from app.assistant.egress import EgressPolicy
 from app.assistant.gateway import DoubaoGateway
-from app.assistant.pipeline import GENERAL_WEB_LIMITATION_EN, review_general_answer
+from app.assistant.pipeline import (
+    FixtureComposer,
+    GENERAL_WEB_LIMITATION_EN,
+    review_general_answer,
+)
+from app.assistant.ports import EvidenceCandidate
 from app.assistant.schemas import Answer, Citation, Claim, RunCreate
 from app.assistant.settings import AssistantSettings
+from app.assistant.statute import StatuteOutcome
 from tests.assistant_helpers import WORKSPACE, headers, make_client, make_service, make_services
 
 QUESTION = "What happened in the trade finance market today?"
@@ -58,9 +64,13 @@ def policy() -> EgressPolicy:
     return EgressPolicy(version="general-test", allowed_domains=["iccwbo.org"])
 
 
-def client_for(tmp_path: Path, gateway, *, general: bool = True):
+def client_for(tmp_path: Path, gateway, *, general: bool = True, retriever=None):
     services = make_services(
-        tmp_path, gateway=gateway, egress=policy(), settings=settings(general=general)
+        tmp_path,
+        gateway=gateway,
+        egress=policy(),
+        settings=settings(general=general),
+        retriever=retriever,
     )
     return make_client(tmp_path, services=services), services
 
@@ -112,7 +122,7 @@ def test_general_route_requires_every_condition(tmp_path):
     )
     assert disabled._general_route(scope, on) is False
 
-def test_general_answer_keeps_only_approved_domains_and_is_capped(tmp_path):
+def test_general_answer_keeps_any_linked_source_and_stays_unverified(tmp_path):
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert body["tools"] == [{"type": "web_search", "max_keyword": 3}]
@@ -132,11 +142,15 @@ def test_general_answer_keeps_only_approved_domains_and_is_capped(tmp_path):
     result = run(client, session_row["id"])["result"]
 
     citations = result["citations"]
-    assert len(citations) == 1
-    assert citations[0]["source_type"] == "general_web"
-    assert citations[0]["locator"]["domain"] == "iccwbo.org"
+    # Any publicly reachable link is citable on this channel; the unverified label carries the trust.
+    assert len(citations) == 2
+    assert {citation["locator"]["domain"] for citation in citations} == {
+        "iccwbo.org",
+        "evil.example",
+    }
+    assert all(citation["source_type"] == "general_web" for citation in citations)
     assert citations[0]["locator"]["retrieved_at"]
-    assert result["support_level"] == "qualified"
+    assert result["support_level"] == "qualified"  # never "strong" for web evidence
     assert GENERAL_WEB_LIMITATION_EN in result["limitations"]
     assert result["retrieval"][0]["status"] == "ok"
     assert result["retrieval"][0]["detail"] == "general_web"
@@ -145,27 +159,50 @@ def test_general_answer_keeps_only_approved_domains_and_is_capped(tmp_path):
         f"/assistant/sessions/{session_row['id']}/messages", headers=headers()
     ).json()["items"][-1]["run_id"]
     events = [row["event_type"] for row in services.store.list_audit(run_id)]
-    assert "web_evidence_dropped" in events
+    # Nothing was dropped, so the drop audit is not written at all.
+    assert "web_evidence_dropped" not in events
 
 
-def test_general_answer_without_approved_citation_is_insufficient(tmp_path):
+def test_general_answer_without_a_resolvable_link_is_insufficient(tmp_path):
+    payload = {
+        "outcome": "answered",
+        "language": "en",
+        "support_level": "qualified",
+        "claims": [
+            {"id": "c1", "text": "Escrow is a third-party holding arrangement.",
+             "kind": "fact", "citation_ids": ["cite_1"]}
+        ],
+        "citations": [
+            {"id": "cite_1", "source_type": "general_web", "title": "Some page",
+             "source_version": "", "locator": {}}
+        ],
+        "limitations": [],
+        "clarification_questions": [],
+    }
+
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json=prose_response(
-                "Only unapproved sources were found.",
-                [allowed_page("https://evil.example/news/2", "Unapproved page")],
-            ),
-        )
+        return httpx.Response(200, json=prose_response(json.dumps(payload), []))
 
-    client, _ = client_for(tmp_path, doubao(handler))
-    result = run(client, session(client)["id"])["result"]
+    client, services = client_for(tmp_path, doubao(handler))
+    session_row = session(client)
+    result = run(client, session_row["id"])["result"]
 
     assert result["outcome"] == "insufficient_evidence"
     assert result["support_level"] == "insufficient"
     assert result["claims"] == []
     assert result["citations"] == []
-    assert any("approved domain" in limitation.lower() for limitation in result["limitations"])
+    assert any("no citation was produced" in note.lower() for note in result["limitations"])
+    assert not any("approved domain" in note.lower() for note in result["limitations"])
+
+    run_id = client.get(
+        f"/assistant/sessions/{session_row['id']}/messages", headers=headers()
+    ).json()["items"][-1]["run_id"]
+    dropped = [
+        json.loads(row["payload_json"])
+        for row in services.store.list_audit(run_id)
+        if row["event_type"] == "web_evidence_dropped"
+    ]
+    assert dropped and "<no-link>" in dropped[0]["hosts"]
 
 
 def test_general_web_failure_is_stated_not_faked(tmp_path):
@@ -260,7 +297,7 @@ def test_in_scope_insufficient_falls_back_to_general_web(tmp_path):
         ),
         calls=calls,
     )
-    client, services = client_for(tmp_path, gateway)
+    client, services = client_for(tmp_path, gateway, retriever=NoLocalRetriever())
     result = run(client, session(client)["id"], question="What is a demand guarantee?")["result"]
 
     assert calls == ["compose", "tools"]
@@ -276,7 +313,7 @@ def test_fallback_is_not_used_without_the_toggle(tmp_path):
         responses_with("web answer", [allowed_page("https://iccwbo.org/news/1")]),
         calls=calls,
     )
-    client, services = client_for(tmp_path, gateway)
+    client, services = client_for(tmp_path, gateway, retriever=NoLocalRetriever())
     result = run(
         client, session(client)["id"], web=False, question="What is a demand guarantee?"
     )["result"]
@@ -334,11 +371,11 @@ def test_routing_outcomes_ignore_the_external_model(tmp_path):
     assert calls == []
 
 
-def test_failed_fallback_keeps_the_corpus_answer_and_reports_why(tmp_path):
+def test_failed_fallback_is_reported_without_a_fake_conclusion(tmp_path):
     gateway = two_mode_gateway(
         httpx.Response(404, json={"error": {"code": "ToolNotOpen", "message": "not activated"}})
     )
-    client, services = client_for(tmp_path, gateway)
+    client, services = client_for(tmp_path, gateway, retriever=NoLocalRetriever())
     result = run(client, session(client)["id"], web=True, question="What is a demand guarantee?")[
         "result"
     ]
@@ -350,3 +387,180 @@ def test_failed_fallback_keeps_the_corpus_answer_and_reports_why(tmp_path):
     assert result["web"]["reason"] == "TOOL_NOT_OPEN"
     assert any("not enabled for this account" in item.lower() for item in result["limitations"])
     assert all("skipped for this request" not in item.lower() for item in result["limitations"])
+
+
+# --- RAG-first fallback (`knowledge-rag-first-fallback`) ------------------------------------
+
+
+class StubStatute:
+    def __init__(self, outcome: StatuteOutcome) -> None:
+        self.outcome = outcome
+        self.calls = 0
+
+    def search(self, *args, **kwargs):
+        return self.outcome.candidates
+
+    def search_detailed(self, *args, **kwargs):
+        self.calls += 1
+        return self.outcome
+
+    def health(self):
+        return {"reachable": True, "documents": 1, "chunks": 1, "index_version": "test"}
+
+
+class HybridGateway:
+    """Fixture composition plus the real (mocked) web tool, so local evidence is possible."""
+
+    supports_tool_search = True
+
+    def __init__(self, web: DoubaoGateway) -> None:
+        self.web = web
+
+    def compose(self, plan, bundle, context):
+        return FixtureComposer().compose(plan, bundle, context)
+
+    def general_web(self, question, *, max_keyword, language="en"):
+        return self.web.general_web(question, max_keyword=max_keyword, language=language)
+
+
+class NoLocalRetriever:
+    def search(self, *args, **kwargs):
+        return []
+
+
+def statute_hit() -> EvidenceCandidate:
+    body = "第五条 独立保函载明适用《见索即付保函统一规则》等交易示范规则的，人民法院应予支持。"
+    return EvidenceCandidate(
+        citation_id="cite_statute_1",
+        source_type="statute",
+        title="最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        source_version="第五条",
+        excerpt=body,
+        locator={
+            "doc_id": "cn-independent-guarantee-2020",
+            "article_label": "第五条",
+            "jurisdiction": "CN",
+            "effective_from": "2020-12-29",
+        },
+        source_text=body,
+        source_id="cn-independent-guarantee-2020",
+        chunk_id="1008bee7f0c0b65f",
+    )
+
+
+def client_with_statute(tmp_path, *, outcome, web, egress=None, retriever=None):
+    services = make_services(
+        tmp_path,
+        gateway=HybridGateway(web),
+        egress=egress or policy(),
+        settings=settings(),
+        statute=StubStatute(outcome),
+        retriever=retriever,
+    )
+    return make_client(tmp_path, services=services), services
+
+
+def test_rag_empty_falls_back_to_web_even_when_local_answered(tmp_path):
+    calls: list[str] = []
+    web = two_mode_gateway(
+        responses_with("Web answer", [allowed_page("https://iccwbo.org/news/2")]), calls=calls
+    )
+    client, services = client_with_statute(
+        tmp_path, outcome=StatuteOutcome(status="ok", reason="zero:no_match"), web=web
+    )
+
+    run_result = run(client, session(client)["id"], question="What is a demand guarantee?")
+    result = run_result["result"]
+
+    assert calls == ["tools"]
+    assert result["route"] == "general_web"
+    assert result["web"]["reason"] == "rag_empty"
+    assert [c["source_type"] for c in result["citations"]] == ["general_web"]
+    allowed = [
+        json.loads(row["payload_json"])
+        for row in services.store.list_audit(run_result["id"])
+        if row["event_type"] == "egress_allowed"
+    ]
+    assert any(payload.get("purpose") == "tool_search" for payload in allowed)
+
+
+def test_rag_hits_suppress_the_web_search(tmp_path):
+    calls: list[str] = []
+    web = two_mode_gateway(
+        responses_with("Web answer", [allowed_page("https://iccwbo.org/news/3")]), calls=calls
+    )
+    client, services = client_with_statute(
+        tmp_path,
+        outcome=StatuteOutcome([statute_hit()], status="ok", reason="low_confidence", hits=1),
+        web=web,
+    )
+
+    result = run(client, session(client)["id"], question="What is a demand guarantee?")["result"]
+
+    assert calls == []
+    assert result["route"] == "statute"
+    assert [c["source_type"] for c in result["citations"]] == ["statute"]
+    assert any("reference only" in item.lower() for item in result["limitations"])
+
+
+def test_an_empty_web_result_keeps_the_local_answer_and_says_so(tmp_path):
+    calls: list[str] = []
+    web = two_mode_gateway(responses_with(json.dumps(INSUFFICIENT_JSON)), calls=calls)
+    client, services = client_with_statute(
+        tmp_path, outcome=StatuteOutcome(status="ok", reason="zero:no_match"), web=web
+    )
+
+    result = run(client, session(client)["id"], question="What is a demand guarantee?")["result"]
+
+    assert calls == ["tools"]
+    assert result["route"] == "published"
+    assert result["citations"], "the local answer must still be delivered"
+    assert any(
+        "web search returned no usable result" in item.lower() for item in result["limitations"]
+    )
+
+
+def test_no_evidence_anywhere_is_stated_without_citations(tmp_path):
+    calls: list[str] = []
+    web = two_mode_gateway(responses_with(json.dumps(INSUFFICIENT_JSON)), calls=calls)
+    client, services = client_with_statute(
+        tmp_path,
+        outcome=StatuteOutcome(status="ok", reason="zero:no_match"),
+        web=web,
+        retriever=NoLocalRetriever(),
+    )
+
+    result = run(client, session(client)["id"], question="What is a demand guarantee?")["result"]
+
+    assert result["route"] == "none"
+    assert not result["citations"]
+    assert any(
+        "neither the knowledge base nor the web" in item.lower() for item in result["limitations"]
+    )
+
+
+def test_the_automatic_fallback_is_blocked_by_the_egress_policy(tmp_path):
+    calls: list[str] = []
+    web = two_mode_gateway(
+        responses_with("Web answer", [allowed_page("https://iccwbo.org/news/4")]), calls=calls
+    )
+    client, services = client_with_statute(
+        tmp_path,
+        outcome=StatuteOutcome(status="ok", reason="zero:no_match"),
+        web=web,
+        egress=EgressPolicy.from_file(Path("/definitely/not/here.yaml")),
+    )
+
+    run_result = run(client, session(client)["id"], question="What is a demand guarantee?")
+    result = run_result["result"]
+
+    assert calls == []
+    web_layers = [layer for layer in result["retrieval"] if layer["layer"] == "web"]
+    assert web_layers and web_layers[0]["status"] == "blocked"
+    assert any("blocked" in item.lower() for item in result["limitations"])
+    blocked = [
+        json.loads(row["payload_json"])
+        for row in services.store.list_audit(run_result["id"])
+        if row["event_type"] == "egress_blocked"
+    ]
+    assert any(payload.get("purpose") == "tool_search" for payload in blocked)

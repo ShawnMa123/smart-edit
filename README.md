@@ -121,6 +121,63 @@ curl -s "localhost:8000/runs/$TID" | python3 -m json.tool | head -20
 `fixture:<path>` → replays that file and says so in the stage `reason`; `openai:<model>` → reserved,
 raises `NotImplementedError`.
 
+### Statute evidence (knowledge-statute-retrieval, off by default)
+
+The knowledge assistant answers from a real legal corpus instead of the synthetic
+one. It is opt-in and fails loudly: `SMART_EDIT_STATUTE=on` requires both `MERCATORIA_BASE_URL` and
+`MERCATORIA_API_TOKEN`, otherwise startup raises. The order is fixed: **RAG first, model summary
+second, web only when RAG returned nothing**. The service's diagnostics (`zero_reason`,
+`confidence`, `score`, `degraded`, `requested_uncovered`) annotate the answer instead of discarding
+it: hits are always passed to the model together with a "low confidence / jurisdiction not
+covered" caveat. Only a zero-chunk or failed response falls back to the general-web channel, which
+still sits behind the egress policy and is now on by default
+(`SMART_EDIT_ASSISTANT_WEB_DEFAULT=off` turns it off; "both found nothing" is stated explicitly).
+
+```bash
+export SMART_EDIT_STATUTE=on
+export MERCATORIA_BASE_URL=http://127.0.0.1:18080      # or the intranet endpoint
+export MERCATORIA_API_TOKEN=<token>
+.venv/bin/python scripts/statute_eval.py                # offline decision-layer report (15 cases)
+```
+
+A run may also carry an **explicit scope** (`jurisdiction_codes`, `applicable_on`, `rule_version`).
+Declaring any of them marks the question as a rule question: it is routed to statute retrieval first
+and only falls back to the web when that evidence is unusable. Unscoped runs behave exactly as before,
+and a rule version never narrows retrieval by itself — it only settles applicability.
+
+**Term normalisation.** Generic words are rewritten into the corpus's controlled terms before
+retrieval (`knowledge.sample.json` → `query_expansion`), so `guarantee` also searches
+独立保函 / 见索即付保函 / demand guarantee. The original wording is always kept; the table is capped
+(≤4 terms per word, ≤12 total) and the terms actually used are written to the run audit.
+
+**"Searched but rejected" is stated.** When the statute leg ran and was not usable — low confidence,
+zero hits, uncovered jurisdiction, service down — the answer says so with the hit count, even when the
+internal corpus answered. The transparency is deliberate: the reader must be able to tell "we did not
+look" from "we looked and rejected it".
+
+### Web fallback and knowledge presets (`knowledge-simple-ask`)
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SMART_EDIT_ASSISTANT_WEB_DEFAULT` | `on` | Whether the web fallback starts enabled. Deployment policy, not a UI decision. |
+| `SMART_EDIT_KNOWLEDGE_CONFIG` | unset | Path to a knowledge config JSON; overrides the shipped sample. |
+| `SMART_EDIT_ASSISTANT_EGRESS_POLICY` | unset | Legacy name for the same path (kept for compatibility). |
+
+`app/configs/knowledge.sample.json` holds the outbound preset: allowed domains, query length, the
+redaction rules, the jurisdiction presets and the suggested questions. Copy it and point
+`SMART_EDIT_KNOWLEDGE_CONFIG` at the copy to change any of them without touching code. A missing or
+broken file denies every outbound call; a rule that does not compile fails at start-up; at most 32
+rules of at most 512 characters each; and the "public rule ids must survive redaction" exemption
+(URDG/UCP/ISP…) is fixed in code so a config cannot whitelist an amount.
+
+Each run records the effective `web_search` value and `web_search_source` (`user` / `default`) in its
+audit payload, so "did this question leave the building, and who decided" is provable after the fact.
+
+Two web channels keep different trust rules: `approved_web` only cites allow-listed domains, while
+`general_web` (the model's own web search) cites any result that carries a resolvable `http(s)` link
+and is always labelled unverified. Results without a usable link are never cited, and the audit
+records their host names so the policy can be reviewed.
+
 Errors always come back as `{code, message, detail?}` with `code` one of `EMPTY_SUBMISSION` (400),
 `unknown_run` (404), `unknown_stage` (409), `REFUSED` (409), `NOT_STANDALONE` (403),
 `INCOMPLETE_RESULT` (500). Branch on `code`, not on `message`.

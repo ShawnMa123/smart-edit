@@ -42,6 +42,7 @@ def make_services(
     egress=None,
     web=None,
     settings=None,
+    statute=None,
 ) -> AssistantServices:
     store = make_store(tmp_path, seed=seed)
     return AssistantServices(
@@ -59,6 +60,7 @@ def make_services(
         egress=egress,
         web=web,
         settings=settings,
+        statute=statute,
     )
 
 
@@ -71,6 +73,7 @@ def make_service(
     egress=None,
     web=None,
     settings=None,
+    statute=None,
     deadline_seconds: int = 60,
 ) -> AssistantService:
     return AssistantService(
@@ -82,6 +85,7 @@ def make_service(
             egress=egress,
             web=web,
             settings=settings,
+            statute=statute,
         ),
         deadline_seconds=deadline_seconds,
     )

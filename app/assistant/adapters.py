@@ -102,3 +102,5 @@ class AssistantServices:
     egress: object | None = None
     web: object | None = None
     settings: object | None = None
+    # `knowledge-statute-retrieval`: optional external statute source; unset means "no statute leg".
+    statute: object | None = None

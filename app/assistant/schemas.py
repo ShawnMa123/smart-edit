@@ -45,6 +45,8 @@ SourceType = Literal[
     "attachment",
     "approved_web",
     "general_web",
+    # Statute text from the external legal-corpus service (knowledge-statute-retrieval).
+    "statute",
 ]
 Rating = Literal["helpful", "not_helpful"]
 FeedbackCategory = Literal["incorrect", "wrong_citation", "outdated", "irrelevant", "unclear"]
@@ -83,13 +85,15 @@ class Citation(Strict):
 
 
 class RetrievalLayer(Strict):
-    layer: Literal["local", "rag", "web"]
+    layer: Literal["local", "rag", "web", "statute"]
     status: Literal["ok", "failed", "skipped", "blocked"]
     detail: str | None = None
     retrieved_at: str | None = None
+    # How many items this layer returned; `None` means "not measured" (`statute-recall`).
+    hits: int | None = None
 
 
-Route = Literal["published", "document", "general_web", "handoff", "none"]
+Route = Literal["published", "statute", "document", "general_web", "handoff", "none"]
 WebStatus = Literal["off", "skipped", "ok", "blocked", "failed"]
 
 
@@ -112,6 +116,19 @@ class LayerCapability(Strict):
     local: bool = True
     approved_web: bool = False
     general_web: bool = False
+    statute: bool = False
+
+
+class StatuteCapability(Strict):
+    """Live view of the statute corpus; `None` fields mean "not measured", never "zero"."""
+
+    enabled: bool = False
+    reachable: bool = False
+    documents: int | None = None
+    chunks: int | None = None
+    index_version: str | None = None
+    # Jurisdictions the corpus actually covers. `None` = not measured; never a fixed guess list.
+    jurisdictions: list[str] | None = None
 
 
 class EgressCapability(Strict):
@@ -122,6 +139,15 @@ class EgressCapability(Strict):
 
 class WebCapability(Strict):
     provider: Literal["off", "fixture", "http"] = "off"
+    # Deployment policy for the web fallback (`knowledge-simple-ask`): the panel starts from this.
+    default_on: bool = False
+
+
+class KnowledgePresets(Strict):
+    """Optional UI presets shipped with the knowledge config; `None` means "not configured"."""
+
+    jurisdictions: list[str] | None = None
+    suggested_questions: list[str] | None = None
 
 
 class Capabilities(Strict):
@@ -131,6 +157,8 @@ class Capabilities(Strict):
     layers: LayerCapability
     egress: EgressCapability
     web: WebCapability
+    statute: StatuteCapability = Field(default_factory=StatuteCapability)
+    presets: KnowledgePresets = Field(default_factory=KnowledgePresets)
 
 
 class Answer(Strict):
@@ -216,6 +244,8 @@ class RunCreate(Strict):
     rule_version: str | None = Field(default=None, max_length=120)
     # Per-run opt-in for the web retrieval layer; default off (knowledge-retrieval-layers).
     web_search: bool = False
+    # Who chose that value: the user's toggle or the deployment default (`knowledge-simple-ask`).
+    web_search_source: Literal["user", "default"] | None = None
 
 
 class Run(Strict):
