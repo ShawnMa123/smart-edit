@@ -613,6 +613,7 @@ function AppContent() {
           onChange: handleDocumentChange,
           onVariableHandled: () => setPendingVariable(null),
         }}
+        legal={{ documentId: DOCUMENT_ID, workspaceId }}
       />
     ),
   };
