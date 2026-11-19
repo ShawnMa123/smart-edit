@@ -8,7 +8,10 @@
 
 import type { ReactNode } from 'react';
 
+import type { SubmissionSummary } from '../api/approvalTypes';
+import { approvalStatusMeta } from '../domain/approvalStatus';
 import { TOPBAR_ENTRIES, type WorkspaceModule } from '../workspace/workspaceModules';
+import { StatusBadge } from './StatusBadge';
 
 /** Configurable product label; a deployment may replace it without touching the layout. */
 export const PRODUCT_NAME = 'Trade workspace';
@@ -24,7 +27,11 @@ export interface DemoIdentityView {
 
 export interface TopBarProps {
   onOpenModule?: (module: WorkspaceModule) => void;
-  activityCount?: number;
+  /** Pending approval requests the principal can decide (server aggregated). */
+  approvalCount?: number;
+  /** Server-side unread Activity count; never browser-local notifications. */
+  activityUnread?: number;
+  /** Unread Inbox notifications (local or server, depending on the session). */
   unreadCount?: number;
   sessionLabel?: string;
   demoIdentity?: DemoIdentityView | null;
@@ -36,9 +43,20 @@ export interface TopBarProps {
   onLogout?: () => void;
 }
 
+const badgeLabel = (entryId: string, count: number): string => {
+  if (entryId === 'approval') {
+    return `${count} approval ${count === 1 ? 'request' : 'requests'} waiting`;
+  }
+  if (entryId === 'activity') {
+    return `${count} unread activity ${count === 1 ? 'entry' : 'entries'}`;
+  }
+  return `${count} unread ${count === 1 ? 'notification' : 'notifications'}`;
+};
+
 export function TopBar({
   onOpenModule,
-  activityCount = 0,
+  approvalCount = 0,
+  activityUnread = 0,
   unreadCount = 0,
   sessionLabel = SESSION_LABEL,
   demoIdentity = null,
@@ -60,7 +78,13 @@ export function TopBar({
       <div className="topbar-actions">
         {TOPBAR_ENTRIES.map((entry) => {
           const count =
-            entry.id === 'activity' ? activityCount : entry.id === 'inbox' ? unreadCount : null;
+            entry.id === 'approval'
+              ? approvalCount
+              : entry.id === 'activity'
+                ? activityUnread
+                : entry.id === 'inbox'
+                  ? unreadCount
+                  : null;
           return (
             <button
               key={entry.id}
@@ -74,12 +98,9 @@ export function TopBar({
                 {entry.icon}
               </span>
               <span className="topbar-label">{entry.label}</span>
-              {count !== null ? (
-                <span
-                  className="badge"
-                  aria-label={`${count} ${entry.id === 'activity' ? 'activity entries' : 'unread notifications'}`}
-                >
-                  {count}
+              {count !== null && count > 0 ? (
+                <span className="badge" aria-label={badgeLabel(entry.id, count)}>
+                  {count > 99 ? '99+' : count}
                 </span>
               ) : null}
             </button>
@@ -158,25 +179,29 @@ export interface DocumentFacts {
 
 export interface EnvironmentStripProps {
   demoMode?: boolean;
+  /** True once PG identity is active: approval is server-backed, not a demo placeholder. */
+  authenticated?: boolean;
   onToggleDemo?: () => void;
   onResetDemo?: () => void;
   demoStorageAvailable?: boolean;
 }
 
-/** One standing summary instead of a disclaimer per panel (design D3). */
+/** One standing summary instead of a disclaimer per panel (design D3/D7). */
 export function EnvironmentStrip({
   demoMode = false,
+  authenticated = false,
   onToggleDemo,
   onResetDemo,
   demoStorageAvailable = true,
 }: EnvironmentStripProps = {}) {
+  const copy = demoMode
+    ? 'Demo data — sample users, organisations and approvals; not real authentication or workflow.'
+    : authenticated
+      ? 'PG identity · server-backed drafts, approvals and activity'
+      : 'Synthetic demo data · fixed snapshot per audit · version history and templates stay in this browser';
   return (
     <div className="environment-strip" role="status" data-demo={demoMode}>
-      <span className="environment-copy">
-        {demoMode
-          ? 'Demo data — sample users, organisations and approvals; not real authentication or workflow.'
-          : 'Synthetic demo data · fixed snapshot per audit · the assistant does not approve or submit · version history and templates stay in this browser'}
-      </span>
+      <span className="environment-copy">{copy}</span>
       <div className="environment-actions">
         {demoMode && !demoStorageAvailable ? (
           <span className="tiny muted">Demo data is session-only in this browser.</span>
@@ -195,15 +220,35 @@ export function EnvironmentStrip({
   );
 }
 
+export interface DocumentHeadProps {
+  facts: DocumentFacts;
+  actions?: ReactNode;
+  /** Latest submission status; `draft` only when the document was never submitted. */
+  submissionStatus?: SubmissionSummary['status'] | 'draft' | string | null;
+  /** Latest submission summary; supplies submitted time, revision and latest comment. */
+  submission?: SubmissionSummary | null;
+}
+
 export function DocumentHead({
   facts,
   actions,
-}: {
-  facts: DocumentFacts;
-  actions?: ReactNode;
-}) {
+  submissionStatus,
+  submission,
+}: DocumentHeadProps) {
+  const status = submissionStatus ?? submission?.status ?? 'draft';
+  const statusMeta = approvalStatusMeta(status);
   const draftLine =
     facts.draftRevision === null ? 'server draft local-only' : `server draft rev ${facts.draftRevision}`;
+  const submittedAt = submission?.created_at
+    ? new Date(submission.created_at).toLocaleString()
+    : null;
+  const submissionRevision = submission?.revision ?? facts.draftRevision;
+  const readOnlyCopy =
+    statusMeta.key === 'approved'
+      ? statusMeta.description
+      : statusMeta.key === 'unknown'
+        ? statusMeta.description
+        : 'Editing is locked until the submission is returned or approved.';
   return (
     <header className="document-head">
       <div>
@@ -212,12 +257,30 @@ export function DocumentHead({
         </div>
         <div className="document-title">
           <h1>{facts.title}</h1>
-          <span className="tag tag--warn">Draft</span>
+          <StatusBadge status={status} />
         </div>
         <div className="meta tiny">
           {facts.versions} captured version{facts.versions === 1 ? '' : 's'} · {facts.characters}{' '}
-          characters · {draftLine} · history stored in this browser
+          characters · {draftLine} · drafts and approvals are server-backed
         </div>
+        {statusMeta.key !== 'draft' ? (
+          <div className="document-status-line tiny" data-testid="document-status-line">
+            <strong>{statusMeta.waitingFor ? `Waiting for ${statusMeta.waitingFor}` : statusMeta.label}</strong>
+            {submissionRevision !== null ? <span> · revision {submissionRevision}</span> : null}
+            {submittedAt ? <span> · submitted {submittedAt}</span> : null}
+            {statusMeta.nextActor ? <span> · next: {statusMeta.nextActor}</span> : null}
+          </div>
+        ) : null}
+        {statusMeta.readOnly ? (
+          <p className="document-readonly tiny muted" data-testid="document-readonly">
+            {readOnlyCopy}
+          </p>
+        ) : null}
+        {submission?.latest_comment ? (
+          <p className="document-latest-comment tiny" data-testid="document-latest-comment">
+            Latest comment: {submission.latest_comment}
+          </p>
+        ) : null}
         <details className="document-details">
           <summary>Technical details</summary>
           <dl>

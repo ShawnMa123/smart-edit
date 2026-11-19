@@ -278,6 +278,24 @@ DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**�
   API 与 `tests/test_automation_apply.py` 覆盖。
 - rich editor 无法启动时（textarea fallback），正文只显示 `{{label}}`，变量动作被禁用并说明需要 rich editor。
 
+### 7.3 提交、审批与只读
+
+`Submit new version` 在 `AUTH_MODE=pg` 下是真实提交：冻结当前 revision 与正文，释放编辑锁，并把文档变为只读。`Pending first / Pending second / Approved` 期间不能加锁或保存；`Returned` 后可以修改并重新提交。操作流程与预置账号见 §8.3.1。
+
+提交后界面使用同一套审批状态：
+
+- 文档头显示真实状态徽标（`Pending first approval` / `Pending second approval` / `Approved` / `Returned` / `Rejected`），不再固定显示 `Draft`；`Draft` 只在尚未提交时出现。
+- 文档上方出现 **Waiting banner + 四步进度**（Submitted → Bank Operations → Compliance → Approved），显示当前等待角色、提交时间、revision、最近意见与只读原因；退回时显示退回意见并提示重新提交。
+- 顶部 **Approval** 入口显示当前角色的服务端待办数（0 时隐藏，>99 显示 `99+`）；**Activity** badge 使用 `/activity/unread-count`，不再拿浏览器本地通知冒充服务器待办。
+- 提交成功、审批决策、复制邀请使用 success / info / warning / error **Toast**；失败保留当前表单或详情并显示 error。只读、退回意见和冲突仍使用内联 banner。
+- 申请人在 pending 状态每 **10s** 自动刷新：页面隐藏时暂停，`Approved / Returned / Rejected` 后停止；审批人通过后无需手动刷新即可看到下一阶段。
+
+端到端演示（使用 seed 账号，自动跑完两级审批与退回重提）：
+
+```bash
+.venv/bin/python scripts/demo_submission_approval.py
+```
+
 ## 8. 知识助手（Knowledge Q&A）
 
 右栏除了 **Rule audit**，还有 **Knowledge Q&A**（Legal 仍明确标 `not implemented`；Automation 为 `fixture only`）。它只做
@@ -540,6 +558,42 @@ SMART_EDIT_AUTH_MODE=pg npm --prefix web run dev
 4. **Activity**：服务端事件，支持全部 / 我的部门 / 仅未读、单条或全部标为已读；成员被移除后其历史事件仍保留并显示 `Removed user`。
 5. **Developer**：需要 `developer.manage`；创建 Key 后原文**只显示一次**，列表只显示前缀。用 Key 调用接口会产生请求日志（method/path/status/latency），可按天/Key/状态看用量。页面明确写 “Webhooks are not available in this version.”。
 6. **权限边界**：组织级文档所有成员可读；部门级文档只有祖先链上有 `document.read` 的人可读（Finance 读 Legal 文档返回 403，且不泄露标题/正文）。`?demo=1` 仍可回退到演示数据。
+
+### 8.3.1 预置角色账号（Applicant / 两级审批）
+
+清空身份 mock 数据并写入真实账号（argon2id 哈希入库，明文只打印/写入本地文件）：
+
+```bash
+.venv/bin/python scripts/seed_identity_users.py --reset
+cat runs/dev/test-users.md
+```
+
+| 邮箱 | 密码 | 角色 | 部门 |
+| --- | --- | --- | --- |
+| `admin@atlas-trade.test` | `AtlasAdmin!2026` | Organisation administrator | — |
+| `applicant@atlas-trade.test` | `Applicant!2026` | Applicant | Trade Operations |
+| `bankops@atlas-trade.test` | `BankOps!2026` | Bank Operations (First Approver) | Bank Operations |
+| `compliance@atlas-trade.test` | `Compliance!2026` | Compliance (Second Approver) | Compliance |
+| `auditor@atlas-trade.test` | `Auditor!2026` | Auditor | — |
+
+行为：Applicant 可编辑/加锁/保存 `demo-document`；First/Second Approver 可打开并加锁但不能保存（`403`，页面显示 read-only 提示）；Auditor 只读且无锁权限。
+
+#### 提交与两级审批（v1）
+
+1. Applicant 打开文档并编辑；未提交时文档头与页脚显示 `Draft`。
+2. 点 **Submit new version** → **Submit for approval**：
+   - 冻结当前 revision、正文、变量与内容摘要；
+   - 释放编辑锁，状态变为 `Pending first approval`；
+   - 文档头显示 `Pending first approval` 徽标，文档上方出现 **Waiting for Bank Operations** banner、四步进度、提交时间、revision 与只读说明；
+   - 文档变为只读，不能加锁/保存；成功 Toast 提供 **View approval** 动作。
+3. Bank Operations 登录 → 顶栏 **Approval**（badge 显示待办数）→ **First approval**：
+   - 左侧待办选择请求，右侧看到冻结快照与时间线；
+   - **Approve** 进入 `Pending second approval`；**Return** 或 **Reject** 必须填写意见；结果以 success/warning/error Toast 呈现。
+4. Compliance 登录 → **Approval** → **Second approval** → **Approve** 后状态为 `Approved`，文档保持只读。Applicant 页面在 10s 内自动刷新为 `Approved`，无需手动刷新。
+5. 若被退回：Applicant 在文档头/banner 看到 `Returned` 与退回意见，可重新加锁、修改并再次提交；每次提交生成新的 submission，旧审批记录保留。
+6. 申请人在 **Approval** → **My submissions** 看到卡片列表（状态/revision/提交时间/当前阶段/最近意见），选中卡片查看冻结快照摘要与时间线；空态显示 `No submissions yet.`。
+
+服务端规则：提交人不能审批自己的请求；审批按组织/部门范围过滤；本轮不发邮件、不接 AI audit gate。API 形态见 README/`document-submission-approval` change。
 
 ## 9. 不开浏览器也能验证同一条链路
 

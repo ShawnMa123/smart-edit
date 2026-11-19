@@ -64,12 +64,12 @@ describe('DocumentActions', () => {
     expect(screen.queryByText(/success|done|exported/i)).toBeNull();
   });
 
-  it('explains the reason for the specific action', async () => {
+  it('does not mark approval as unavailable in an authenticated build', () => {
     render(<DocumentActions />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Start approval · not implemented/ }));
-
-    expect(screen.getByRole('status').textContent).toContain('approval workflow');
+    expect(UNAVAILABLE_ACTIONS.some((action) => action.id === 'approve')).toBe(false);
+    expect(screen.queryByRole('button', { name: /Start approval/ })).toBeNull();
+    expect(screen.queryByText(/approval workflow/)).toBeNull();
   });
 
   it('offers import as a real action, not a labelled placeholder', () => {

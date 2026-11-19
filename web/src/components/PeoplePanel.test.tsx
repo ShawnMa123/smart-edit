@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PeoplePanel } from './PeoplePanel';
+import { ToastProvider } from './ToastProvider';
 
 const response = (status: number, body: unknown) =>
   ({
@@ -68,12 +69,35 @@ describe('PeoplePanel', () => {
   it('creates an invite and exposes the copyable one-time link', async () => {
     const writeText = vi.fn(async () => undefined);
     Object.assign(navigator, { clipboard: { writeText } });
-    render(<PeoplePanel orgId="org_1" fetchImpl={fetchImpl()} />);
+    render(
+      <ToastProvider>
+        <PeoplePanel orgId="org_1" fetchImpl={fetchImpl()} />
+      </ToastProvider>,
+    );
     await userEvent.type(await screen.findByLabelText('Invite email'), 'new@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
     expect(await screen.findByText(/\/invites\/token-123/)).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Copy link' }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect((await screen.findByText('Invite link copied')).textContent).toContain('Invite link');
+  });
+
+  it('warns instead of claiming a copy when the clipboard rejects', async () => {
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn(async () => Promise.reject(new Error('denied'))) },
+    });
+    render(
+      <ToastProvider>
+        <PeoplePanel orgId="org_1" fetchImpl={fetchImpl()} />
+      </ToastProvider>,
+    );
+    await userEvent.type(await screen.findByLabelText('Invite email'), 'new@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
+    await screen.findByText(/\/invites\/token-123/);
+    await userEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+
+    expect(await screen.findByText(/Could not copy the invite link/)).toBeTruthy();
+    expect(screen.queryByText('Invite link copied')).toBeNull();
   });
 
   it('shows an empty state when the role cannot list members', async () => {

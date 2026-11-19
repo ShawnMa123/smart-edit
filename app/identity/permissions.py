@@ -25,6 +25,9 @@ ASSISTANT_USE = "assistant.use"
 ACTIVITY_READ = "activity.read"
 DEVELOPER_MANAGE = "developer.manage"
 AUDIT_READ = "audit.read"
+APPROVAL_SUBMIT = "approval.submit"
+APPROVAL_FIRST = "approval.first"
+APPROVAL_SECOND = "approval.second"
 
 PERMISSIONS: tuple[str, ...] = (
     ORG_MANAGE,
@@ -44,6 +47,9 @@ PERMISSIONS: tuple[str, ...] = (
     ACTIVITY_READ,
     DEVELOPER_MANAGE,
     AUDIT_READ,
+    APPROVAL_SUBMIT,
+    APPROVAL_FIRST,
+    APPROVAL_SECOND,
 )
 
 # Document-level permissions a department-scoped resource can require.
@@ -80,8 +86,55 @@ ROLE_ORG_ADMIN = "org_admin"
 ROLE_DEPT_ADMIN = "dept_admin"
 ROLE_MEMBER = "member"
 ROLE_AUDITOR = "auditor"
+# Trade-finance workflow roles (`user-management` seed): they are real RBAC roles, not UI labels.
+ROLE_APPLICANT = "applicant"
+ROLE_BANK_OPS = "bank_ops"
+ROLE_COMPLIANCE = "compliance"
 
 ROLE_CATALOG: dict[str, dict] = {
+    ROLE_APPLICANT: {
+        "name": "Applicant",
+        "scope_level": "org",
+        "permissions": (
+            DOCUMENT_READ,
+            DOCUMENT_CREATE,
+            DOCUMENT_EDIT,
+            DOCUMENT_LOCK,
+            DOCUMENT_EXPORT,
+            AUTOMATION_USE,
+            AUTOMATION_APPLY,
+            ASSISTANT_USE,
+            ACTIVITY_READ,
+            APPROVAL_SUBMIT,
+        ),
+    },
+    ROLE_BANK_OPS: {
+        "name": "Bank Operations (First Approver)",
+        "scope_level": "org",
+        # Reviewers may open/lock a document, but `document.edit` stays with the applicant.
+        "permissions": (
+            DOCUMENT_READ,
+            DOCUMENT_LOCK,
+            DOCUMENT_EXPORT,
+            AUDIT_READ,
+            ACTIVITY_READ,
+            ASSISTANT_USE,
+            APPROVAL_FIRST,
+        ),
+    },
+    ROLE_COMPLIANCE: {
+        "name": "Compliance (Second Approver)",
+        "scope_level": "org",
+        "permissions": (
+            DOCUMENT_READ,
+            DOCUMENT_LOCK,
+            DOCUMENT_EXPORT,
+            AUDIT_READ,
+            ACTIVITY_READ,
+            ASSISTANT_USE,
+            APPROVAL_SECOND,
+        ),
+    },
     ROLE_ORG_ADMIN: {
         "name": "Organisation administrator",
         "scope_level": "org",
@@ -152,6 +205,9 @@ def is_known_permission(permission: str) -> bool:
 __all__ = [
     "ACTIVITY_READ",
     "API_KEY_SCOPES",
+    "APPROVAL_FIRST",
+    "APPROVAL_SECOND",
+    "APPROVAL_SUBMIT",
     "ASSISTANT_USE",
     "AUDIT_READ",
     "AUTOMATION_APPLY",
@@ -170,7 +226,10 @@ __all__ = [
     "ORG_MANAGE",
     "PERMISSIONS",
     "ROLE_AUDITOR",
+    "ROLE_APPLICANT",
+    "ROLE_BANK_OPS",
     "ROLE_CATALOG",
+    "ROLE_COMPLIANCE",
     "ROLE_DEPT_ADMIN",
     "ROLE_GRANT_PERMISSION",
     "ROLE_KEYS",

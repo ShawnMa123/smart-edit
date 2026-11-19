@@ -21,7 +21,10 @@ from app.identity.bootstrap import build_identity_services
 from app.identity.resources import DocumentAccess
 from app.identity.settings import AuthSettings
 
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 CSRF = {"X-Requested-With": "smart-edit"}
+TEST_SCHEMA = "smart_edit_test"
 
 TABLES = (
     "api_request_logs",
@@ -42,6 +45,13 @@ TABLES = (
 )
 
 
+def _scoped_url(url: str) -> str:
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query))
+    query["options"] = f"-csearch_path={TEST_SCHEMA}"
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
 def database_url() -> str:
     url = os.environ.get("SMART_EDIT_DATABASE_URL")
     if not url:
@@ -56,10 +66,14 @@ def database_url() -> str:
     try:
         with psycopg.connect(url, connect_timeout=3) as conn:
             conn.execute("SELECT 1")
+            # Identity tests never touch the dev/public schema (that would wipe seeded users).
+            conn.execute(f"CREATE SCHEMA IF NOT EXISTS {TEST_SCHEMA}")
+            conn.commit()
     except Exception:  # noqa: BLE001 - an unreachable tunnel skips, never fails the suite
         pytest.skip("PostgreSQL is not reachable (start the team04-pg tunnel)")
-    os.environ["SMART_EDIT_DATABASE_URL"] = url
-    return url
+    scoped = _scoped_url(url)
+    os.environ["SMART_EDIT_DATABASE_URL"] = scoped
+    return scoped
 
 
 def truncate(url: str) -> None:
@@ -85,7 +99,6 @@ def _cheap_argon2():
 @pytest.fixture
 def identity_services():
     url = database_url()
-    truncate(url)
     settings = AuthSettings.from_env(
         {
             "SMART_EDIT_AUTH_MODE": "pg",
@@ -94,6 +107,8 @@ def identity_services():
         }
     )
     services = build_identity_services(settings)
+    truncate(url)
+    services.store.sync_role_catalog()
     yield services
     services.close()
 

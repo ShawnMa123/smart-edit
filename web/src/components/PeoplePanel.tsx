@@ -5,8 +5,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError } from '../api/errors';
 import * as api from '../api/identity';
 import type { Department, Invite, Member } from '../api/identityTypes';
+import { useToast } from './ToastProvider';
 
-const ROLE_OPTIONS = ['member', 'auditor', 'dept_admin', 'org_admin'];
+const ROLE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'applicant', label: 'Applicant' },
+  { value: 'bank_ops', label: 'Bank Operations (First Approver)' },
+  { value: 'compliance', label: 'Compliance (Second Approver)' },
+  { value: 'member', label: 'Member' },
+  { value: 'auditor', label: 'Auditor' },
+  { value: 'dept_admin', label: 'Department admin' },
+  { value: 'org_admin', label: 'Organisation admin' },
+];
 
 interface PeoplePanelProps {
   orgId: string;
@@ -34,6 +43,7 @@ function orderedTree(departments: Department[]): Array<Department & { depth: num
 }
 
 export function PeoplePanel({ orgId, fetchImpl }: PeoplePanelProps) {
+  const toast = useToast();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -109,10 +119,17 @@ export function PeoplePanel({ orgId, fetchImpl }: PeoplePanelProps) {
   const copyInvite = async () => {
     if (!inviteLink) return;
     const absolute = new URL(inviteLink, window.location.origin).toString();
+    const clipboard = navigator.clipboard;
+    if (!clipboard?.writeText) {
+      toast.warning('Clipboard is unavailable — copy the link manually.');
+      return;
+    }
     try {
-      await navigator.clipboard?.writeText(absolute);
+      await clipboard.writeText(absolute);
+      toast.success('Invite link copied');
     } catch {
       // Clipboard access is optional; the link stays visible for manual copying.
+      toast.warning('Could not copy the invite link — copy it manually.');
     }
   };
 
@@ -204,8 +221,8 @@ export function PeoplePanel({ orgId, fetchImpl }: PeoplePanelProps) {
             onChange={(event) => setRole(event.target.value)}
           >
             {ROLE_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -266,7 +283,7 @@ export function PeoplePanel({ orgId, fetchImpl }: PeoplePanelProps) {
                 assignment.scope_id !== selected.department_id;
               return (
                 <li key={assignment.assignment_id}>
-                  <strong>{assignment.role_key}</strong>{' '}
+                  <strong>{assignment.role_name ?? assignment.role_key}</strong>{' '}
                   <span className="tiny">
                     {assignment.scope_type === 'org'
                       ? 'organisation-wide'

@@ -29,7 +29,7 @@ test('the shell shows the standing environment band and keeps the assistant tabs
   const strip = page.locator('.environment-strip');
   await expect(strip).toBeVisible();
   await expect(strip).toContainText(/synthetic demo data/i);
-  await expect(strip).toContainText(/does not approve or submit/i);
+  await expect(strip).not.toContainText(/does not approve or submit/i);
   await expect(strip).toContainText(/this browser/i);
 
   const tabs = page.getByRole('tablist', { name: 'Assistant capabilities' });

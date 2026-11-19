@@ -19,7 +19,7 @@ from typing import Any, Iterator
 from app.documents.errors import HostError, HostNotFound, LockConflict, RevisionConflict
 from app.documents.projection import plain_text_document, project_document, sha256_text
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -46,6 +46,27 @@ CREATE TABLE IF NOT EXISTS document_locks (
   FOREIGN KEY (draft_id) REFERENCES document_drafts(draft_id));
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_lock ON document_locks(draft_id)
   WHERE released_at IS NULL;
+CREATE TABLE IF NOT EXISTS document_submissions (
+  submission_id TEXT PRIMARY KEY, document_id TEXT NOT NULL, draft_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL, department_id TEXT, submitted_by TEXT NOT NULL,
+  revision INTEGER NOT NULL, content_sha256 TEXT NOT NULL, content_json TEXT NOT NULL,
+  text TEXT NOT NULL, variables_json TEXT NOT NULL DEFAULT '{}', variables_version INTEGER NOT NULL,
+  status TEXT NOT NULL, request_id TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS document_submissions_document_idx
+  ON document_submissions(document_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS approval_requests (
+  request_id TEXT PRIMARY KEY, submission_id TEXT NOT NULL UNIQUE, document_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL, department_id TEXT, submitted_by TEXT NOT NULL,
+  status TEXT NOT NULL, current_stage TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, decided_at TEXT);
+CREATE INDEX IF NOT EXISTS approval_requests_pending_idx
+  ON approval_requests(workspace_id, status, created_at);
+CREATE TABLE IF NOT EXISTS approval_steps (
+  step_id TEXT PRIMARY KEY, request_id TEXT NOT NULL, stage TEXT NOT NULL,
+  decision TEXT NOT NULL, actor_user_id TEXT NOT NULL, comment TEXT,
+  expected_revision INTEGER NOT NULL, created_at TEXT NOT NULL, decided_at TEXT NOT NULL,
+  UNIQUE (request_id, stage),
+  FOREIGN KEY (request_id) REFERENCES approval_requests(request_id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS host_audit (
   id TEXT PRIMARY KEY, request_id TEXT NOT NULL, event_type TEXT NOT NULL, actor TEXT NOT NULL,
   payload_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL);
@@ -456,6 +477,298 @@ class HostStore:
             request_id=request_id,
         )
 
+    # --- submissions and approvals -------------------------------------------------------------
+    def latest_submission(self, document_id: str) -> dict[str, Any] | None:
+        return self.one(
+            "SELECT * FROM document_submissions WHERE document_id = ? "
+            "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (document_id,),
+        )
+
+    def blocking_submission(self, document_id: str) -> dict[str, Any] | None:
+        """A submission that makes the document read-only for the applicant."""
+        return self.one(
+            "SELECT * FROM document_submissions WHERE document_id = ? "
+            "AND status IN ('pending_first', 'pending_second', 'approved') "
+            "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (document_id,),
+        )
+
+    def list_submissions(self, document_id: str) -> list[dict[str, Any]]:
+        return self.all(
+            "SELECT * FROM document_submissions WHERE document_id = ? "
+            "ORDER BY created_at DESC, rowid DESC",
+            (document_id,),
+        )
+
+    def get_submission(self, submission_id: str) -> dict[str, Any] | None:
+        return self.one(
+            "SELECT * FROM document_submissions WHERE submission_id = ?", (submission_id,)
+        )
+
+    def latest_request(self, document_id: str) -> dict[str, Any] | None:
+        return self.one(
+            "SELECT * FROM approval_requests WHERE document_id = ? "
+            "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (document_id,),
+        )
+
+    def get_request(self, request_id: str) -> dict[str, Any] | None:
+        return self.one("SELECT * FROM approval_requests WHERE request_id = ?", (request_id,))
+
+    def list_steps(self, request_id: str) -> list[dict[str, Any]]:
+        return self.all(
+            "SELECT * FROM approval_steps WHERE request_id = ? ORDER BY created_at ASC", (request_id,)
+        )
+
+    def list_pending_approvals(
+        self, workspace_id: str, statuses: tuple[str, ...]
+    ) -> list[dict[str, Any]]:
+        if not statuses:
+            return []
+        placeholders = ",".join("?" for _ in statuses)
+        return self.all(
+            "SELECT r.*, s.revision AS snapshot_revision, s.content_sha256 AS snapshot_sha256, "
+            "s.submitted_by AS snapshot_submitted_by, d.title, d.department_id "
+            "FROM approval_requests r "
+            "JOIN document_submissions s ON s.submission_id = r.submission_id "
+            "JOIN documents d ON d.document_id = r.document_id "
+            f"WHERE r.workspace_id = ? AND r.status IN ({placeholders}) "
+            "ORDER BY r.created_at ASC",
+            (workspace_id, *statuses),
+        )
+
+    def create_submission(
+        self,
+        *,
+        document_id: str,
+        draft_id: str,
+        submitted_by: str,
+        lock_id: str,
+        fencing_token: int,
+        expected_revision: int,
+        expected_sha256: str | None,
+        audit_request_id: str = "",
+    ) -> dict[str, Any]:
+        stamp = now_iso()
+        with self.transaction() as conn:
+            document = conn.execute(
+                "SELECT * FROM documents WHERE document_id = ?", (document_id,)
+            ).fetchone()
+            draft = conn.execute(
+                "SELECT * FROM document_drafts WHERE draft_id = ? AND document_id = ?",
+                (draft_id, document_id),
+            ).fetchone()
+            if document is None or draft is None:
+                raise HostNotFound("document or draft not found")
+            if int(draft["revision"]) != int(expected_revision):
+                raise HostError(
+                    409,
+                    "stale_revision",
+                    "the draft moved since the submission was prepared",
+                    {"current_revision": int(draft["revision"])},
+                )
+            if expected_sha256 and draft["text_sha256"] != expected_sha256:
+                raise HostError(409, "stale_content", "the draft content changed before submission")
+            lock = conn.execute(
+                "SELECT * FROM document_locks WHERE lock_id = ? AND draft_id = ?",
+                (lock_id, draft_id),
+            ).fetchone()
+            if lock is None:
+                raise LockConflict("the lock does not belong to this draft")
+            if lock["released_at"] is not None:
+                raise LockConflict("the lock was released")
+            if lock["owner_user_id"] != submitted_by:
+                raise LockConflict("the lock is owned by another user")
+            if _parse_time(lock["lease_until"]) <= _parse_time(stamp):
+                raise LockConflict("the lock lease expired")
+            if int(lock["fencing_token"]) != int(fencing_token):
+                raise LockConflict("the fencing token is stale")
+            active = conn.execute(
+                "SELECT status FROM document_submissions WHERE document_id = ? "
+                "AND status IN ('pending_first', 'pending_second', 'approved') LIMIT 1",
+                (document_id,),
+            ).fetchone()
+            if active is not None:
+                raise HostError(
+                    409,
+                    "submission_pending",
+                    "this document already has an active submission",
+                    {"status": active["status"]},
+                )
+            submission_id = new_id("sub")
+            request_id = new_id("apr")
+            submission = {
+                "submission_id": submission_id,
+                "document_id": document_id,
+                "draft_id": draft_id,
+                "workspace_id": document["workspace_id"],
+                "department_id": document["department_id"],
+                "submitted_by": submitted_by,
+                "revision": int(draft["revision"]),
+                "content_sha256": draft["text_sha256"],
+                "content_json": draft["content_json"],
+                "text": draft["text"],
+                "variables_json": draft["variables_json"],
+                "variables_version": int(draft["variables_version"]),
+                "status": "pending_first",
+                "request_id": request_id,
+                "created_at": stamp,
+            }
+            request = {
+                "request_id": request_id,
+                "submission_id": submission_id,
+                "document_id": document_id,
+                "workspace_id": document["workspace_id"],
+                "department_id": document["department_id"],
+                "submitted_by": submitted_by,
+                "status": "pending_first",
+                "current_stage": "first",
+                "revision": 1,
+                "created_at": stamp,
+                "updated_at": stamp,
+                "decided_at": None,
+            }
+            conn.execute(
+                "INSERT INTO document_submissions VALUES (:submission_id,:document_id,:draft_id,"
+                ":workspace_id,:department_id,:submitted_by,:revision,:content_sha256,"
+                ":content_json,:text,:variables_json,:variables_version,:status,:request_id,:created_at)",
+                submission,
+            )
+            conn.execute(
+                "INSERT INTO approval_requests VALUES (:request_id,:submission_id,:document_id,"
+                ":workspace_id,:department_id,:submitted_by,:status,:current_stage,:revision,"
+                ":created_at,:updated_at,:decided_at)",
+                request,
+            )
+            released = conn.execute(
+                "UPDATE document_locks SET released_at = ? WHERE lock_id = ? "
+                "AND owner_user_id = ? AND released_at IS NULL",
+                (stamp, lock_id, submitted_by),
+            )
+            if released.rowcount != 1:
+                raise LockConflict("the lock could not be released")
+            self._audit(
+                conn,
+                audit_request_id,
+                "submission_created",
+                submitted_by,
+                {
+                    "submission_id": submission_id,
+                    "request_id": request_id,
+                    "document_id": document_id,
+                    "revision": int(draft["revision"]),
+                    "status": "pending_first",
+                },
+            )
+            self._enqueue(
+                conn,
+                "submission.created",
+                {"submission_id": submission_id, "request_id": request_id},
+            )
+        return {"submission": submission, "request": request}
+
+    def decide_approval(
+        self,
+        *,
+        request_id: str,
+        stage: str,
+        decision: str,
+        actor_user_id: str,
+        comment: str | None,
+        expected_revision: int,
+        audit_request_id: str = "",
+    ) -> dict[str, Any]:
+        stamp = now_iso()
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT * FROM approval_requests WHERE request_id = ?", (request_id,)
+            ).fetchone()
+            if row is None:
+                raise HostNotFound("approval request not found")
+            request = dict(row)
+            if request["status"] in ("approved", "returned", "rejected"):
+                raise HostError(409, "approval_closed", "this approval request is already closed")
+            if request["current_stage"] != stage or request["status"] != f"pending_{stage}":
+                raise HostError(
+                    409,
+                    "wrong_stage",
+                    "this decision does not belong to the current approval stage",
+                    {"stage": request["current_stage"]},
+                )
+            if int(request["revision"]) != int(expected_revision):
+                raise HostError(
+                    409,
+                    "stale_approval",
+                    "the approval request moved since it was loaded",
+                    {"current_revision": int(request["revision"])},
+                )
+            if actor_user_id == request["submitted_by"]:
+                raise HostError(403, "self_approval", "you cannot decide your own submission")
+            if decision in ("return", "reject") and not (comment or "").strip():
+                raise HostError(422, "comment_required", "a comment is required for return/reject")
+            if decision == "approve":
+                if stage == "first":
+                    status, current_stage = "pending_second", "second"
+                else:
+                    status, current_stage = "approved", "second"
+            elif decision == "return":
+                status, current_stage = "returned", stage
+            elif decision == "reject":
+                status, current_stage = "rejected", stage
+            else:
+                raise HostError(422, "invalid_decision", "decision must be approve, return or reject")
+            closed_at = stamp if status in ("approved", "returned", "rejected") else None
+            step = {
+                "step_id": new_id("step"),
+                "request_id": request_id,
+                "stage": stage,
+                "decision": decision,
+                "actor_user_id": actor_user_id,
+                "comment": (comment or "").strip() or None,
+                "expected_revision": int(expected_revision),
+                "created_at": stamp,
+                "decided_at": stamp,
+            }
+            conn.execute(
+                "INSERT INTO approval_steps VALUES (:step_id,:request_id,:stage,:decision,"
+                ":actor_user_id,:comment,:expected_revision,:created_at,:decided_at)",
+                step,
+            )
+            updated = conn.execute(
+                "UPDATE approval_requests SET status=?, current_stage=?, revision=revision+1, "
+                "updated_at=?, decided_at=? WHERE request_id=? AND revision=?",
+                (status, current_stage, stamp, closed_at, request_id, expected_revision),
+            )
+            if updated.rowcount != 1:
+                raise HostError(
+                    409,
+                    "stale_approval",
+                    "the approval request moved during the decision",
+                    {"current_revision": int(request["revision"]) + 1},
+                )
+            conn.execute(
+                "UPDATE document_submissions SET status = ? WHERE submission_id = ?",
+                (status, request["submission_id"]),
+            )
+            self._audit(
+                conn,
+                audit_request_id,
+                f"approval_{decision}",
+                actor_user_id,
+                {
+                    "request_id": request_id,
+                    "stage": stage,
+                    "decision": decision,
+                    "status": status,
+                },
+            )
+            self._enqueue(
+                conn,
+                f"approval.{stage}.{decision}",
+                {"request_id": request_id, "status": status},
+            )
+        return {"request": self.get_request(request_id) or {}, "step": step}
     # --- locks ---------------------------------------------------------------------------------
     def active_lock(self, draft_id: str) -> dict[str, Any] | None:
         return self.one(

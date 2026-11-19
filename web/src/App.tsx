@@ -47,13 +47,23 @@ import {
 } from './components/UnavailableModuleDialog';
 import { ImplementationMap } from './components/ImplementationMap';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
+import type { AuthStatus } from './auth/AuthProvider';
+import type { AuthProfile } from './api/identityTypes';
 import { LoginPage } from './components/LoginPage';
 import { PeoplePanel } from './components/PeoplePanel';
 import { ActivityFeed } from './components/ActivityFeed';
 import { DeveloperPanel } from './components/DeveloperPanel';
 import { InviteAcceptPage } from './components/InviteAcceptPage';
+import { ApprovalPanel } from './components/ApprovalPanel';
+import { loadApprovalCounts } from './domain/approvalCounts';
+import { ApprovalStatusBanner } from './components/ApprovalStatusBanner';
+import { SubmitVersionDialog } from './components/SubmitVersionDialog';
+import { ToastProvider } from './components/ToastProvider';
+import type { SubmissionSummary } from './api/approvalTypes';
 
 const DOCUMENT_ID = 'demo-document';
+/** Applicant status refresh (`approval-ui-polish` D4); terminal statuses stop the document poll. */
+const POLL_INTERVAL_MS = 10_000;
 type PaneId = 'versions' | 'editor' | 'assistant';
 type SaveState = 'local' | 'saving' | 'saved' | 'conflict' | 'error';
 
@@ -70,6 +80,7 @@ const DEMO_MODULE_TITLES: Partial<Record<WorkspaceModule, string>> = {
 const AUTH_MODULE_TITLES: Partial<Record<WorkspaceModule, string>> = {
   identity: 'Your account',
   people: 'Organisation & members',
+  approval: 'Approvals',
   developer: 'Developer',
   activity: 'Activity',
 };
@@ -80,10 +91,19 @@ interface ConflictState {
   server: DraftView | null;
 }
 
-export function App() {
+export interface AppProps {
+  /** Test seam: start the auth provider from a known state instead of probing on mount. */
+  authStatus?: AuthStatus;
+  authProfile?: AuthProfile | null;
+  autoProbe?: boolean;
+}
+
+export function App({ authStatus, authProfile, autoProbe }: AppProps = {}) {
   return (
-    <AuthProvider>
-      <AppContent />
+    <AuthProvider initialStatus={authStatus} initialProfile={authProfile} autoProbe={autoProbe}>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </AuthProvider>
   );
 }
@@ -91,6 +111,10 @@ export function App() {
 function AppContent() {
   const auth = useAuth();
   const workspaceId = auth.workspaceId;
+  const authenticatedOrgId =
+    auth.status === 'authenticated' ? auth.profile?.active_org?.org_id ?? null : null;
+  const authPermissions = auth.profile?.permissions ?? [];
+  const authPermissionsKey = authPermissions.join(',');
   const inviteMatch = window.location.pathname.match(/^\/invites\/([^/]+)$/);
   const inviteToken = inviteMatch ? decodeURIComponent(inviteMatch[1]) : null;
   useEffect(() => {
@@ -129,6 +153,11 @@ function AppContent() {
   /** Whether the rich editor started; variable actions are unavailable in the textarea fallback. */
   const [editorMode, setEditorMode] = useState<'rich' | 'fallback'>('rich');
   const [draft, setDraft] = useState<DraftView | null>(null);
+  /** Server-aggregated top-bar counts; `null` until the first authenticated load. */
+  const [serverCounts, setServerCounts] = useState<{
+    approval: number;
+    activityUnread: number;
+  } | null>(null);
   /** Whether this session actually holds the edit lock (design D5: unknown is its own word). */
   const [lockHeld, setLockHeld] = useState(false);
   const [lockNotice, setLockNotice] = useState<string | null>(null);
@@ -161,8 +190,31 @@ function AppContent() {
             throw error;
           }
         }
-        const lockView = await acquireLock(view.document_id, view.draft_id);
+        const lockView = await acquireLock(view.document_id, view.draft_id).catch((error) => {
+          // Reviewers can read a document without holding the edit lock; show the content read-only
+          // instead of failing the whole load (Applicant / First / Second Approver testing).
+          if (error instanceof ApiError && (error.status === 403 || error.status === 409)) {
+            return null;
+          }
+          throw error;
+        });
         if (!aliveRef.current) return;
+        if (!lockView) {
+          draftRef.current = view;
+          lockRef.current = null;
+          setDraft(view);
+          setLockHeld(false);
+          setLockNotice(
+            view.submission_status && view.submission_status !== 'draft'
+              ? 'This submitted version is read-only until it is returned or approved.'
+              : 'Read-only: this role cannot edit or lock the document.',
+          );
+          setRichDoc(view.content);
+          richDocRef.current = view.content;
+          setDirty(false);
+          setSaveState('local');
+          return;
+        }
         draftRef.current = view;
         lockRef.current = lockView;
         setDraft(view);
@@ -355,6 +407,50 @@ function AppContent() {
     return () => window.clearInterval(timer);
   }, [audit.phase]);
 
+  // Authenticated sessions share one 10s timer for top-bar counts and the pending submission
+// (`approval-status-ui` D4/D5). Hidden pages pause; terminal statuses stop the document refresh.
+  useEffect(() => {
+    if (!authenticatedOrgId) {
+      setServerCounts(null);
+      return;
+    }
+    let alive = true;
+    const refreshCounts = () => {
+      void loadApprovalCounts(authenticatedOrgId, authPermissions).then((counts) => {
+        if (alive) setServerCounts(counts);
+      });
+    };
+    const refreshSubmission = () => {
+      void getDocument(DOCUMENT_ID)
+        .then((fresh) => {
+          if (!alive || !aliveRef.current) return;
+          draftRef.current = fresh;
+          setDraft(fresh);
+          // Pending/approved submissions are read-only, so replacing the editor content is safe
+          // only while this session holds no lock and the operator has not typed locally.
+          if (!lockRef.current && !userEditedRef.current) {
+            richDocRef.current = fresh.content;
+            setRichDoc(fresh.content);
+          }
+        })
+        .catch(() => undefined);
+    };
+    const tick = () => {
+      if (globalThis.document?.visibilityState === 'hidden') return;
+      refreshCounts();
+      const status = draftRef.current?.submission_status;
+      if (status === 'pending_first' || status === 'pending_second') refreshSubmission();
+    };
+    refreshCounts();
+    const timer = window.setInterval(tick, POLL_INTERVAL_MS);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+    // `authPermissions` is captured by key; the array identity changes with the profile object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authPermissionsKey, authenticatedOrgId]);
+
   const refreshVersions = () => setVersions(versionStore.list(DOCUMENT_ID));
 
   const recordActivity = (input: ActivityInput) => {
@@ -546,6 +642,14 @@ function AppContent() {
     lockLabel: lockHeld ? 'held by this session' : 'unknown',
   };
 
+  const submissionStatus = draft?.submission_status ?? 'draft';
+  /** Real approval state is only shown for an authenticated PG session (D8). */
+  const realSubmission = auth.status === 'authenticated';
+  const submissionReadOnly = ['pending_first', 'pending_second', 'approved'].includes(
+    submissionStatus,
+  );
+  const submissionComment = draft?.submission?.latest_comment ?? null;
+
   const panes: Record<PaneId, JSX.Element> = {
     versions: (
       <VersionPanel
@@ -576,6 +680,9 @@ function AppContent() {
         onStartEditing={handleStartEditing}
         onSubmitVersion={handleSubmitVersion}
         lockNotice={lockNotice}
+        submissionStatus={submissionStatus}
+        submissionComment={submissionComment}
+        readOnly={submissionReadOnly}
         documentId={facts.documentId}
         versions={facts.versions}
         draftRevision={facts.draftRevision}
@@ -808,6 +915,10 @@ function AppContent() {
   }
 
   async function handleStartEditing() {
+    if (submissionReadOnly) {
+      setLockNotice('This submission is under approval; editing is disabled.');
+      return;
+    }
     const current = draftRef.current;
     if (!current || lockRef.current) {
       setLockNotice('Start editing needs a server draft and no active lock.');
@@ -839,6 +950,24 @@ function AppContent() {
     setSubmitOpen(false);
   }
 
+  async function handleSubmitted(submission: SubmissionSummary) {
+    setSubmitOpen(false);
+    lockRef.current = null;
+    setLockHeld(false);
+    setLockNotice(`Submitted for approval (${submission.status}).`);
+    try {
+      const fresh = await getDocument(DOCUMENT_ID);
+      draftRef.current = fresh;
+      setDraft(fresh);
+      setRichDoc(fresh.content);
+      richDocRef.current = fresh.content;
+      setDirty(false);
+      setSaveState('saved');
+    } catch {
+      // The status banner still shows the submission; a later reload will refresh the snapshot.
+    }
+  }
+
   const handleRailOpen = (target: WorkspaceNavTarget) => {
     if (target === 'document') {
       setPane('editor');
@@ -849,13 +978,10 @@ function AppContent() {
     }
   };
 
-  const authenticatedOrgId =
-    auth.status === 'authenticated' ? auth.profile?.active_org?.org_id ?? null : null;
-
   const isUnavailableModule = (module: WorkspaceModule): module is UnavailableModule =>
     (module === 'people' && !authenticatedOrgId) ||
     (module === 'identity' && !authenticatedOrgId) ||
-    module === 'approval' ||
+    (module === 'approval' && !authenticatedOrgId) ||
     module === 'comments';
 
   const moduleBody = (module: WorkspaceModule) => {
@@ -891,6 +1017,15 @@ function AppContent() {
           quote={knowledgeSelection?.selectedText ?? null}
           onAdd={handleDemoAddComment}
           onResolve={handleDemoResolveComment}
+        />
+      );
+    }
+    if (module === 'approval' && authenticatedOrgId) {
+      return (
+        <ApprovalPanel
+          orgId={authenticatedOrgId}
+          documentId={DOCUMENT_ID}
+          permissions={auth.profile?.permissions ?? []}
         />
       );
     }
@@ -997,7 +1132,22 @@ function AppContent() {
     <div className="app">
       <TopBar
         onOpenModule={openModule}
-        activityCount={demoMode ? demoState.activity.length : activity.length}
+        approvalCount={
+          demoMode
+            ? demoState.approval.status === 'IN_REVIEW'
+              ? 1
+              : 0
+            : authenticatedOrgId
+              ? serverCounts?.approval ?? 0
+              : 0
+        }
+        activityUnread={
+          demoMode
+            ? demoUnreadCount
+            : authenticatedOrgId
+              ? serverCounts?.activityUnread ?? 0
+              : realUnreadCount
+        }
         unreadCount={demoMode ? demoUnreadCount : realUnreadCount}
         demoIdentity={demoIdentity}
         organizations={auth.profile?.organizations ?? []}
@@ -1008,6 +1158,7 @@ function AppContent() {
       />
       <EnvironmentStrip
         demoMode={demoMode}
+        authenticated={auth.status === 'authenticated'}
         onToggleDemo={toggleDemoMode}
         onResetDemo={resetDemoData}
         demoStorageAvailable={demoPersistence}
@@ -1017,6 +1168,8 @@ function AppContent() {
         <main className="workspace">
           <DocumentHead
             facts={facts}
+            submissionStatus={realSubmission ? submissionStatus : 'draft'}
+            submission={realSubmission ? draft?.submission ?? null : null}
             actions={
               <DocumentActions
                 onImport={(files) => void handleImport(files)}
@@ -1033,6 +1186,12 @@ function AppContent() {
                 }}
               />
             }
+          />
+
+          <ApprovalStatusBanner
+            status={realSubmission ? submissionStatus : 'draft'}
+            submission={realSubmission ? draft?.submission ?? null : null}
+            onViewApproval={() => openModule('approval')}
           />
 
           <ImportReport
@@ -1099,7 +1258,9 @@ function AppContent() {
           title={
             demoMode
               ? DEMO_MODULE_TITLES[activeModule] ?? MODULE_TITLES[activeModule]
-              : AUTH_MODULE_TITLES[activeModule] ?? MODULE_TITLES[activeModule]
+              : authenticatedOrgId
+                ? AUTH_MODULE_TITLES[activeModule] ?? MODULE_TITLES[activeModule]
+                : MODULE_TITLES[activeModule]
           }
           onClose={closeModule}
         >
@@ -1115,7 +1276,20 @@ function AppContent() {
         />
       ) : null}
 
-      {submitOpen ? (
+      {submitOpen && auth.status === 'authenticated' ? (
+        <SubmitVersionDialog
+          draft={draft}
+          lock={lockRef.current}
+          onClose={() => setSubmitOpen(false)}
+          onSubmitted={(submission) => void handleSubmitted(submission)}
+          onViewApproval={() => {
+            setSubmitOpen(false);
+            setActiveModule('approval');
+          }}
+        />
+      ) : null}
+
+      {submitOpen && auth.status !== 'authenticated' ? (
         <WorkspaceDialog
           title="Submit new version"
           onClose={() => setSubmitOpen(false)}

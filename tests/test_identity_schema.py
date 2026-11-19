@@ -16,7 +16,8 @@ def test_migrations_create_tables_and_are_idempotent(identity_services):  # noqa
     tables = {
         row["table_name"]
         for row in store.db.fetchall(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = current_schema()"
         )
     }
     assert {
@@ -47,11 +48,28 @@ def test_demo_workspace_is_seeded_and_role_catalog_is_synced(identity_services):
         row["role_key"]
         for row in identity_services.store.db.fetchall("SELECT role_key FROM roles")
     }
-    assert roles == {"org_admin", "dept_admin", "member", "auditor"}
+    assert roles == {
+        "org_admin",
+        "dept_admin",
+        "member",
+        "auditor",
+        "applicant",
+        "bank_ops",
+        "compliance",
+    }
     permissions = identity_services.store.db.fetchall(
         "SELECT permission FROM role_permissions WHERE role_key = 'org_admin'"
     )
     assert "developer.manage" in {row["permission"] for row in permissions}
+    for role, permission in (
+        ("applicant", "approval.submit"),
+        ("bank_ops", "approval.first"),
+        ("compliance", "approval.second"),
+    ):
+        rows = identity_services.store.db.fetchall(
+            "SELECT permission FROM role_permissions WHERE role_key = %s", (role,)
+        )
+        assert permission in {row["permission"] for row in rows}
 
 
 def test_unreachable_pg_fails_at_startup_with_actionable_message():

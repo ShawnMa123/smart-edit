@@ -5,7 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, Response
 
 from app.documents.errors import PreconditionRequired
-from app.documents.schemas import DocumentCreate, DraftSave, Heartbeat, LockCreate, VariablesUpdate
+from app.documents.schemas import (
+    DocumentCreate,
+    DraftSave,
+    Heartbeat,
+    LockCreate,
+    SubmissionCreate,
+    VariablesUpdate,
+)
 from app.documents.service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -13,6 +20,14 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 def _service(request: Request) -> DocumentService:
     return request.app.state.host.documents
+
+
+def _approvals(request: Request):
+    return request.app.state.host.approvals
+
+
+def _principal(request: Request):
+    return _service(request).principal(request)
 
 
 def _request_id(request: Request) -> str:
@@ -128,6 +143,24 @@ def restore_checkpoint(
     )
     _headers(response, view["etag"])
     return view
+
+
+@router.post("/{document_id}/submissions", status_code=201)
+def submit_document(
+    document_id: str, request: Request, response: Response, payload: SubmissionCreate
+) -> dict:
+    approvals = _approvals(request)
+    result = approvals.submit(_principal(request), document_id, payload.model_dump(), _request_id(request))
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Location"] = f"/approvals/{result['request']['request_id']}"
+    return result
+
+
+@router.get("/{document_id}/submissions")
+def list_submissions(document_id: str, request: Request, response: Response) -> list[dict]:
+    approvals = _approvals(request)
+    response.headers["Cache-Control"] = "no-store"
+    return approvals.submissions(_principal(request), document_id)
 
 
 @router.post("/{document_id}/drafts/{draft_id}/lock", status_code=201)

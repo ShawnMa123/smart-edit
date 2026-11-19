@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.assistant import router as assistant_router
 from app.api.activity import router as activity_router
+from app.api.approvals import router as approvals_router
 from app.api.auth import router as auth_router
 from app.api.automation import router as automation_router
 from app.api.developer import router as developer_router
@@ -129,6 +130,7 @@ def create_app(
         host.documents.authorizer = document_access
         host.automation.authorizer = document_access
         host.runs.authorizer = document_access
+        host.approvals.authorizer = document_access
         host.automation.version_provider = lambda workspace_id: _authorization_version(
             identity.store, workspace_id
         )
@@ -144,6 +146,7 @@ def create_app(
     app.include_router(auth_router)
     app.include_router(organization_router)
     app.include_router(activity_router)
+    app.include_router(approvals_router)
     app.include_router(developer_router)
     app.include_router(assistant_router)
     app.include_router(documents_router)

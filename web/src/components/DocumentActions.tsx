@@ -9,7 +9,6 @@ export interface UnavailableAction {
 /** Actions the reference prototype offers that this build cannot perform (task 6.4). */
 export const UNAVAILABLE_ACTIONS: UnavailableAction[] = [
   { id: 'export', label: 'Export', reason: 'Export (ED-09) is not implemented in this build.' },
-  { id: 'approve', label: 'Start approval', reason: 'The approval workflow (§10) is not implemented in this build.' },
 ];
 
 /** What the file picker accepts — the same four types the server can read (ED-03). */

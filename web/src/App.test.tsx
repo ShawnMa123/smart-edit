@@ -148,7 +148,7 @@ it('routes Submit new version to the sample approval in demo mode', async () => 
     render(<App />);
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Demo data' }));
-    expect(screen.getByLabelText('4 activity entries')).toBeTruthy();
+    expect(screen.getByLabelText('2 unread activity entries')).toBeTruthy();
     expect(screen.getByLabelText('2 unread notifications')).toBeTruthy();
 
     await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
@@ -160,10 +160,10 @@ it('routes Submit new version to the sample approval in demo mode', async () => 
     await userEvent.click(screen.getByRole('button', { name: 'Inbox' }));
     expect(screen.getByRole('dialog', { name: 'Inbox' }).textContent).toContain('Comment added');
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
-    expect(screen.getByLabelText('0 unread notifications')).toBeTruthy();
+    expect(screen.queryByLabelText(/unread notifications/)).toBeNull();
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Demo data' }));
-    expect(screen.getByLabelText('0 activity entries')).toBeTruthy();
+    expect(screen.queryByLabelText(/unread activity/)).toBeNull();
   });
 
   it('records real operations in the browser-local activity log', async () => {
@@ -175,7 +175,7 @@ it('routes Submit new version to the sample approval in demo mode', async () => 
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Capture version' }));
-    expect(screen.getByLabelText('1 activity entries')).toBeTruthy();
+    expect(screen.getByLabelText('1 unread activity entry')).toBeTruthy();
 
     await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
     const dialog = screen.getByRole('dialog', { name: 'Activity' });

@@ -1,6 +1,7 @@
 /** Document-host client: drafts, ETags, conditional saves and locks. */
 
 import type { RichDocument } from '../rich/richDocument';
+import type { SubmissionSummary } from './approvalTypes';
 import { API_BASE, DEFAULT_TIMEOUT_MS } from './client';
 import { ApiError, INVALID_RESPONSE_CODE, NETWORK_CODE, TIMEOUT_CODE } from './errors';
 
@@ -18,6 +19,9 @@ export interface DraftView {
   variables: Record<string, unknown>;
   variables_version: number;
   updated_at: string | null;
+  /** `draft` when no submission exists; otherwise the latest submission status. */
+  submission_status?: SubmissionSummary['status'] | 'draft';
+  submission?: (SubmissionSummary & { created_at: string }) | null;
 }
 
 export interface DocumentCreateInput {

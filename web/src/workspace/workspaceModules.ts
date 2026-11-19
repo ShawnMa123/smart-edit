@@ -27,6 +27,7 @@ export const RAIL_ENTRIES: RailEntry[] = [
 
 export const TOPBAR_ENTRIES: RailEntry[] = [
   { id: 'activity', label: 'Activity', icon: '◷' },
+  { id: 'approval', label: 'Approval', icon: '✓' },
   { id: 'people', label: 'People', icon: '♙' },
   { id: 'inbox', label: 'Inbox', icon: '☷' },
   { id: 'developer', label: 'Developer', icon: '⌘' },

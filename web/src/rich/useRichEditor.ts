@@ -14,9 +14,11 @@ import { extensions, toEditorContent, toRichDocument } from './tiptap';
 export interface UseRichEditorOptions {
   document: RichDocument;
   onChange: (document: RichDocument) => void;
+  /** Approval read-only mode: the document is frozen for this role/status. */
+  editable?: boolean;
 }
 
-export function useRichEditor({ document, onChange }: UseRichEditorOptions): Editor | null {
+export function useRichEditor({ document, onChange, editable = true }: UseRichEditorOptions): Editor | null {
   // The last document the editor itself produced. The parent echoes it back as a prop; tracking the
   // exact object is what lets the effect tell "my own edit" from "an import/version restore".
   const applied = useRef<RichDocument>(document);
@@ -24,6 +26,7 @@ export function useRichEditor({ document, onChange }: UseRichEditorOptions): Edi
   const editor = useEditor({
     extensions,
     content: toEditorContent(document),
+    editable,
     editorProps: {
       attributes: {
         class: 'editor-rich',
@@ -47,6 +50,10 @@ export function useRichEditor({ document, onChange }: UseRichEditorOptions): Edi
       onChange(withProvenance);
     },
   });
+
+  useEffect(() => {
+    if (editor) editor.setEditable(editable);
+  }, [editor, editable]);
 
   // Replace the content when a *different* document arrives (import, version restore), without
   // echoing it back as a user edit. Without updating `applied` in `onUpdate`, every keystroke looks

@@ -103,11 +103,14 @@ uvicorn app.api.main:app --reload
 
 - **启动即校验**：`AUTH_MODE=pg` 时连接池 + `SELECT 1` + 编号 SQL 迁移（`app/identity/migrations/`，`schema_meta.schema_version`）在启动阶段完成；PG 不可达会直接报错并提示 `SMART_EDIT_DATABASE_URL` / `team04-pg`，**不会**回退到 SQLite 或假身份。
 - **账号**：邮箱唯一、`argon2id` 哈希（`SMART_EDIT_ARGON2_*` 可调）、登录失败按 IP+邮箱限流（`SMART_EDIT_AUTH_LOGIN_*`）。会话是服务端不透明令牌，cookie 为 `HttpOnly; SameSite=Lax`，生产设 `SMART_EDIT_AUTH_COOKIE_SECURE=1`。
-- **角色与继承**：`org_admin` / `dept_admin` / `member` / `auditor`；角色挂在组织或部门上，生效权限 = 组织级 + 资源部门祖先链上的并集，**没有 deny**；收权即删除 assignment。最后一名有效 `org_admin` 不能被移除/停用。
+- **角色与继承**：`org_admin` / `dept_admin` / `member` / `auditor` / `applicant` / `bank_ops` / `compliance`；角色挂在组织或部门上，生效权限 = 组织级 + 资源部门祖先链上的并集，**没有 deny**；收权即删除 assignment。最后一名有效 `org_admin` 不能被移除/停用。
+  - 测试账号（Applicant / Bank Operations First Approver / Compliance Second Approver）：`.venv/bin/python scripts/seed_identity_users.py --reset`，账号与密码打印在终端并写入 `runs/dev/test-users.md`。
 - **资源范围（Option B）**：文档 `department_id=NULL` = 组织级（所有 active member 可读）；部门级文档只对祖先链上拥有 `document.read` 的人员可读；写/锁/导出分别要求 `document.edit/lock/export`。所有业务 API 以服务端存储的 scope 判定，客户端提交的 `workspace_id/department_id` 不作为授权依据。
 - **邀请 v1**：生成一次性 token（只存哈希，默认 72h），管理员复制链接线下发送；**不发邮件、不做邮箱验证/自助找回密码**；接受一次后失效，邀请人不能授予超出自身权限的角色。
 - **Developer**：API Key 高熵、只存哈希、只在创建时显示一次；`Authorization: Bearer <key>` 映射为服务主体，scopes 与创建者**当前**权限取交集（失权即失效）；请求日志只记 method/path/status/latency/key，不含 body/令牌。`developer.manage` 保护页面与接口；**Webhook 首版不提供**。
 - **Activity**：登录/登出、组织/部门、成员/角色、文档提交/锁、助手 run、API Key 变更均由服务端写事件；组织级事件对所有成员可见，部门级事件按 `activity.read` 的祖先链过滤；已读状态按用户独立保存。
+- **提交与两级审批**：`POST /documents/{id}/submissions` 冻结不可变版本；`GET /approvals?stage=first|second`、`GET /approvals/{id}`、`POST /approvals/{id}/decisions` 支持 `approve / return / reject`。审批中与已批准版本只读，退回后可修改并重新提交；禁止审批自己提交的请求；本轮不发送邮件、不接 AI audit gate。
+- **审批界面**：文档头、My submissions 与顶部 badge 共用一套状态（Draft / Pending first / Pending second / Approved / Returned / Rejected）；待审批时显示 Waiting banner + 四步进度、当前角色、提交时间、revision 与最近意见；顶部 Approval 使用 `/approvals` 聚合的待办数（0 隐藏、>99 为 `99+`），Activity 使用 `/activity/unread-count`；提交、决策、复制邀请走语义 Toast；申请人在 pending 时每 10s 刷新，页面隐藏暂停、终态停止。
 
 ---
 
@@ -217,3 +220,12 @@ Errors always come back as `{code, message, detail?}` with `code` one of `EMPTY_
 Run state is process-scoped: after a restart the same `thread_id` answers `unknown_run` — never an
 empty run. Re-auditing means creating a new run, because `normalize` clears `_candidates` and a
 repeat trigger is refused.
+
+
+-----------
+邮箱	密码	角色	部门
+admin@atlas-trade.test	AtlasAdmin!2026	Organisation administrator	—
+applicant@atlas-trade.test	Applicant!2026	Applicant	Trade Operations
+bankops@atlas-trade.test	BankOps!2026	Bank Operations (First Approver)	Bank Operations
+compliance@atlas-trade.test	Compliance!2026	Compliance (Second Approver)	Compliance
+auditor@atlas-trade.test	Auditor!2026	Auditor	—

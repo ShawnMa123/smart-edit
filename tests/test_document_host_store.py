@@ -7,7 +7,7 @@ import sqlite3
 import pytest
 
 from app.documents.bootstrap import build_host_services
-from app.documents.errors import LockConflict, RevisionConflict
+from app.documents.errors import HostError, LockConflict, RevisionConflict
 from app.documents.store import HostStore
 
 
@@ -42,10 +42,15 @@ def test_schema_tables_and_version(tmp_path):
         "automation_dependencies",
         "automation_reviews",
     } <= tables
-    assert store.schema_version() == 3
+    assert store.schema_version() == 4
     for table in ("documents", "document_drafts", "automation_proposals"):
         columns = {row["name"] for row in store.all(f"PRAGMA table_info({table})")}
         assert "department_id" in columns
+    assert {
+        "document_submissions",
+        "approval_requests",
+        "approval_steps",
+    } <= tables
 
     newer = sqlite3.connect(tmp_path / "host.db")
     newer.execute("UPDATE schema_meta SET value = '99' WHERE key = 'schema_version'")
@@ -55,20 +60,24 @@ def test_schema_tables_and_version(tmp_path):
         HostStore(tmp_path / "host.db")
 
 
-def test_department_id_migration_is_idempotent_and_keeps_old_data(tmp_path):
+def test_schema_v4_migration_is_idempotent_and_keeps_old_data(tmp_path):
     store = _store(tmp_path)
     document = store.create_document(
         workspace_id="ws_demo_01", owner_user_id="u1", title="Old", text="keep me"
     )
-    # Simulate a v2 database: remove the new column from all three tables and lower the version.
+    # Simulate a v3 database: drop the v4 tables and lower the version.
     with store.transaction() as conn:
-        for table in ("automation_proposals", "document_drafts", "documents"):
-            conn.execute(f"ALTER TABLE {table} DROP COLUMN department_id")
-        conn.execute("UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'")
+        conn.execute("DROP TABLE IF EXISTS approval_steps")
+        conn.execute("DROP TABLE IF EXISTS approval_requests")
+        conn.execute("DROP TABLE IF EXISTS document_submissions")
+        conn.execute("UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'")
     store._conn.close()
 
     reopened = HostStore(tmp_path / "host.db")
-    assert reopened.schema_version() == 3
+    assert reopened.schema_version() == 4
+    assert {"document_submissions", "approval_requests", "approval_steps"} <= {
+        row["name"] for row in reopened.all("SELECT name FROM sqlite_master WHERE type = 'table'")
+    }
     for table in ("documents", "document_drafts", "automation_proposals"):
         columns = {row["name"] for row in reopened.all(f"PRAGMA table_info({table})")}
         assert "department_id" in columns
@@ -187,3 +196,139 @@ def test_locks_single_active_lease_and_fencing(tmp_path):
 def test_production_uses_no_local_adapter(tmp_path):
     with pytest.raises(RuntimeError):
         build_host_services(db_path=tmp_path / "host.db", mode="production")
+
+
+def test_submission_snapshot_is_immutable_after_draft_edit(tmp_path):
+    store = _store(tmp_path)
+    draft = _doc(store)
+    lock = store.acquire_lock(draft_id=draft["draft_id"], owner_user_id="user_a", lease_seconds=60)
+    result = store.create_submission(
+        document_id=draft["document_id"],
+        draft_id=draft["draft_id"],
+        submitted_by="user_a",
+        lock_id=lock["lock_id"],
+        fencing_token=lock["fencing_token"],
+        expected_revision=draft["revision"],
+        expected_sha256=draft["text_sha256"],
+    )
+    submission = result["submission"]
+    assert result["request"]["status"] == "pending_first"
+    assert store.active_lock(draft["draft_id"]) is None
+
+    store.save_draft(
+        draft_id=draft["draft_id"],
+        expected_revision=draft["revision"],
+        text="changed after submission",
+        actor="user_a",
+    )
+    frozen = store.get_submission(submission["submission_id"])
+    assert frozen["text"] == draft["text"]
+    assert frozen["revision"] == draft["revision"]
+    assert store.latest_submission(draft["document_id"])["submission_id"] == submission["submission_id"]
+
+
+def test_approval_state_machine_terminal_and_self_guard(tmp_path):
+    store = _store(tmp_path)
+    draft = _doc(store)
+    lock = store.acquire_lock(draft_id=draft["draft_id"], owner_user_id="user_a", lease_seconds=60)
+    result = store.create_submission(
+        document_id=draft["document_id"],
+        draft_id=draft["draft_id"],
+        submitted_by="user_a",
+        lock_id=lock["lock_id"],
+        fencing_token=lock["fencing_token"],
+        expected_revision=draft["revision"],
+        expected_sha256=draft["text_sha256"],
+    )
+    request_id = result["request"]["request_id"]
+
+    with pytest.raises(HostError) as self_approval:
+        store.decide_approval(
+            request_id=request_id,
+            stage="first",
+            decision="approve",
+            actor_user_id="user_a",
+            comment=None,
+            expected_revision=1,
+        )
+    assert self_approval.value.code == "self_approval"
+
+    with pytest.raises(HostError) as no_comment:
+        store.decide_approval(
+            request_id=request_id,
+            stage="first",
+            decision="return",
+            actor_user_id="user_b",
+            comment="  ",
+            expected_revision=1,
+        )
+    assert no_comment.value.code == "comment_required"
+
+    first = store.decide_approval(
+        request_id=request_id,
+        stage="first",
+        decision="approve",
+        actor_user_id="user_b",
+        comment="ok",
+        expected_revision=1,
+    )
+    assert first["request"]["status"] == "pending_second"
+    second = store.decide_approval(
+        request_id=request_id,
+        stage="second",
+        decision="approve",
+        actor_user_id="user_c",
+        comment=None,
+        expected_revision=2,
+    )
+    assert second["request"]["status"] == "approved"
+    assert store.latest_submission(draft["document_id"])["status"] == "approved"
+
+    with pytest.raises(HostError) as replay:
+        store.decide_approval(
+            request_id=request_id,
+            stage="second",
+            decision="approve",
+            actor_user_id="user_c",
+            comment=None,
+            expected_revision=3,
+        )
+    assert replay.value.code == "approval_closed"
+
+
+def test_approval_reject_and_stale_revision(tmp_path):
+    store = _store(tmp_path)
+    draft = _doc(store)
+    lock = store.acquire_lock(draft_id=draft["draft_id"], owner_user_id="user_a", lease_seconds=60)
+    result = store.create_submission(
+        document_id=draft["document_id"],
+        draft_id=draft["draft_id"],
+        submitted_by="user_a",
+        lock_id=lock["lock_id"],
+        fencing_token=lock["fencing_token"],
+        expected_revision=draft["revision"],
+        expected_sha256=draft["text_sha256"],
+    )
+    request_id = result["request"]["request_id"]
+
+    with pytest.raises(HostError) as stale:
+        store.decide_approval(
+            request_id=request_id,
+            stage="first",
+            decision="approve",
+            actor_user_id="user_b",
+            comment=None,
+            expected_revision=99,
+        )
+    assert stale.value.code == "stale_approval"
+
+    rejected = store.decide_approval(
+        request_id=request_id,
+        stage="first",
+        decision="reject",
+        actor_user_id="user_b",
+        comment="sanctions hit",
+        expected_revision=1,
+    )
+    assert rejected["request"]["status"] == "rejected"
+    assert store.latest_submission(draft["document_id"])["status"] == "rejected"

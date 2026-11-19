@@ -11,6 +11,7 @@ import { EditorContent, useEditorState, type Editor } from '@tiptap/react';
 import { useEffect, useState, type MouseEvent } from 'react';
 
 import type { AssistantSelection } from '../api/assistantTypes';
+import type { SubmissionStatus } from '../api/approvalTypes';
 import { richToPlainText } from '../rich/plainText';
 import { plainTextToDocument, type RichDocument } from '../rich/richDocument';
 import { selectionFromEditor, selectionFromTextarea } from '../rich/selection';
@@ -39,6 +40,12 @@ export interface RichEditorProps {
   onSubmitVersion?: () => void;
   /** Visible lock-action failure/release notice. */
   lockNotice?: string | null;
+  /** Approval status; `pending_*`/`approved` make the editor read-only. */
+  submissionStatus?: SubmissionStatus | 'draft';
+  /** Reviewer comment shown after a return. */
+  submissionComment?: string | null;
+  /** Disables Start editing and Submit actions while approval is in flight. */
+  readOnly?: boolean;
   /** Reports whether the rich surface or the textarea fallback is active (variable actions depend on it). */
   onModeChange?: (mode: 'rich' | 'fallback') => void;
   /** Document identity for the page header; never an example reference (design D4). */
@@ -85,7 +92,25 @@ export const TABLE_TOOLS: Tool[] = [
   { label: '−C', title: 'Delete column', run: (e) => e.chain().focus().deleteColumn().run() },
 ];
 
-function FallbackEditor({ document, onChange, onSelection, reason }: RichEditorProps & { reason: string }) {
+export const SUBMISSION_STATUS_LABELS: Record<SubmissionStatus | 'draft', string> = {
+  draft: 'Draft',
+  pending_first: 'Pending first approval',
+  pending_second: 'Pending second approval',
+  approved: 'Approved',
+  returned: 'Returned',
+  rejected: 'Rejected',
+};
+
+const statusLabel = (status: SubmissionStatus | 'draft'): string =>
+  SUBMISSION_STATUS_LABELS[status] ?? status;
+
+function FallbackEditor({
+  document,
+  onChange,
+  onSelection,
+  readOnly,
+  reason,
+}: RichEditorProps & { reason: string }) {
   const text = richToPlainText(document);
   const hasVariables = /\{\{[^{}]+\}\}/.test(text);
   return (
@@ -103,6 +128,7 @@ function FallbackEditor({ document, onChange, onSelection, reason }: RichEditorP
         aria-label="Document text"
         data-testid="editor-text"
         value={text}
+        readOnly={readOnly}
         spellCheck={false}
         onChange={(event) => onChange(plainTextToDocument(event.target.value))}
         onSelect={(event) => {
@@ -130,6 +156,7 @@ export function RichEditor(props: RichEditorProps) {
     editor = (props.useEditorImpl ?? defaultUseRichEditor)({
       document: props.document,
       onChange: props.onChange,
+      editable: !props.readOnly,
     });
   } catch (error) {
     if (!failure) setFailure(error instanceof Error ? error.message : String(error));
@@ -155,6 +182,9 @@ export function RichEditor(props: RichEditorProps) {
       onStartEditing={props.onStartEditing}
       onSubmitVersion={props.onSubmitVersion}
       lockNotice={props.lockNotice ?? null}
+      submissionStatus={props.submissionStatus ?? 'draft'}
+      submissionComment={props.submissionComment ?? null}
+      readOnly={props.readOnly ?? false}
       documentId={props.documentId}
       versions={props.versions ?? 0}
       draftRevision={props.draftRevision ?? null}
@@ -179,6 +209,9 @@ function Surface({
   onStartEditing,
   onSubmitVersion,
   lockNotice,
+  submissionStatus,
+  submissionComment,
+  readOnly,
   documentId,
   versions,
   draftRevision,
@@ -199,6 +232,9 @@ function Surface({
   onStartEditing?: () => void | Promise<void>;
   onSubmitVersion?: () => void;
   lockNotice: string | null;
+  submissionStatus?: SubmissionStatus | 'draft';
+  submissionComment?: string | null;
+  readOnly?: boolean;
   documentId?: string;
   versions: number;
   draftRevision: number | null;
@@ -434,7 +470,12 @@ function Surface({
 
           <footer className="paper-foot">
             <span>Working copy · not an executed document</span>
-            <span>{versions > 0 ? `v${versions} captured` : 'no captured version'}</span>
+            <span>
+              {versions > 0 ? `v${versions} captured` : 'no captured version'}
+            </span>
+            <span className="chip" data-testid="approval-status">
+              Approval: {statusLabel(submissionStatus ?? 'draft')}
+            </span>
           </footer>
         </article>
       </div>
@@ -444,11 +485,20 @@ function Surface({
           {lockNotice}
         </p>
       ) : null}
+      {submissionStatus === 'returned' && submissionComment ? (
+        <p className="notice notice--warn tiny" role="status" data-testid="return-reason">
+          Returned: {submissionComment}
+        </p>
+      ) : null}
 
       <div className="editor-footer">
         <div className="editor-footer-copy">
           <span>{richToPlainText(document).length} characters in the audit text</span>
-          <span className="muted">Paper view · the projection above is unchanged</span>
+          <span className="muted">
+            {readOnly
+              ? 'Approval in progress · the submitted version is read-only'
+              : 'Paper view · the projection above is unchanged'}
+          </span>
         </div>
         <div className="editor-footer-actions">
           <button
@@ -460,12 +510,17 @@ function Surface({
           </button>
           <button
             type="button"
-            disabled={lockHeld}
+            disabled={lockHeld || readOnly}
             onClick={() => void onStartEditing?.()}
           >
             Start editing
           </button>
-          <button type="button" className="primary" onClick={() => onSubmitVersion?.()}>
+          <button
+            type="button"
+            className="primary"
+            disabled={readOnly}
+            onClick={() => onSubmitVersion?.()}
+          >
             Submit new version
           </button>
         </div>

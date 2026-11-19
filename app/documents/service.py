@@ -71,6 +71,10 @@ class DocumentService:
             raise HostError(403, "capability_denied", f"the principal lacks {capability}")
 
     def _draft_view(self, draft: dict[str, Any], document: dict[str, Any]) -> dict[str, Any]:
+        submission = self.store.latest_submission(draft["document_id"])
+        request = self.store.get_request(submission["request_id"]) if submission else None
+        steps = self.store.list_steps(request["request_id"]) if request else []
+        latest = steps[-1] if steps else None
         return {
             "document_id": draft["document_id"],
             "draft_id": draft["draft_id"],
@@ -83,7 +87,35 @@ class DocumentService:
             "variables": json.loads(draft.get("variables_json") or "{}"),
             "variables_version": int(draft.get("variables_version") or 1),
             "updated_at": draft.get("updated_at"),
+            "submission_status": submission["status"] if submission else "draft",
+            "submission": (
+                {
+                    "submission_id": submission["submission_id"],
+                    "request_id": submission["request_id"],
+                    "status": submission["status"],
+                    "revision": int(submission["revision"]),
+                    "current_stage": (request or {}).get("current_stage"),
+                    "approval_revision": int((request or {}).get("revision") or 0),
+                    "latest_decision": (latest or {}).get("decision"),
+                    "latest_comment": (latest or {}).get("comment"),
+                    "latest_actor": (latest or {}).get("actor_user_id"),
+                    "latest_decided_at": (latest or {}).get("decided_at"),
+                    "created_at": submission["created_at"],
+                }
+                if submission
+                else None
+            ),
         }
+
+    def _block_if_submitted(self, document_id: str) -> None:
+        submission = self.store.blocking_submission(document_id)
+        if submission:
+            raise HostError(
+                409,
+                "submission_pending",
+                "this document is under approval and cannot be edited",
+                {"status": submission["status"], "request_id": submission["request_id"]},
+            )
 
     def _document(
         self, principal: Principal, document_id: str, action: str = "document.read"
@@ -172,6 +204,7 @@ class DocumentService:
         request_id: str,
     ) -> dict[str, Any]:
         document, _ = self._draft(principal, document_id, draft_id, "document.edit")
+        self._block_if_submitted(document_id)
         self._require_capability(principal, "edit")
         self.store.validate_lock(
             draft_id=draft_id,
@@ -199,6 +232,7 @@ class DocumentService:
         request_id: str,
     ) -> dict[str, Any]:
         document, _ = self._draft(principal, document_id, draft_id, "document.edit")
+        self._block_if_submitted(document_id)
         self._require_capability(principal, "edit")
         self.store.validate_lock(
             draft_id=draft_id,
@@ -225,6 +259,7 @@ class DocumentService:
         request_id: str,
     ) -> dict[str, Any]:
         document, _ = self._draft(principal, document_id, draft_id, "document.edit")
+        self._block_if_submitted(document_id)
         draft = self.store.restore_checkpoint(
             draft_id=draft_id,
             checkpoint_id=checkpoint_id,
@@ -238,6 +273,7 @@ class DocumentService:
         self, principal: Principal, document_id: str, draft_id: str, payload: LockCreate
     ) -> dict[str, Any]:
         document, _ = self._draft(principal, document_id, draft_id, "document.lock")
+        self._block_if_submitted(document_id)
         lock = self.store.acquire_lock(
             draft_id=draft_id,
             owner_user_id=principal.user_id,

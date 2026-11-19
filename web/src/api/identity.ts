@@ -153,6 +153,18 @@ export const listActivity = (
     undefined,
     options,
   );
+/** Server-side unread badge; unlike the browser-local activity list this is org data. */
+export const getActivityUnreadCount = (
+  orgId: string,
+  scope: 'all' | 'my_department' = 'all',
+  options?: IdentityOptions,
+) =>
+  request<{ unread_count: number }>(
+    `/activity/unread-count${qs({ org_id: orgId, scope })}`,
+    'GET',
+    undefined,
+    options,
+  ).then((result) => result.unread_count ?? 0);
 export const markActivityRead = (orgId: string, eventId: string, options?: IdentityOptions) =>
   request<unknown>(`/activity/${eventId}/read${qs({ org_id: orgId })}`, 'POST', undefined, options);
 export const markAllActivityRead = (

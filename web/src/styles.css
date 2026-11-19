@@ -1741,3 +1741,315 @@ button.quiet .tag {
   display: grid;
   gap: 8px;
 }
+/* ---------------------------------------------------------------------------
+   Approval status UI (`approval-ui-polish`): shared badge, waiting banner,
+   submission cards and semantic toasts.
+   --------------------------------------------------------------------------- */
+
+.document-status-line {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.document-readonly {
+  margin: 3px 0 0;
+}
+
+.document-latest-comment {
+  margin: 3px 0 0;
+  color: var(--text);
+}
+
+/* Status badge: icon + word; colour is additive, never the only signal. */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-tag);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.status-badge-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.status-badge--neutral {
+  background: var(--status-unknown-bg);
+  color: var(--status-unknown);
+  border-color: #d8dcdc;
+}
+
+.status-badge--processing {
+  background: #e8f1fd;
+  color: #0a5ad4;
+  border-color: #c5d9f7;
+}
+
+.status-badge--success {
+  background: var(--status-ok-bg);
+  color: var(--status-ok);
+  border-color: #b9dcc8;
+}
+
+.status-badge--warning {
+  background: var(--status-warn-bg);
+  color: var(--status-warn);
+  border-color: #ecd6a8;
+}
+
+.status-badge--error {
+  background: var(--status-bad-bg);
+  color: var(--status-bad);
+  border-color: #efc3c8;
+}
+
+/* Waiting banner + four-step path. */
+.approval-banner {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius);
+  background: #fafbfc;
+}
+
+.approval-banner--processing {
+  border-left-color: #0a5ad4;
+  background: #f6f9fe;
+}
+
+.approval-banner--success {
+  border-left-color: var(--status-ok);
+  background: var(--status-ok-bg);
+}
+
+.approval-banner--warning {
+  border-left-color: var(--status-warn);
+  background: var(--status-warn-bg);
+}
+
+.approval-banner--error {
+  border-left-color: var(--status-bad);
+  background: var(--status-bad-bg);
+}
+
+.approval-banner-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.approval-banner-title {
+  font-size: 13px;
+}
+
+.approval-banner-head button {
+  margin-left: auto;
+}
+
+.approval-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  list-style: none;
+  margin: 10px 0 6px;
+  padding: 0;
+}
+
+.approval-step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.approval-step + .approval-step::before {
+  content: '';
+  flex: 1 1 12px;
+  height: 1px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+.approval-step-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.approval-step--done {
+  color: var(--status-ok);
+}
+
+.approval-step--done .approval-step-dot {
+  border-color: var(--status-ok);
+  background: var(--status-ok-bg);
+}
+
+.approval-step--current {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.approval-step--current .approval-step-dot {
+  border-color: #0a5ad4;
+  background: #e8f1fd;
+  color: #0a5ad4;
+}
+
+.approval-step--upcoming {
+  color: var(--muted);
+}
+
+.approval-step--upcoming .approval-step-dot {
+  color: var(--muted);
+}
+
+.approval-banner-meta,
+.approval-banner-comment,
+.approval-banner-readonly {
+  margin: 2px 0 0;
+}
+
+.approval-banner-comment {
+  color: var(--text);
+}
+
+/* Applicant submission cards. */
+.submission-cards {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+
+.submission-card {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+}
+
+.submission-card[data-status='pending_first'],
+.submission-card[data-status='pending_second'] {
+  border-left-color: #0a5ad4;
+}
+
+.submission-card[data-status='approved'] {
+  border-left-color: var(--status-ok);
+}
+
+.submission-card[data-status='returned'] {
+  border-left-color: var(--status-warn);
+}
+
+.submission-card[data-status='rejected'] {
+  border-left-color: var(--status-bad);
+}
+
+.submission-card[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.submission-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Toasts: top-right stack, live region, dismissible. */
+.toast-stack {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 200;
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 6px 20px #1c243022;
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+.toast--success {
+  border-left-color: var(--status-ok);
+}
+
+.toast--info {
+  border-left-color: #0a5ad4;
+}
+
+.toast--warning {
+  border-left-color: var(--status-warn);
+}
+
+.toast--error {
+  border-left-color: var(--status-bad);
+  background: var(--status-bad-bg);
+}
+
+.toast-icon {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.toast-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-action {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+}
+
+.toast-dismiss {
+  flex: 0 0 auto;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}

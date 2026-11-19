@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.approval.service import ApprovalService
 from app.automation.run_service import AutomationRunService
 from app.automation.service import AutomationService
 from app.automation.store import AutomationStore
@@ -28,6 +29,7 @@ class HostServices:
     documents: DocumentService
     automation: AutomationService
     runs: AutomationRunService
+    approvals: ApprovalService
     identity: FakeIdentity
     clock: SystemClock
     ids: SystemIds
@@ -80,6 +82,7 @@ def build_host_services(
             authorizer=document_access,
             activity=activity,
         ),
+        approvals=ApprovalService(store, document_access, ids, activity),
         identity=resolved_identity,
         clock=clock,
         ids=ids,

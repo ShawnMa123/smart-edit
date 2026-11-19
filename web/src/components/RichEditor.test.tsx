@@ -664,3 +664,36 @@ describe('page presentation (3.1, 3.2)', () => {
   });
 });
 });
+describe('approval state (document-submission-approval)', () => {
+  const renderApproval = (over: Partial<Parameters<typeof RichEditor>[0]>) =>
+    render(
+      <RichEditor
+        document={plainTextToDocument('DEMAND GUARANTEE')}
+        onChange={() => undefined}
+        documentId="demo-document"
+        versions={2}
+        draftRevision={3}
+        lockHeld={false}
+        {...over}
+      />,
+    );
+
+  it('shows the approval status and disables editing while pending', () => {
+    renderApproval({ submissionStatus: 'pending_first', readOnly: true });
+    expect(screen.getByTestId('approval-status').textContent).toContain(
+      'Pending first approval',
+    );
+    expect((screen.getByRole('button', { name: 'Submit new version' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Start editing' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows the return reason and allows editing again', () => {
+    renderApproval({
+      submissionStatus: 'returned',
+      submissionComment: 'add the expiry date',
+      readOnly: false,
+    });
+    expect(screen.getByTestId('return-reason').textContent).toContain('add the expiry date');
+    expect((screen.getByRole('button', { name: 'Submit new version' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
