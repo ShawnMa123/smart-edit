@@ -4,8 +4,47 @@
 
 **周期**：至 2026-11-18 ｜ **团队**：3 人 ｜ **规格管理**：OpenSpec
 
-> 演示（下周 Demo）：见 **[DEMO.md](DEMO.md)** —— 地址/账号、15 分钟分镜脚本、可粘贴样例、
-> 运维与数据恢复、诚实边界、故障排查、Q&A 预演。
+**文档地图**：本文件（架构/契约/API）· **[DEMO.md](DEMO.md)**（评审演示：脚本、样例、运维、Q&A）·
+**[how_to_use.md](how_to_use.md)**（逐功能使用说明）· **[deploy/README.md](deploy/README.md)**（部署与排障）
+
+---
+
+## 评审委员会：在线试用（3 步）
+
+| 项 | 值 |
+|---|---|
+| 地址 | **http://59.110.213.187:8082/** （HTTP，无需 VPN；建议 Chrome/Edge，窗口宽度 ≥ 1400px） |
+| 账号 | `applicant@atlas-trade.test` / `Applicant!2026`（提交人）<br>`bankops@atlas-trade.test` / `BankOps!2026`（一审）<br>`compliance@atlas-trade.test` / `Compliance!2026`（二审）<br>`admin@atlas-trade.test` / `AtlasAdmin!2026`（管理员） |
+| 健康检查 | `curl http://59.110.213.187:8082/health` → `{"status":"ok","auth_mode":"pg"}` |
+| 数据 | 演示组织 `Atlas Trade Bank`（`ws_demo_01`），单一文档 `demo-document` |
+
+### 3 条最值得试的路径
+
+| 想验证什么 | 怎么做 | 预期 |
+|---|---|---|
+| **合规风险能不能拦住** | 登录 applicant → 编辑器 `Cmd/Ctrl+A` 全选 → 粘贴[制裁样例](fixtures/legal-samples/sanctions-export-zh.txt) → 等 2 秒 → 右侧 `Legal → Document check → Scan document` | `Gate: Blocked`；`Sensitive goods destined for a sanctioned country`（Critical/Blocks），带 `弹药/导弹/军用无人机/伊朗` 四个草稿锚点，点 `Jump to clause` 可回跳 |
+| **法条结论有没有证据** | 粘贴[中文保函样例](fixtures/legal-samples/statute-zh.txt) → 同样扫描 | 2 条确定性措辞 + 2 条法条结论（引《…规定》第一条/第三条，附条号/法域/生效日） |
+| **要件审计是否逐项可数** | 粘贴[标准保函](fixtures/llm/sample_document.txt) → 右侧 `Audit` → `Customer template` 填 `adidas-guarantee` → `Run spec audit` | 57 项检查：`pass 36 / finding 1 / not_applicable 19 / unable 1`，唯一阻断为"开立日期早于审计日" |
+
+其它可看：`Knowledge` 点「独立保函必须载明哪些事项才有效？」（约 10 秒，5 条引用）；
+用 `bankops` / `compliance` 登录后在 `Approval` 完成一审/二审；顶栏 `Activity` / `People` / `Developer`。
+
+### 试用时请留意（也是我们想被检验的点）
+
+- **粘贴会替换当前草稿**（演示只有一份文档）。想恢复初始文本：
+  `ssh -i ~/.ssh/team04_ecs root@59.110.213.187 'cd /opt/smart-edit && .venv/bin/python scripts/seed_identity_users.py'`
+- **"没查到"不等于"没问题"**：报告里 `Planned N · assessed M (x%)`、`unchecked_units`、`low_confidence`
+  就是在区分"检查过并放过"与"根本没查成"。
+- **模型不能造证据**：法条结论只能引用检索到的 chunk；模型不能把严重度提到 `Critical`，也不能直接阻断。
+- **联网是用户选择**：默认关闭；勾选后只把未覆盖条款的标题发出去，结果一律标 `Unverified web source`。
+- **英文条款常显示 "Unable to assess"**：法规语料目前以 CN/EU/INT/US/WTO 的贸易与海关规则为主；
+  这是如实告知，不是故障（换成中文样例即可看到法条结论）。
+- **不是筛查服务**：没有接 OFAC/BIS 名单，也没有货物分类与许可判断；结论是"需要人复核的红黄线"。
+
+完整脚本、样例全文、故障排查与 Q&A 预演见 **[DEMO.md](DEMO.md)**。
+遇到问题先看 `deploy/README.md` 的排障表，或把 `http://59.110.213.187:8082/health` 的返回贴给我们。
+
+> 想在自己机器上跑：见下文 **[本地运行（5 分钟）](#本地运行5-分钟)**（不需要模型 key 也能跑主要功能）。
 
 ---
 
@@ -70,21 +109,90 @@ ingest → parse → extract → normalize → reset → (Agent2 要件校验 �
 
 ---
 
-## 快速开始
+## 本地运行（5 分钟）
+
+### 0. 前提
+
+- Python ≥ 3.11（3.12 验证过）、`pip`
+- Node ≥ 18 + `npm`（前端 Vite 5）
+- macOS / Linux（Windows 建议 WSL）
+- 不需要模型 key、不需要数据库也能把主要功能跑起来（见 §本地能力对照）
+
+### 1. 装依赖
 
 ```bash
-pip install -e .
-./scripts/dev.sh                       # 一条命令起后端 :8000 + 前端 :5173；日志实时打印，Ctrl+C 一起停
-./scripts/dev.sh --pg                  # PG 身份模式：自动检查/启动 team04 隧道
-./scripts/dev.sh --pg --detach --open  # 后台运行 + 自动打开浏览器
-./scripts/dev.sh --status              # 查看端口 / PID / PG 隧道 / health
-./scripts/stop.sh                      # 停止 dev 服务（后台启动的也能停）
-./scripts/stop.sh --tunnel             # 同时关闭 PG 隧道
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .     # 后端：FastAPI / LangGraph / PyMuPDF / psycopg …
+npm --prefix web ci                      # 前端（或 npm --prefix web install）
+cp .env.example .env                     # 可选；不配也能跑，见下一节
+```
+
+### 2. 起服务
+
+```bash
+./scripts/dev.sh          # 后端 :8000 + 前端 :5173，日志同屏；Ctrl+C 一起停
+```
+
+浏览器打开 **http://localhost:5173**（Vite 默认只监听 `localhost`，用 `127.0.0.1` 可能打不开；
+它把 `/api` 代理到 `127.0.0.1:8000`，与线上 nginx 行为一致）。
+
+### 3. 本地能力对照（不配 `.env` 时）
+
+| 能力 | 本地默认 | 说明 |
+|---|---|---|
+| 规则审计 `Audit`（要件/规则/覆盖率/闸门） | ✅ 完整 | 确定性抽取 profile + 规则包，不需要模型 |
+| 法规/合规扫描的确定性部分 | ✅ 完整 | 要素、日期、高风险措辞、制裁/出口管制组合判定 |
+| 法条证据（RAGFlow） | ⚠️ 关闭 | 需要 `SMART_EDIT_STATUTE=1` + `MERCATORIA_BASE_URL/TOKEN` |
+| 模型综合 / 联网 | ⚠️ 关闭 | 需要 `SMART_EDIT_ASSISTANT_*`（Ark key）；关闭时结论显示 `unable_to_assess`，不会假装通过 |
+| 账号登录 | fake 模式 | 没有登录页，直接进入演示工作台；真实账号见 §5 |
+
+### 4. 想开完整能力
+
+复制 `.env.example` 为 `.env`，填 Ark key 与 Mercatoria 地址（都在 `.env.example` 的注释里）；
+或者直接用线上站（见上一节"评审委员会：在线试用"），那里模型、法规语料、真实账号都是开着的。
+
+### 5. 真实账号模式（仅内部，需要 team04 PG 隧道）
+
+```bash
+ssh -f -N team04-pg                                # 127.0.0.1:15432 → RDS
+./scripts/dev.sh --pg                              # 自动检查/启动隧道
+.venv/bin/python scripts/seed_identity_users.py    # 写 5 个演示账号（密码见 DEMO.md）
+```
+
+### 6. 测试与自检
+
+```bash
+.venv/bin/python -m pytest tests -q                            # 后端：856 passed / 27 skipped
+npm --prefix web run typecheck && npm --prefix web run test    # 前端：typecheck + 545 passed
+.venv/bin/python -m app.rules.doctor                           # 规则包体检（退出码即门禁）
+.venv/bin/python scripts/audit_demo.py                         # 打印计划/覆盖率/闸门（无需模型）
+```
+
+### 7. 常见问题
+
+| 现象 | 处理 |
+|---|---|
+| `缺少 .venv` / `缺少 web/node_modules` | 按 §1 安装（`dev.sh` 会打印确切命令） |
+| 端口被占用 | `./scripts/dev.sh --status`；或加 `--force`；或 `PORT=8010 WEB_PORT=5174 ./scripts/dev.sh` |
+| 页面能开但接口 404/500 | 后端没起：`./scripts/dev.sh --status`，或单独 `uvicorn app.api.main:app --reload` |
+| 打开 5173 没看到登录页 | 本地是 `fake` 身份模式，这是预期；要登录页用 `--pg` |
+| `127.0.0.1:5173` 打不开、`localhost:5173` 正常 | Vite 默认只监听 `localhost`（IPv6）；用 `localhost` 即可 |
+| `--pg` 报 PG 不可达 | 先 `ssh -f -N team04-pg`，或改用 `--fake` |
+| Playwright e2e 缺浏览器 | `cd web && npx playwright install chromium` |
+| 改了后端不生效 | `dev.sh` 默认**不**热重载：Ctrl+C 后重跑；需要自动重载就直接 `uvicorn app.api.main:app --reload` |
+
+### 8. 开发命令速查
+
+```bash
+./scripts/dev.sh                       # 后端 :8000 + 前端 :5173
+./scripts/dev.sh --pg --detach --open  # PG 身份 + 后台 + 自动开浏览器
+./scripts/dev.sh --honest              # 关掉模型 provider（演示"检查没跑"的诚实路径）
+./scripts/dev.sh --status              # 端口 / PID / PG 隧道 / health
+./scripts/stop.sh                      # 停止 dev 服务
+./scripts/stop.sh --tunnel             # 同时关 PG 隧道
 ./scripts/stop.sh --all                # 连 Playwright e2e 端口一起清
-uvicorn app.api.main:app --reload      # 只要后端时
-langgraph dev          # 在 LangSmith Studio 里看图和回放
-.venv/bin/python scripts/audit_demo.py   # 规范审计组：一条命令打印计划 / 覆盖率 / 闸门决策（无需模型）
-.venv/bin/python -m app.rules.doctor     # 规则包体检：字段引用 / 冲突 / 向量完整性 / 计划单元数（退出码即门禁）
+uvicorn app.api.main:app --reload      # 只要后端
+langgraph dev                          # LangSmith Studio 里看图和回放
 ```
 
 ---
