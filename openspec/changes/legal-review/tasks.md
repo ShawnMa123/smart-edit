@@ -1,10 +1,8 @@
 # Tasks
 
-## 1. 契约与确定性规则核
+## 1. 契约
 
-- [x] 1.1 `app/legal_review/contracts.py`：`ReviewCreate/ReviewRun/ReviewReport/CheckResult/Finding` 等 DTO 与枚举（对齐 v2 规格 §8.2）。验证：`tests/test_legal_review.py`
-- [x] 1.2 `app/legal_review/rules.py`：受限 DSL `exists/compare` 三值逻辑。验证：单测覆盖 missing/unconfirmed/confirmed、compare 各比较符与类型不匹配
-- [x] 1.3 `app/legal_review/service.py`：`run_deterministic` + `DEMO-AMOUNT-REQUIRED`。验证：金额缺失→Critical、确认→pass、未确认→unable_to_assess
+- [x] 1.1 `app/legal_review/contracts.py`：`ReviewCreate/ReviewRun/ReviewReport/CheckResult/Finding` 等 DTO 与枚举（对齐 v2 规格 §8.2）。验证：`tests/test_legal_review_legal.py`
 
 ## 2. 法规复用与映射
 
@@ -15,7 +13,7 @@
 ## 3. 前端 LegalPanel
 
 - [x] 3.1 `web/src/api/legal.ts` 客户端 + 契约类型。验证：`tsc --noEmit`
-- [x] 3.2 `LegalPanel.tsx`：法规问答（建议 chip + 正文 markdown 渲染 + 引用卡片）+ 规则检查（三种事实态）。验证：`LegalPanel.test.tsx`、`AssistantPanel.test.tsx`
+- [x] 3.2 `LegalPanel.tsx`：法规问答（建议 chip + 正文 markdown 渲染 + 引用卡片 + 引用 chip 点击跳转）。验证：`LegalPanel.test.tsx`、`AssistantPanel.test.tsx`
 - [x] 3.3 `AssistantPanel.tsx` legal tab `'not-implemented'`→`'full'`；`App.tsx` 传 legal binding。验证：`AssistantPanel.test.tsx`
 
 ## 4. 诚实性验收（真实服务）
@@ -26,4 +24,4 @@
 
 ## 5. 回归
 
-- [x] 5.1 `pytest tests/test_legal_review.py tests/test_legal_review_legal.py`、`npm --prefix web run typecheck`、`npm --prefix web run test`（AssistantPanel + LegalPanel）全绿
+- [x] 5.1 `pytest tests/test_legal_review_legal.py`、`npm --prefix web run typecheck`、`npm --prefix web run test`（AssistantPanel + LegalPanel）全绿

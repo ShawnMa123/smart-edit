@@ -1,7 +1,8 @@
-"""Legal review service — L1 deterministic slice.
+"""Legal review service — legal advice slice (L1).
 
-One synthetic rule runs synchronously over supplied facts and produces a CheckResult +
-Finding. This is the minimal vertical loop, not the async worker (that is L2).
+`modes=["legal"]` reuses `StatuteRetriever.chat_detailed()` (`/v1/chat`) and maps the outcome onto
+a `Finding` + `CheckResult`. The deterministic rule engine is not part of this module (it belongs to
+the audit capability); any other `mode` is reported as `not_implemented`, never as "no findings".
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.legal_review.contracts import CheckResult, Finding, ReviewCreate, ReviewReport, ReviewRun
-from app.legal_review.rules import Rule, evaluate
 
 
 def _utcnow() -> datetime:
@@ -21,95 +21,6 @@ def _utcnow() -> datetime:
 
 def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
-
-
-# ── synthetic rule bundle (spec §14.2: one synthetic rule first) ───────────────
-_DEMO_AMOUNT_REQUIRED = Rule(
-    rule_id="DEMO-AMOUNT-REQUIRED",
-    version="1",
-    title="Missing amount",
-    domain="template",
-    severity="Critical",
-    gate_type="hard_block",
-    target_operations=("start_approval",),
-    applicability={},
-    required_facts=(),
-    expression={"op": "exists", "field_id": "amount"},
-    explanation="The synthetic template requires an amount before approval.",
-)
-
-_RULES = (_DEMO_AMOUNT_REQUIRED,)
-
-
-def _evaluate_rule(rule: Rule, facts: dict) -> CheckResult:
-    missing = [f for f in rule.required_facts if (facts.get(f) or {}).get("state") == "missing"]
-    if missing:
-        return CheckResult(
-            check_id=f"check_{rule.rule_id.lower()}",
-            method="deterministic",
-            scope_key=rule.domain,
-            status="needs_input",
-            rule_refs=[{"rule_id": rule.rule_id, "version": rule.version}],
-            reason_codes=["missing_required_facts"],
-            missing_facts=missing,
-        )
-
-    verdict = evaluate(rule.expression, facts)
-    if verdict is False:
-        finding = _make_finding(rule)
-        return CheckResult(
-            check_id=f"check_{rule.rule_id.lower()}",
-            method="deterministic",
-            scope_key=rule.domain,
-            status="finding",
-            rule_refs=[{"rule_id": rule.rule_id, "version": rule.version}],
-            reason_codes=["rule_violated"],
-            finding_ids=[finding.finding_id],
-        )
-    if verdict is True:
-        return CheckResult(
-            check_id=f"check_{rule.rule_id.lower()}",
-            method="deterministic",
-            scope_key=rule.domain,
-            status="pass",
-            rule_refs=[{"rule_id": rule.rule_id, "version": rule.version}],
-        )
-    return CheckResult(
-        check_id=f"check_{rule.rule_id.lower()}",
-        method="deterministic",
-        scope_key=rule.domain,
-        status="unable_to_assess",
-        rule_refs=[{"rule_id": rule.rule_id, "version": rule.version}],
-        reason_codes=["unconfirmed_fact"],
-    )
-
-
-def _make_finding(rule: Rule) -> Finding:
-    return Finding(
-        finding_id=f"lf_{uuid.uuid4().hex[:12]}",
-        check_id=f"check_{rule.rule_id.lower()}",
-        method="deterministic",
-        category="field",
-        severity=rule.severity,
-        gate_type=rule.gate_type,
-        target_operations=list(rule.target_operations),
-        title=rule.title,
-        explanation=rule.explanation,
-        rule_refs=[{"rule_id": rule.rule_id, "version": rule.version}],
-        applicability={"jurisdictions": [], "assessment_date": _iso(_utcnow())[:10], "conditions": [], "limitations": ["Missing field has no text anchor"]},
-    )
-
-
-def run_deterministic(facts: dict) -> tuple[list[CheckResult], list[Finding]]:
-    """Run every deterministic rule once; a missing required fact is needs_input, never pass."""
-    checks: list[CheckResult] = []
-    findings: list[Finding] = []
-    for rule in _RULES:
-        check = _evaluate_rule(rule, facts)
-        checks.append(check)
-        if check.status == "finding":
-            findings.append(_make_finding(rule))
-    return checks, findings
 
 
 _LEGAL_CHECK_ID = "check_legal"
@@ -288,7 +199,6 @@ def run_legal(
 
 def create_review(
     request: ReviewCreate,
-    facts: dict,
     *,
     statute: Any = None,
     principal: Any = None,
@@ -300,21 +210,30 @@ def create_review(
 
     checks: list[CheckResult] = []
     findings: list[Finding] = []
-    if "deterministic" in request.modes:
-        d_checks, d_findings = run_deterministic(facts)
-        checks.extend(d_checks)
-        findings.extend(d_findings)
-    if "legal" in request.modes:
-        l_checks, l_findings = run_legal(
-            statute,
-            principal,
-            request.workspace_id,
-            request.question,
-            applicable_on=request.applicable_on,
-            jurisdiction_codes=request.jurisdiction_codes,
-        )
-        checks.extend(l_checks)
-        findings.extend(l_findings)
+    for mode in request.modes:
+        if mode == "legal":
+            l_checks, l_findings = run_legal(
+                statute,
+                principal,
+                request.workspace_id,
+                request.question,
+                applicable_on=request.applicable_on,
+                jurisdiction_codes=request.jurisdiction_codes,
+            )
+            checks.extend(l_checks)
+            findings.extend(l_findings)
+        else:
+            # The deterministic / semantic engines are not part of this module (they belong to the
+            # audit capability). An unbuilt method is "could not check", never "no findings".
+            checks.append(
+                CheckResult(
+                    check_id=f"check_{mode}",
+                    method=mode,
+                    scope_key=mode,
+                    status="unable_to_assess",
+                    reason_codes=["not_implemented"],
+                )
+            )
 
     completion = "complete"
     if findings:

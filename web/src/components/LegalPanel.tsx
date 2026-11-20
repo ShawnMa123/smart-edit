@@ -1,12 +1,9 @@
 /**
- * Legal panel (L1 slice): statute advice + deterministic rule check.
+ * Legal panel (L1 slice): statute advice.
  *
- * - Advice mode asks the statute service (`/v1/chat`) and shows the advice plus traceable citations.
- * - Rule mode runs the synthetic `DEMO-AMOUNT-REQUIRED` rule over three fact states so the three
- *   outcomes (missing -> Critical, confirmed -> pass, unconfirmed -> unable_to_assess) are visible.
- *
- * "Not checked" is shown as `unable_to_assess`/`failed`, never as "no problem": the backend
- * aggregates that invariant and this panel surfaces each coverage check status verbatim.
+ * Asks the statute service (`/v1/chat`) and shows the advice plus traceable citations. "Not checked"
+ * is shown as `unable_to_assess`/`failed`, never as "no problem": the backend aggregates that
+ * invariant and this panel surfaces each coverage check status verbatim.
  */
 
 import { useRef, useState, type ReactNode } from 'react';
@@ -19,7 +16,6 @@ import {
   type Finding,
   type FindingAnchor,
   type LegalClient,
-  type LegalMethod,
   type LegalOptions,
   type ReviewReport,
   type SupportLevel,
@@ -33,7 +29,6 @@ export interface LegalPanelProps {
   options?: LegalOptions;
 }
 
-type Mode = 'advice' | 'rule';
 type Tone = 'ok' | 'warn' | 'bad' | 'muted';
 
 const OUTCOME_LABEL: Record<ReviewReport['outcome'], string> = {
@@ -87,16 +82,6 @@ const CHECK_STATUS_LABEL: Record<CheckStatus, string> = {
   unable_to_assess: '无法评估',
   failed: '失败',
 };
-
-const RULE_PRESETS = [
-  { id: 'missing', label: 'Amount missing', facts: {} },
-  {
-    id: 'confirmed',
-    label: 'Amount confirmed',
-    facts: { amount: { state: 'confirmed', value: '500000.00' } },
-  },
-  { id: 'unconfirmed', label: 'Amount unconfirmed', facts: { amount: { state: 'unconfirmed' } } },
-] as const;
 
 /** One-click questions for the statute corpus — keeps a live demo from stalling. */
 const SUGGESTIONS = [
@@ -356,25 +341,21 @@ export function LegalPanel({
   client = legalClient,
   options = {},
 }: LegalPanelProps) {
-  const [mode, setMode] = useState<Mode>('advice');
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<ReviewReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
 
-  const run = async (
-    modes: LegalMethod[],
-    extra: { question?: string; facts?: Record<string, unknown> },
-  ) => {
+  const run = async (question: string) => {
     const accepted = await client.submitReview(
       {
         workspace_id: workspaceId,
         document_id: documentId,
         snapshot_id: 'demo-snapshot',
         facts_version_id: 'demo-facts',
-        modes,
-        ...extra,
+        modes: ['legal'],
+        question,
       },
       options,
     );
@@ -391,118 +372,57 @@ export function LegalPanel({
     setError(null);
     setReport(null);
     try {
-      setReport(await run(['legal'], { question: trimmed }));
+      setReport(await run(trimmed));
     } catch (failure) {
       setError(failure instanceof ApiError ? explainError(failure.code) : String(failure));
     } finally {
       setBusy(false);
     }
-  };
-
-  const runRule = async (facts: Record<string, unknown>) => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    setReport(null);
-    try {
-      setReport(await run(['deterministic'], { facts }));
-    } catch (failure) {
-      setError(failure instanceof ApiError ? explainError(failure.code) : String(failure));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const switchMode = (next: Mode) => {
-    setMode(next);
-    setReport(null);
-    setError(null);
-    setQuestion('');
   };
 
   return (
     <div className="legal-panel">
-      <div className="legal-modes" role="tablist" aria-label="Legal review mode">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'advice'}
-          onClick={() => switchMode('advice')}
-        >
-          Statute advice
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'rule'}
-          onClick={() => switchMode('rule')}
-        >
-          Rule check
-        </button>
-      </div>
-
-      {mode === 'advice' ? (
-        <div className="legal-section">
-          <p className="notice notice--warn tiny" role="status">
-            仅供参考 · 由法规语料支撑。
-          </p>
-          <div className="legal-suggestions" role="group" aria-label="建议问题">
-            {SUGGESTIONS.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setQuestion(suggestion);
-                  questionRef.current?.focus();
-                }}
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-          <label className="tiny muted" htmlFor="legal-question">
-            Legal question
-          </label>
-          <textarea
-            id="legal-question"
-            aria-label="Legal question"
-            ref={questionRef}
-            value={question}
-            disabled={busy}
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ask a statute question, e.g. “Is the amount required before approval?”"
-          />
-          <div className="row">
-            <button type="button" onClick={() => void askAdvice()} disabled={busy || !question.trim()}>
-              Ask
+      <div className="legal-section">
+        <p className="notice notice--warn tiny" role="status">
+          仅供参考 · 由法规语料支撑。
+        </p>
+        <div className="legal-suggestions" role="group" aria-label="建议问题">
+          {SUGGESTIONS.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setQuestion(suggestion);
+                questionRef.current?.focus();
+              }}
+            >
+              {suggestion}
             </button>
-          </div>
+          ))}
         </div>
-      ) : (
-        <div className="legal-section">
-          <p className="notice tiny" role="status">
-            Synthetic rule <code>DEMO-AMOUNT-REQUIRED</code> — the amount must be present before
-            approval.
-          </p>
-          <div className="legal-presets" role="group" aria-label="Fact state">
-            {RULE_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                disabled={busy}
-                onClick={() => void runRule({ ...preset.facts })}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
+        <label className="tiny muted" htmlFor="legal-question">
+          Legal question
+        </label>
+        <textarea
+          id="legal-question"
+          aria-label="Legal question"
+          ref={questionRef}
+          value={question}
+          disabled={busy}
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="Ask a statute question, e.g. “Is the amount required before approval?”"
+        />
+        <div className="row">
+          <button type="button" onClick={() => void askAdvice()} disabled={busy || !question.trim()}>
+            Ask
+          </button>
         </div>
-      )}
+      </div>
 
       {busy ? (
         <p className="notice tiny" role="status">
-          {mode === 'advice' ? '检索法规中，通常需 2–5 秒…' : '规则检查中…'}
+          检索法规中，通常需 2–5 秒…
         </p>
       ) : null}
 

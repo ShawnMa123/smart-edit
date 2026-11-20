@@ -1,8 +1,7 @@
 """HTTP surface for the legal review module (`/legal/*`).
 
-L1 slice: synchronous, deterministic-only, in-memory. The async worker and persistence
-are L2. `facts` is carried on the request body for the demo only — the real pipeline will
-resolve it from `facts_version_id` against the host (spec §4.1).
+L1 slice: synchronous legal advice (`modes=["legal"]`) via the statute service, in-memory. The
+async worker and persistence are L2. The deterministic/semantic engines are not part of this module.
 """
 
 from __future__ import annotations
@@ -20,8 +19,7 @@ _REPORTS: dict[str, ReviewReport] = {}
 
 
 class ReviewSubmit(ReviewCreate):
-    # Temporary demo field; the host resolves facts from facts_version_id in the real flow.
-    facts: dict = {}
+    pass
 
 
 @router.post("/reviews", status_code=202, response_model=ReviewRun)
@@ -33,7 +31,7 @@ def submit_review(submit: ReviewSubmit, request: Request, response: Response) ->
     principal = getattr(request.state, "principal", None) or Principal(
         user_id="user_demo_01", workspace_id=submit.workspace_id
     )
-    run, report = create_review(submit, submit.facts, statute=statute, principal=principal)
+    run, report = create_review(submit, statute=statute, principal=principal)
     _REPORTS[report.report_id] = report
     response.headers["Location"] = f"/legal/reports/{report.report_id}"
     return run

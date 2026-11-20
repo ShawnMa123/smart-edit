@@ -911,33 +911,6 @@ button.primary {
   gap: 8px;
 }
 
-.legal-modes {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.legal-modes button {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 5px 3px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.legal-modes button[aria-selected='true'] {
-  color: var(--text);
-  font-weight: 600;
-  border-bottom-color: var(--accent);
-  background: var(--surface);
-}
-
 .legal-section {
   display: flex;
   flex-direction: column;
@@ -949,16 +922,6 @@ button.primary {
   min-height: 64px;
   font: inherit;
   resize: vertical;
-}
-
-.legal-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.legal-presets button {
-  font-size: 12px;
 }
 
 .legal-suggestions {

@@ -58,7 +58,7 @@ def _submit(modes, question=None, statute=None):
         question=question,
     )
     return create_review(
-        request, {}, statute=statute, principal=Principal("u1", "ws_demo")
+        request, statute=statute, principal=Principal("u1", "ws_demo")
     )
 
 

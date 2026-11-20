@@ -1,6 +1,6 @@
 """DTOs and enums for the legal review module (spec `AI-Law_agent_reqirement.md` §8.2).
 
-L1 slice: the deterministic check subset. snake_case, strict enums, no unknown fields.
+L1 slice: legal advice (`modes=["legal"]`). snake_case, strict enums, no unknown fields.
 """
 
 from __future__ import annotations

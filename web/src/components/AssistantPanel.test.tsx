@@ -103,18 +103,6 @@ describe('AssistantPanel', () => {
     expect(screen.queryByRole('button', { name: /Run spec audit/i })).toBeNull();
   });
 
-  it('switches to the deterministic rule check with three fact states', async () => {
-    renderPanel();
-
-    await userEvent.click(screen.getByRole('tab', { name: 'Legal advice' }));
-    await userEvent.click(screen.getByRole('tab', { name: 'Rule check' }));
-
-    expect(screen.getByRole('button', { name: 'Amount missing' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Amount confirmed' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Amount unconfirmed' })).toBeTruthy();
-    expect(screen.queryByLabelText('Legal question')).toBeNull();
-  });
-
   it('returns to the audit panel from the legal tab', async () => {
     renderPanel();
 
