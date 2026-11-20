@@ -11,6 +11,13 @@
   --radius: 4px;
   --radius-tag: 3px;
   --serif: Georgia, 'Noto Serif SC', serif;
+  /* HSBC-inspired editorial accents: white paper, ink text, one red accent. Scoped to the AI pane
+     and the AI wait box so the rest of the workspace keeps its existing palette. */
+  --hsbc-red: #db0011;
+  --hsbc-red-dark: #a3000d;
+  --hsbc-ink: #1a1a1a;
+  --hsbc-paper: #ffffff;
+  --hsbc-mist: #f6f5f2;
   /* Status tokens: every one of these is always paired with a word (see tokens.ts). */
   --status-ok: #1f7a4d;
   --status-warn: #8a5a00;
@@ -35,7 +42,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--hsbc-red);
   outline-offset: 2px;
 }
 
@@ -1100,6 +1107,19 @@ button.primary {
   border-bottom: 1px solid var(--border);
   padding: 6px 4px;
   vertical-align: top;
+}
+
+/* Hairline table with a sticky header; numbers align like an HSBC statement table. */
+.checks thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.checks td {
+  font-variant-numeric: tabular-nums;
 }
 
 .finding {
@@ -2236,4 +2256,338 @@ button.quiet .tag {
   color: var(--muted);
   background: transparent;
   border: 0;
+}
+/* ---------------------------------------------------------------------------
+   AI working state (audit / knowledge / legal).
+
+   A status card, not a fake progress bar: the providers do not report progress. The thin red rule is
+   indeterminate; elapsed time and the current stage are the only real numbers. HSBC-inspired palette:
+   white paper, ink text, one red accent.
+   --------------------------------------------------------------------------- */
+
+aside[aria-label='AI assistant'] {
+  box-shadow: inset 0 3px 0 var(--hsbc-red);
+}
+
+aside[aria-label='AI assistant'] .assistant-tabs button[aria-selected='true'] {
+  border-bottom-color: var(--hsbc-red);
+}
+
+aside[aria-label='AI assistant'] button.primary {
+  background: var(--hsbc-red);
+  border-color: var(--hsbc-red);
+}
+
+aside[aria-label='AI assistant'] > .row h2 {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Audit stages as the HSBC history-timeline pattern: a thin rule, one red marker per stage. */
+.stage-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 14px;
+  list-style: none;
+}
+
+.stage-timeline::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--border);
+}
+
+.stage-timeline li {
+  position: relative;
+  padding-left: 10px;
+}
+
+.stage-timeline li::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hsbc-red);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.stage-timeline li[data-status='failed']::before {
+  background: var(--status-bad);
+}
+
+.stage-timeline li[data-status='partial']::before,
+.stage-timeline li[data-status='skipped']::before {
+  background: var(--status-warn);
+}
+
+.stage-timeline li[data-status='absent']::before {
+  background: var(--muted);
+}
+
+/* Knowledge run phases inside the wait box: real stages only, no fake percentage. */
+.ai-wait__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: ai-step;
+}
+
+.ai-wait__steps li {
+  position: relative;
+  padding-left: 14px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ai-wait__steps li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.ai-wait__steps li[data-state='done'] {
+  color: var(--hsbc-ink);
+}
+
+.ai-wait__steps li[data-state='done']::before {
+  border-color: var(--hsbc-red);
+  background: var(--hsbc-red);
+}
+
+.ai-wait__steps li[data-state='active'] {
+  color: var(--hsbc-ink);
+  font-weight: 600;
+}
+
+.ai-wait__steps li[data-state='active']::before {
+  border-color: var(--hsbc-red);
+  background: var(--hsbc-red);
+  box-shadow: 0 0 0 3px rgba(219, 0, 17, 0.12);
+}
+
+/* Busy marker on the assistant tab: the tab that started the call keeps saying so. */
+.tag--busy {
+  color: #fff;
+  background: var(--hsbc-red);
+  border-color: var(--hsbc-red);
+}
+
+.assistant-tabs button[aria-busy='true'] .tab-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--hsbc-red);
+  animation: ai-wait-pulse 1.2s ease-in-out infinite;
+}
+
+/* Audit findings as the HSBC history-timeline pattern: one marker per finding, colour by severity. */
+.audit-findings {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 14px;
+}
+
+.audit-findings::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--border);
+}
+
+.audit-findings .finding {
+  position: relative;
+}
+
+.audit-findings .finding::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 11px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hsbc-red);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.audit-findings .finding[data-severity='warn']::before {
+  background: var(--status-warn);
+}
+
+.audit-findings .finding[data-severity='info']::before {
+  background: var(--status-ok);
+}
+
+/* HSBC-style dark utility bar: ink background, white type, one red rule. */
+.topbar {
+  background: var(--hsbc-ink);
+  border-bottom: 3px solid var(--hsbc-red);
+  color: #fff;
+}
+
+.topbar .brand-mark {
+  background: var(--hsbc-red);
+}
+
+.topbar .brand .product {
+  border-left-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.topbar-actions button {
+  color: #fff;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.topbar-actions button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.topbar-actions .badge {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.topbar .session-chip,
+.topbar .muted {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ai-wait {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--hsbc-red);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--hsbc-paper) 0%, var(--hsbc-mist) 100%);
+  box-shadow: 0 8px 20px rgba(26, 26, 26, 0.06);
+}
+
+.ai-wait__progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #f3d9dc;
+  overflow: hidden;
+}
+
+.ai-wait__progress span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  background: var(--hsbc-red);
+  animation: ai-wait-slide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes ai-wait-slide {
+  from {
+    left: -35%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+.ai-wait__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-wait__head strong {
+  color: var(--hsbc-ink);
+  font-size: 13px;
+  letter-spacing: 0.1px;
+}
+
+.ai-wait__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hsbc-red);
+  box-shadow: 0 0 0 3px rgba(219, 0, 17, 0.12);
+  animation: ai-wait-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-wait-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+.ai-wait__message {
+  color: var(--hsbc-ink);
+}
+
+.ai-wait__message code {
+  padding: 0 3px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: #f0efec;
+}
+
+.ai-wait__hint {
+  line-height: 1.5;
+}
+
+.ai-wait .row {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-wait__progress span {
+    left: 0;
+    width: 100%;
+    opacity: 0.35;
+    animation: none;
+  }
+
+  .ai-wait__dot {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
 }

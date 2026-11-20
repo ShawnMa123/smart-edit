@@ -107,7 +107,12 @@ export interface AssistantPanelProps extends AuditPanelProps {
  */
 export function AssistantPanel({ knowledge, automation, legal, ...auditProps }: AssistantPanelProps) {
   const [activeTab, setActiveTab] = useState<string>('audit');
+  const [busyTabs, setBusyTabs] = useState<Record<string, boolean>>({});
   const active = TABS.find((tab) => tab.id === activeTab) ?? TABS[0];
+  const markBusy = (id: string) => (value: boolean) =>
+    setBusyTabs((prev) => (prev[id] === value ? prev : { ...prev, [id]: value }));
+  const isBusy = (id: string): boolean =>
+    id === 'audit' ? auditProps.state.phase === 'running' : Boolean(busyTabs[id]);
 
   return (
     <aside className="pane" aria-label="AI assistant">
@@ -123,14 +128,18 @@ export function AssistantPanel({ knowledge, automation, legal, ...auditProps }: 
             type="button"
             role="tab"
             aria-selected={tab.id === activeTab}
-            aria-label={tabLabel(tab)}
+            aria-busy={isBusy(tab.id)}
+            aria-label={isBusy(tab.id) ? `${tab.label} · working` : tabLabel(tab)}
             onClick={() => setActiveTab(tab.id)}
           >
             <span className="tab-label" aria-hidden="true">
               {tab.shortLabel}
             </span>
-            <span className={`tab-status tag ${tab.statusTone}`} aria-hidden="true">
-              {tab.statusLabel}
+            <span
+              className={`tab-status tag ${isBusy(tab.id) ? 'tag--busy' : tab.statusTone}`}
+              aria-hidden="true"
+            >
+              {isBusy(tab.id) ? 'Working' : tab.statusLabel}
             </span>
           </button>
         ))}
@@ -140,11 +149,11 @@ export function AssistantPanel({ knowledge, automation, legal, ...auditProps }: 
         {active.id === 'audit' ? (
           <AuditPanel {...auditProps} />
         ) : active.id === 'knowledge' ? (
-          <KnowledgePanel {...knowledge} />
+          <KnowledgePanel {...knowledge} onBusyChange={markBusy('knowledge')} />
         ) : active.id === 'automation' ? (
           <AutomationPanel {...automation} />
         ) : active.id === 'legal' ? (
-          <LegalPanel {...legal} />
+          <LegalPanel {...legal} onBusyChange={markBusy('legal')} />
         ) : null}
       </div>
 

@@ -20,6 +20,7 @@ import {
 } from '../tokens';
 import { StatusChip } from './StatusChip';
 import { EmptyState } from './EmptyState';
+import { AiWaitBox } from './AiWaitBox';
 
 export interface AuditPanelProps {
   state: AuditState;
@@ -153,13 +154,18 @@ function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
       ) : null}
 
       {audit.findings.length > 0 ? (
-        <div>
+        <div className="audit-findings">
           <h3 className="tiny muted">Audit findings ({audit.findings.length})</h3>
           <p className="tiny muted">
             Each finding says what is wrong, which field it points at, and which actions it blocks.
           </p>
           {audit.findings.map((finding) => (
-            <div className="finding" key={finding.key} data-testid="audit-finding">
+            <div
+              className="finding"
+              key={finding.key}
+              data-testid="audit-finding"
+              data-severity={finding.severity}
+            >
               <div className="row">
                 <StatusChip token={severityToken(finding.severity)} />
                 <strong>{finding.headline}</strong>
@@ -298,20 +304,18 @@ export function AuditPanel({
     const elapsed = Math.max(0, (now ?? Date.now()) - state.startedAt);
     return (
       <div>
-        <div className="notice" role="status">
-          <h3>Fixed snapshot captured — running checks</h3>
-          <p className="tiny muted">
-            Auditing snapshot <code>{state.snapshot.digest.slice(0, 12)}</code> · {seconds(elapsed)}{' '}
-            elapsed
-          </p>
-        </div>
-        <button type="button" onClick={onStopWaiting}>
-          Stop waiting
-        </button>
-        <p className="muted tiny">
-          This only stops waiting here; the run may still be finishing on the server, and no
-          conclusion is shown.
-        </p>
+        <AiWaitBox
+          title="Fixed snapshot captured — running checks"
+          message={
+            <>
+              Auditing snapshot <code>{state.snapshot.digest.slice(0, 12)}</code>
+            </>
+          }
+          hint="This only stops waiting here; the run may still be finishing on the server, and no conclusion is shown."
+          elapsedMs={elapsed}
+          onCancel={onStopWaiting}
+          cancelLabel="Stop waiting"
+        />
       </div>
     );
   }
@@ -374,7 +378,7 @@ export function AuditPanel({
       </button>
 
       <h3 className="tiny muted">Stages</h3>
-      <ul className="tiny">
+      <ul className="tiny stage-timeline">
         {view.stages.map((row) => (
           <li key={row.stage} data-testid="stage-row" data-stage={row.stage} data-status={row.status}>
             <StatusChip token={stageStatusToken(row.status)} /> <strong>{row.stage}</strong>{' '}

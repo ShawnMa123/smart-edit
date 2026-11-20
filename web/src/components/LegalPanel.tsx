@@ -9,10 +9,11 @@
  * aggregates that invariant and this panel surfaces each coverage check status verbatim.
  */
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { DEFAULT_WORKSPACE } from '../api/assistantTypes';
 import { ApiError, explainError } from '../api/errors';
+import { AiWaitBox } from './AiWaitBox';
 import {
   legalClient,
   type CheckStatus,
@@ -31,6 +32,8 @@ export interface LegalPanelProps {
   /** Injected in tests; defaults to the real client. */
   client?: LegalClient;
   options?: LegalOptions;
+  /** Lets the assistant pane show a "Working" marker on this tab while a review runs. */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 type Mode = 'advice' | 'rule';
@@ -370,6 +373,7 @@ export function LegalPanel({
   workspaceId = DEFAULT_WORKSPACE,
   client = legalClient,
   options = {},
+  onBusyChange,
 }: LegalPanelProps) {
   const [mode, setMode] = useState<Mode>('advice');
   const [question, setQuestion] = useState('');
@@ -377,6 +381,17 @@ export function LegalPanel({
   const [report, setReport] = useState<ReviewReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
+  const busyNotify = useRef(onBusyChange);
+  busyNotify.current = onBusyChange;
+  useEffect(() => {
+    busyNotify.current?.(busy);
+  }, [busy]);
+  useEffect(
+    () => () => {
+      busyNotify.current?.(false);
+    },
+    [],
+  );
 
   const run = async (
     modes: LegalMethod[],
@@ -516,11 +531,19 @@ export function LegalPanel({
       )}
 
       {busy ? (
-        <p className="notice tiny" role="status">
-          {mode === 'advice'
-            ? 'Searching the statute corpus — usually 2–5 seconds…'
-            : 'Running the rule…'}
-        </p>
+        <AiWaitBox
+          title={mode === 'advice' ? 'Asking the statute service' : 'Running the rule check'}
+          message={
+            mode === 'advice'
+              ? 'Searching the statute corpus — usually 2–5 seconds…'
+              : 'Checking the synthetic DEMO-AMOUNT-REQUIRED rule…'
+          }
+          hint={
+            mode === 'advice'
+              ? 'The answer will cite the statute chunks it used, or say it could not assess them.'
+              : undefined
+          }
+        />
       ) : null}
 
       {error ? (

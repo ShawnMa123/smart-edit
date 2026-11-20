@@ -27,6 +27,7 @@ import {
 } from '../api/assistantTypes';
 import { ApiError, explainError } from '../api/errors';
 import type { ActivityKind } from '../workspace/activityStore';
+import { AiWaitBox } from './AiWaitBox';
 import { EmptyState } from './EmptyState';
 import { onboardingCopy, suggestionsFor } from './knowledgeSuggestions';
 
@@ -46,6 +47,8 @@ export interface KnowledgePanelProps {
   pollDelayMs?: number;
   /** Reports a completed or failed knowledge operation to the workspace activity log. */
   onActivity?: (kind: ActivityKind, action: string, detail: string) => void;
+  /** Lets the assistant pane show a "Working" marker on this tab while a run is in flight. */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 const delay = (ms: number): Promise<void> =>
@@ -60,6 +63,26 @@ const SUPPORT_COPY: Record<Answer['support_level'], string> = {
   not_applicable: 'Not applicable: this outcome does not carry evidence.',
 };
 
+/** Real phases reported by the assistant run; no invented stage names. */
+const RUN_STEPS = ['Resolve context', 'Retrieve evidence', 'Compose answer', 'Review'];
+
+const RUN_STEP_INDEX: Record<string, number> = {
+  queued: 0,
+  resolving_context: 0,
+  analyzing: 0,
+  screening: 0,
+  retrieving: 1,
+  local_retrieval: 1,
+  web_search: 1,
+  composing: 2,
+  reviewing: 3,
+  publishing: 3,
+  completed: 4,
+  failed: 4,
+  cancelled: 4,
+  timed_out: 4,
+};
+
 export function KnowledgePanel({
   documentId,
   workspaceId = DEFAULT_WORKSPACE,
@@ -71,6 +94,7 @@ export function KnowledgePanel({
   options = {},
   pollDelayMs = 500,
   onActivity,
+  onBusyChange,
 }: KnowledgePanelProps) {
   const [question, setQuestion] = useState('');
   const [session, setSession] = useState<Session | null>(null);
@@ -306,6 +330,17 @@ export function KnowledgePanel({
   }, [capabilities]);
 
   const busy = phase !== 'idle';
+  const busyNotify = useRef(onBusyChange);
+  busyNotify.current = onBusyChange;
+  useEffect(() => {
+    busyNotify.current?.(busy);
+  }, [busy]);
+  useEffect(
+    () => () => {
+      busyNotify.current?.(false);
+    },
+    [],
+  );
   const activeRun = run && !isTerminal(run.status);
   const webLayer = answer?.retrieval?.find((layer) => layer.layer === 'web');
   const webSummary = answer?.web ?? null;
@@ -483,10 +518,18 @@ export function KnowledgePanel({
         ) : null}
       </div>
 
-      {run ? (
-        <p className="tiny muted" role="status">
-          Run {run.status} · {run.stage}
-        </p>
+      {busy ? (
+        <AiWaitBox
+          title={run ? 'Working on your question' : 'Preparing your question'}
+          message={
+            run
+              ? `Run ${run.status} · ${run.stage}`
+              : 'Creating the snapshot and starting the assistant run…'
+          }
+          steps={RUN_STEPS}
+          activeStep={run ? (RUN_STEP_INDEX[run.stage] ?? 0) : 0}
+          hint="Every claim will cite the evidence returned for this run; nothing is approved automatically."
+        />
       ) : null}
       {error ? (
         <p className="notice notice--bad tiny" role="alert">

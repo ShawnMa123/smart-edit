@@ -61,6 +61,29 @@ describe('AssistantPanel', () => {
     expect(audit.textContent).toContain('Full');
   });
 
+  it('marks the tab as working while its audit runs', () => {
+    render(
+      <AssistantPanel
+        state={{
+          phase: 'running',
+          snapshot: { text: '', digest: 'd'.repeat(64), versionId: null, capturedAt: '' },
+          startedAt: 0,
+        }}
+        currentDigest="digest-1"
+        onRun={vi.fn()}
+        onStopWaiting={vi.fn()}
+        knowledge={knowledge}
+        automation={automation}
+        legal={legal}
+      />,
+    );
+
+    const audit = screen.getByRole('tab', { name: 'Rule audit · working' });
+    expect(audit.getAttribute('aria-busy')).toBe('true');
+    expect(audit.textContent).toContain('Working');
+    expect(screen.getByTestId('ai-wait')).toBeTruthy();
+  });
+
   it('renders the audit panel by default', () => {
     renderPanel();
 
