@@ -36,6 +36,9 @@ REQUIRED_VECTOR_STATUSES = ("pass", "finding", "needs_input")
 _FAILED = "failed"
 # A value that is not in any `allowed_values` list, used to prove an expectation *can* fail.
 _PROBE_FAILING_VALUE = "ZZ-NOT-ALLOWED"
+# Rule vectors for `relative_date: today` need a fixed audit date, or the same pack would demonstrate
+# different outcomes on different days.
+VECTOR_AS_OF = "2026-11-19"
 
 
 def _values(fields: dict) -> dict[str, AuditValue]:
@@ -95,7 +98,9 @@ def inspect(*, schema=None, bundles=None) -> dict:
         for rule in bundle.rules:
             demonstrated = []
             for vector in rule.get("test_vectors") or []:
-                status = evaluate_rule(rule, _values(vector["fields"]), {"schema": schema}).status
+                status = evaluate_rule(
+                    rule, _values(vector["fields"]), {"schema": schema, "as_of": VECTOR_AS_OF}
+                ).status
                 demonstrated.append(status)
                 if status != vector["expect"]:
                     problems.append(

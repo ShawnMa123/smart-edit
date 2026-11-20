@@ -10,11 +10,11 @@ from fastapi.testclient import TestClient
 from app.api.main import create_app
 from app.audit.gate import evaluate_gate
 from app.audit.planner import TEMPLATE_RESOLUTION_UNIT, build_plan
-from app.audit.project import project_issue
+from app.audit.project import project_issue, to_verification
 from app.audit.resolve import AMBIGUOUS
 from app.audit.runner import audit_state
 from app.llm import resolve_llm
-from app.rules.bundles import load_bundles
+from app.rules.bundles import load_bundle, load_bundles
 from app.rules.schema import load_schema
 from app.rules.templates import load_template, load_templates, merge_schema
 from app.runs import RunStore
@@ -31,6 +31,7 @@ VALUES = {
     "expiry_date": "2027-03-12",
     "governing_rules": "URDG 758",
 }
+TEST_AS_OF = "2026-03-12"
 DOCUMENT = "\n".join(
     [
         "DEMAND GUARANTEE",
@@ -79,8 +80,8 @@ def test_template_units_join_the_plan_and_the_total_is_conserved():
     template_units = [unit for unit in plan if unit.family == "template"]
     assert len(template_units) == 6
     assert len({unit.check_id for unit in plan}) == len(plan)
-    # 39 base schema units + `origin_country`'s type unit + 6 rules + 6 evidence + 6 template units
-    assert len(plan) == 58
+    # 39 base schema units + `origin_country`'s type unit + 11 rules + 6 evidence + 6 template units
+    assert len(plan) == 63
     assert [unit.check_id for unit in resolution_plan if unit.family == "template"] == [
         TEMPLATE_RESOLUTION_UNIT
     ]
@@ -89,11 +90,11 @@ def test_template_units_join_the_plan_and_the_total_is_conserved():
 def test_a_template_run_plans_and_assesses_its_units():
     """13.2 A templated audit runs the expectations through the engine and the clauses over the text."""
     result = audit_state(
-        _state(extra={"origin_country": "VN"}), snapshot_digest="d-1", templates=[PACK]
+        _state(extra={"origin_country": "VN"}), snapshot_digest="d-1", as_of=TEST_AS_OF, templates=[PACK]
     )
     report = result["report"]
 
-    assert report["planned"] == 58
+    assert report["planned"] == 63
     by_id = {unit.check_id: unit for unit in result["units"]}
     statuses = {item.check_id: item.status for item in result["results"]}
     assert statuses["TEMPLATE:adidas-guarantee:field:currency"] == "pass"
@@ -106,10 +107,10 @@ def test_a_template_run_plans_and_assesses_its_units():
 def test_a_template_field_comes_from_extra_fields_and_respects_binding():
     """13.2 `origin_country` is not in fields.yaml: extra_fields is where it arrives."""
     wrong = audit_state(
-        _state(extra={"origin_country": "CN"}), snapshot_digest="d-1", templates=[PACK]
+        _state(extra={"origin_country": "CN"}), snapshot_digest="d-1", as_of=TEST_AS_OF, templates=[PACK]
     )
     unconfirmed = audit_state(
-        _state(extra={}), snapshot_digest="d-1", templates=[PACK]
+        _state(extra={}), snapshot_digest="d-1", as_of=TEST_AS_OF, templates=[PACK]
     )
 
     statuses = {item.check_id: item.status for item in wrong["results"]}
@@ -123,7 +124,7 @@ def test_a_template_field_comes_from_extra_fields_and_respects_binding():
 
 def test_the_report_carries_the_template_baseline():
     """13.3 `verification.audit.template` names the template, the packs and the resolution basis."""
-    report = audit_state(_state(extra={"origin_country": "VN"}), snapshot_digest="d-1", templates=[PACK])[
+    report = audit_state(_state(extra={"origin_country": "VN"}), snapshot_digest="d-1", as_of=TEST_AS_OF, templates=[PACK])[
         "report"
     ]
     baseline = report["template"]
@@ -138,16 +139,31 @@ def test_the_report_carries_the_template_baseline():
     assert baseline["resolved_from"]["counterparty_value"] == "Adidas AG"
     assert baseline["policy_packs"] == [
         {
+            "pack_id": "company-guarantee",
+            "version": "1.0.0",
+            "owner": "Trade Finance Compliance",
+            "valid_from": "2026-11-01",
+            "valid_to": None,
+            "source": "company-guarantee.yaml",
+        },
+        {
             "pack_id": "guarantee-core",
             "version": "1.0.0",
             "owner": None,
             "valid_from": None,
             "valid_to": None,
             "source": "guarantee.yaml",
-        }
+        },
     ]
     assert baseline["conflicts"] == []
     assert baseline["reason"] is None
+
+    verification = to_verification(report, issues=[], findings=[])
+    assert verification["policy"] == {
+        "template_id": "adidas-guarantee",
+        "bundles": {"company-guarantee": "1.0.0", "guarantee-core": "1.0.0"},
+        "as_of": TEST_AS_OF,
+    }
 
 
 def test_an_unresolvable_template_records_its_reason_instead_of_units():
@@ -155,13 +171,13 @@ def test_an_unresolvable_template_records_its_reason_instead_of_units():
     state = _state(extra={"origin_country": "VN"})
     state["fields"]["beneficiary_name"] = _field("beneficiary_name", "Beta Construction Ltd")
 
-    result = audit_state(state, snapshot_digest="d-1", templates=[PACK])
+    result = audit_state(state, snapshot_digest="d-1", as_of=TEST_AS_OF, templates=[PACK])
     baseline = result["report"]["template"]
     statuses = {item.check_id: (item.status, item.reason_code) for item in result["results"]}
 
     assert baseline["template_id"] is None
     assert baseline["reason"] == "no_applicable_template"
-    assert result["report"]["planned"] == 52
+    assert result["report"]["planned"] == 57
     assert statuses[TEMPLATE_RESOLUTION_UNIT] == ("unable_to_assess", "no_applicable_template")
 
 
@@ -185,7 +201,7 @@ def test_two_matching_templates_are_ambiguous_not_chosen(tmp_path):
     )
     packs = [PACK, load_template(second)]
 
-    result = audit_state(_state(extra={"origin_country": "VN"}), snapshot_digest="d-1", templates=packs)
+    result = audit_state(_state(extra={"origin_country": "VN"}), snapshot_digest="d-1", as_of=TEST_AS_OF, templates=packs)
     baseline = result["report"]["template"]
 
     assert baseline["reason"] == AMBIGUOUS
@@ -199,7 +215,7 @@ def test_two_matching_templates_are_ambiguous_not_chosen(tmp_path):
 def test_a_template_finding_is_projected_with_its_gate_type_and_anchor():
     """13.4 The Issue/Finding rows carry the template's gate type, never severity's."""
     state = _state(extra={"origin_country": "CN"})
-    result = audit_state(state, snapshot_digest="d-1", templates=[PACK])
+    result = audit_state(state, snapshot_digest="d-1", as_of=TEST_AS_OF, templates=[PACK])
     units = {unit.check_id: unit for unit in result["units"]}
     outcome = next(
         item for item in result["results"] if item.check_id == "TEMPLATE:adidas-guarantee:field:origin_country"
@@ -240,7 +256,7 @@ def test_the_gate_blocks_on_a_policy_conflict_and_on_a_template_change(tmp_path)
         },
     )
     state = _state(extra={"origin_country": "VN"})
-    result = audit_state(state, snapshot_digest="d-1", templates=[conflicting])
+    result = audit_state(state, snapshot_digest="d-1", as_of=TEST_AS_OF, templates=[conflicting])
     report = result["report"]
 
     conflict_decision = evaluate_gate(
@@ -267,7 +283,7 @@ def test_the_gate_blocks_on_a_policy_conflict_and_on_a_template_change(tmp_path)
 def test_the_gate_accepts_a_report_bound_to_the_current_template():
     """13.5 The same report is fine while the template digest matches."""
     state = _state(extra={"origin_country": "VN"})
-    report = audit_state(state, snapshot_digest="d-1", templates=[PACK])["report"]
+    report = audit_state(state, snapshot_digest="d-1", as_of=TEST_AS_OF, templates=[PACK])["report"]
 
     decision = evaluate_gate(
         report,
@@ -280,21 +296,21 @@ def test_the_gate_accepts_a_report_bound_to_the_current_template():
     assert "template_changed" not in decision["reason_codes"]
 
 
-def test_an_untemplated_audit_is_exactly_the_51_unit_baseline():
+def test_an_untemplated_audit_is_exactly_the_56_unit_baseline():
     """15.1 With no template requested (or none published) nothing about the audit changes."""
-    plain = audit_state(_state(extra={"origin_country": "VN"}), snapshot_digest="d-1")
+    plain = audit_state(_state(extra={"origin_country": "VN"}), snapshot_digest="d-1", as_of=TEST_AS_OF)
     unpublished = audit_state(
         _state(extra={"origin_country": "VN"}),
-        snapshot_digest="d-1",
+        snapshot_digest="d-1", as_of=TEST_AS_OF,
         templates=[],  # an empty pool: the caller asked, but no pack is available
     )
 
-    assert plain["report"]["planned"] == 51
+    assert plain["report"]["planned"] == 56
     assert plain["report"]["coverage"] == {
-        "assessed": 33,
-        "not_applicable": 18,
+        "assessed": 37,
+        "not_applicable": 19,
         "unsettled": 0,
-        "ratio": 0.647,
+        "ratio": 0.661,
     }
     assert plain["report"]["outcome"] == "no_findings"
     assert plain["report"]["template"]["requested"] is False
@@ -302,8 +318,42 @@ def test_an_untemplated_audit_is_exactly_the_51_unit_baseline():
 
     # An explicit request with nothing to resolve is loud, not silently ignored.
     assert unpublished["report"]["template"]["reason"] == "no_applicable_template"
-    assert unpublished["report"]["planned"] == 52
+    assert unpublished["report"]["planned"] == 57
     assert unpublished["report"]["outcome"] == "unable_to_assess"
+
+
+def test_a_company_pack_and_a_template_gate_conflict_is_never_allowed(tmp_path):
+    """Task 4.3: a stricter company pack vs an advisory template expectation is a conflict."""
+    from dataclasses import replace
+
+    core = load_bundle(Path("app/rules/bundles/guarantee.yaml"))
+    stricter = replace(
+        core,
+        bundle_id="company-strict",
+        rules=tuple(
+            {**rule, "gate_type": "hard_block"} if rule.get("field_id") == "currency" else rule
+            for rule in core.rules
+        ),
+    )
+
+    result = audit_state(
+        _state(extra={"origin_country": "VN"}),
+        snapshot_digest="d-1",
+        as_of=TEST_AS_OF,
+        bundles=[stricter],
+        templates=[PACK],
+    )
+    report = result["report"]
+
+    assert any("currency is gated inconsistently" in conflict for conflict in report["template"]["conflicts"])
+    assert report["outcome"] == "unable_to_assess"
+    decision = evaluate_gate(
+        report,
+        operation="start_approval",
+        candidate_digest="d-1",
+        findings=report["findings"],
+    )
+    assert decision["decision"] != "allowed"
 
 
 def test_the_envelope_carries_the_template_baseline(tmp_path):
@@ -316,9 +366,9 @@ def test_the_envelope_carries_the_template_baseline(tmp_path):
     thread_id = client.post("/runs", json={"text": text}).json()["thread_id"]
 
     before = client.get(f"/runs/{thread_id}").json()
-    plain = client.post(f"/runs/{thread_id}/stages/audit").json()
+    plain = client.post(f"/runs/{thread_id}/stages/audit?as_of=2026-03-12").json()
 
     assert before["verification"] is None
     assert plain["verification"]["audit"]["template"]["requested"] is False
     assert plain["verification"]["audit"]["template"]["reason"] == "template_not_requested"
-    assert plain["verification"]["audit"]["planned"] == 51
+    assert plain["verification"]["audit"]["planned"] == 56

@@ -9,7 +9,7 @@
 |---|---|---|
 | 后端 HTTP（创建 run、触发阶段、读信封） | 能跑 | `app/api/main.py`，`supported_stages = audit/extract/normalize/parse` |
 | 标准化（`agent1`：parse → extract → normalize） | 能跑 | fixture 模型下 8 个字段 `extracted`，出处可定位 |
-| 规范审计（`agent4`：`stages/audit`） | 能跑 | 每份保函 **51** 个计划单元，干净文档评估 **33** 项（ratio 0.647），引擎模型调用 **0** |
+| 规范审计（`agent4`：`stages/audit`） | 能跑 | 每份保函 **56** 个计划单元，干净文档评估 **37** 项（ratio 0.661），引擎模型调用 **0** |
 | 三栏界面 + 右栏「Rule audit」 | 能跑 | `npm --prefix web run dev` → http://localhost:5173 |
 | 右栏「Knowledge Q&A」知识助手（fixture 语料） | 能跑 | `/api/assistant/*`：202 + 轮询、Claim 级引用、support_level、澄清/弃答/转交、反馈 |
 | 后端 / 前端测试 | 539 后端 / 345 前端全绿 | `.venv/bin/python -m pytest -q`、`npm --prefix web run test` |
@@ -68,6 +68,8 @@ npm --prefix web run dev          # 看到 Local: http://localhost:5173/
 
 1. **文档栏**：把 `fixtures/llm/sample_document.txt` 全文复制进去。
    必须是**这份文件**——`fixtures/llm/extract_sample.json` 是照着它录制的，换文本就不是在测链路了。
+   > `fixture:` 只是 demo / 回归路径；真实文本请用 `?profile=guarantee-default`（见 §5.5），否则审计的是
+   > 录制文件里的值，而不是你编辑的内容。
 2. （可选）左栏「Version history」点 Capture 存一版，报告会绑定到这一版的快照摘要。
 3. **右栏 → Rule audit 标签 → 点 `Run spec audit`**。
 4. （可选）右栏 → **Knowledge Q&A** → 输入问题（或先在中间栏选中一段文字再提问），点 `Ask`；
@@ -86,11 +88,12 @@ POST /api/runs/{thread_id}/stages/audit         ← 规范审计（前置已完�
 | 区域 | 期望 |
 |---|---|
 | Stages | `parse / extract / normalize / audit` **全部 Done**；`extract` 带 `fixture:fixtures/llm/extract_sample.json` 横幅 |
-| Rule audit | **`No findings reported`**，`33 of 51 planned checks assessed · ratio 0.647` |
-| 指标卡 | Planned 51 · Assessed 33 · Not applicable 18 · Needs input 0 · Hard blocks 0 |
+| Rule audit | **`No findings reported`**，`37 of 56 planned checks assessed · ratio 0.661`（审计日期用 `?as_of=2026-03-12`） |
+| 指标卡 | Planned 56 · Assessed 37 · Not applicable 19 · Needs input 0 · Hard blocks 0 |
+| 提取来源 | 「Where the values came from」显示 `Fixture replay (demo, not this document)` + `audit date 2026-03-12` |
 | Gate | **`Not asked`** + "nothing is allowed"（审计本身不判定任何操作，这是设计） |
 | 字段表 | 8 个字段 `Extracted`；金额 `500000.00`，原文 `USD 500,000.00` 可回溯 |
-| 页脚 | `engine 1.0.0 · schema 044a959e73af · bundle guarantee-core v1.0.0 · server digest …` |
+| 页脚 | `engine 1.0.0 · schema 044a959e73af · bundle company-guarantee v1.0.0, guarantee-core v1.0.0 · server digest …` |
 
 **验证它不说谎**：回到文档栏随便改一个字，右栏立刻变成 `Report is stale`，仍保留上次结论，
 但明确写着不能用它审批（结论不会被"重新绑定"到新文本上）。
@@ -106,10 +109,12 @@ POST /api/runs/{thread_id}/stages/audit         ← 规范审计（前置已完�
 再点 `Run spec audit`，应当看到：`Checks did not run` + `no model provider configured (set SMART_EDIT_LLM)`
 + `Rule audit did not run`，**且没有任何缺失字段清单**——那些空字段是占位符，不是这份文档的缺陷。
 （前端在 `extract` 未成功时**不会**发起 `/stages/audit`，避免拿占位符审出假问题。）
+> 这条路径只适用于**既没有 profile、也没有模型**。指定 `?profile=guarantee-default` 时提取是确定性的，
+> 不需要模型，`extract` 仍会 `done`（`model_calls=0`）。
 
 ## 5. 按客户模板审（模板驱动审计）
 
-审计默认只按"基础字段字典 + 银行规则包"跑（51 个单元）。**模板驱动是显式请求的**：你要审的是"和阿迪达斯的
+审计默认只按"基础字段字典 + 银行/公司规则包"跑（56 个单元）。**模板驱动是显式请求的**：你要审的是"和阿迪达斯的
 那份保函"，就点名模板；系统不会因为目录里有模板就擅自套用。
 
 ```bash
@@ -130,15 +135,15 @@ curl -s -X POST "localhost:8000/runs/$TID/stages/audit?template=adidas-guarantee
 
 | 项 | 实测值 |
 |---|---|
-| 计划单元 | **58** = 39 基础字段 + `origin_country` 类型单元 + 6 规则 + 6 证据 + **6 模板单元**（3 字段期望 + 2 条款 + 1 声明） |
-| 结论 | `no_findings`，`complete`，覆盖率 **0.69**（40 项已评估） |
-| 模板基线 | `verification.audit.template`：`adidas-guarantee` v1.0.0、`synthetic: true`、`resolved_from.beneficiary_name = Adidas AG`、`policy_packs: guarantee-core v1.0.0`、`conflicts: []` |
+| 计划单元 | **63** = 39 基础字段 + `origin_country` 类型单元 + 11 规则 + 6 证据 + **6 模板单元**（3 字段期望 + 2 条款 + 1 声明） |
+| 结论 | `no_findings`，`complete`，覆盖率 **0.698**（44 项已评估） |
+| 模板基线 | `verification.audit.template`：`adidas-guarantee` v1.0.0、`synthetic: true`、`resolved_from.beneficiary_name = Adidas AG`、`policy_packs: company-guarantee v1.0.0 + guarantee-core v1.0.0`、`conflicts: []` |
 
 模板没命中（文档对手方不是 Adidas）或同时命中两份时，**不猜**：
 
 | 情形 | 结果 |
 |---|---|
-| 0 份匹配 | 计划 52（多一个 `TEMPLATE:resolution`），`unable_to_assess` + `no_applicable_template`，闸门不放行 |
+| 0 份匹配 | 计划 57（多一个 `TEMPLATE:resolution`），`unable_to_assess` + `no_applicable_template`，闸门不放行 |
 | ≥2 份匹配 | `unable_to_assess` + `ambiguous_template`，报告列出候选 `{template_id, version}` |
 
 三种条款判断必须分清（这是 AUD-08 的要点）：
@@ -152,6 +157,81 @@ curl -s -X POST "localhost:8000/runs/$TID/stages/audit?template=adidas-guarantee
 
 模板字段（如 `origin_country`）不在 `fields.yaml` 里，它从 `extra_fields` 读：**抽不到就是"没读到"
 （`needs_input`），不是"文档缺值"**。
+
+## 5.5 确定性提取（真实文本，不再回放 fixture）
+
+`fixture:` 只用于 demo / 回归：它不看编辑区文本，永远返回录制好的那 8 个候选值。真实文本请指定**已发布的
+extraction profile**；`extract` 会按 label/alias 从当前 `docs.blocks` 定位值，`model_calls=0`，同一文本 +
+同一 profile 的结果可复现。
+
+- profile 位置：`app/configs/extraction/guarantee-default.json`；目录可用
+  `SMART_EDIT_EXTRACTION_PROFILES=<dir>` 覆盖。
+- `fields.yaml` 决定“字段是什么”，profile 只**引用** key，声明 labels、`value_kind`、`search`
+  （`same_block` / `same_or_next_block`）、`max_chars`、confidence。profile 不接受正则或脚本；未知 key、
+  未知 `value_kind`、未发布、`document_types` 不匹配都会加载失败。
+- 解析顺序：请求 `?profile=` > template 的 `extraction_profile` > 无 profile（走原 fixture/LLM 路径）。
+- 显式 profile 只替换提取，**不会**跳过 template fields/clauses 或公司规则包；未知/未发布/类型不匹配的
+  profile 直接 `400 invalid_extraction_profile`，不会静默回落 fixture。
+
+```bash
+# 不设 SMART_EDIT_LLM 也能跑确定性提取
+curl -s -X POST \
+  "localhost:8000/runs/$TID/stages/audit?profile=guarantee-default&as_of=2026-03-12" \
+  | python3 -m json.tool | head -40
+```
+
+报告里看什么：
+
+| 字段 | 含义 |
+|---|---|
+| `verification.extraction.source` | `deterministic` / `fixture` / `llm` / `unknown`（绝不冒充 deterministic） |
+| `verification.extraction.profile_id / version / content_sha256` | 哪一版 profile 读的这份文档 |
+| `fields_found` / `fields_missing` | 定位成功/缺失的字段数；缺字段由 `normalize` 生成 missing 占位 |
+| `verification.policy.as_of` / `verification.audit.as_of` | 本次审计基准日（`relative_date: today` 用它） |
+| 字段 `notes` 里的 `extraction_conflict` | 同一字段出现两个不同值，已降级为 `inferred`，规则不会 pass |
+
+`?as_of=YYYY-MM-DD` 固定审计日期（缺省服务器当天并回显）；同一文本 + 同一 `as_of` 重放结果一致。
+公司规则包在 `app/rules/bundles/company-guarantee.yaml`（Issue Date 不早于 today、金额上限、URDG 758、
+付款条款、允许币种）；每条规则带 pass/finding/needs_input 向量，发布前跑：
+
+```bash
+.venv/bin/python -m app.rules.doctor
+```
+
+新增字段：在 `fields.yaml` 声明 key/type，在 profile JSON 加 locator（必要时新增受测 `value_kind`）；
+新增公司规则：复制 bundle、改版本与向量，doctor 全绿后再发布。
+
+### 在页面上测（不需要模型）
+
+1. `./scripts/dev.sh --honest` —— 后端**不配** `SMART_EDIT_LLM`。没有 profile 时它会诚实失败；
+   这一步用来证明确定性 profile 不依赖模型。
+2. 中间栏粘贴（`开立日期` 用**服务器当天**；本机环境是 2026-11-20）：
+
+   ```text
+   保函编号：BG-2026-0001
+   保函金额：USD 500,000.00
+   币种：USD
+   开立日期：2026-11-20
+   到期日：2027-11-20
+   适用规则：URDG 758
+   付款条件：
+   Payment shall be made in USD within 30 days of presentation.
+   ```
+
+3. 右栏 **Rule audit** → **Customer template** 填 `adidas-guarantee`（该模板声明
+   `extraction_profile: guarantee-default`）→ **Run spec audit**。
+4. 期望：Stages 四个 `Done`；`extract` 的 reason 是 `deterministic profile guarantee-default@1.0.0`；
+   「Where the values came from」显示 `Deterministic profile · guarantee-default v1.0.0`、
+   `6 fields found · 0 missing`、`audit date 2026-11-20`。
+   因为当前 profile 只覆盖 6 个字段，`guarantee_number / applicant_name / beneficiary_name` 会是
+   `missing` 并产生 3 条 required finding —— 这是 profile 覆盖范围的预期结果，不是读取失败。
+5. 再验证“读的是当前文本”：把 `开立日期` 改成前一天（2026-11-19）→ 再点 Run → 出现
+   `CO-ISSUE-NOT-PAST`；把 `保函金额` 改成 `-500.00` → 再点 Run → 出现 `GR-AMOUNT-POSITIVE`。
+
+已知限制：页面没有 `?as_of=` / `?profile=` 输入框（`as_of` 用服务器当天，profile 由模板选出）；
+当前 `guarantee-default` 只覆盖 6 个字段，不含 `beneficiary_name`，所以模板的对手方匹配会显示
+「Template could not be resolved」。这不影响确定性提取与公司规则包，来源块仍会显示 `deterministic`。
+需要完整模板/条款演示时，用 §5.5 的 API 调用，或在 profile 中补充 `beneficiary_name` locator。
 
 ## 6. 从文件导入（PDF / Word / 图片）
 

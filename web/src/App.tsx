@@ -598,11 +598,14 @@ function AppContent() {
       const created = await createRun(snapshot.text);
       // The audit only runs on values, never on placeholders: with no provider `normalize` still
       // reports `done` while every field is a placeholder, so the guard is `extract` **and** `normalize`.
-      const normalized = await triggerStage(created.thread_id, 'normalize');
+      //
+      // Pass the template to `normalize` too: `normalize` backfills `extract`, and a template may name
+      // the extraction profile (change D7). Without this the page could never reach the deterministic
+      // path — it would always extract with the fixture/LLM before the audit even starts.
+      const template = templateId.trim() || undefined;
+      const normalized = await triggerStage(created.thread_id, 'normalize', { template });
       const report = fieldChecksRan(normalized)
-        ? await triggerStage(created.thread_id, 'audit', {
-            template: templateId.trim() || undefined,
-          })
+        ? await triggerStage(created.thread_id, 'audit', { template })
         : normalized;
       dispatch({ type: 'succeed', envelope: report, at: Date.now() });
       const summary = auditSummary(report);

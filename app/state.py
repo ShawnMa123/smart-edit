@@ -264,6 +264,10 @@ class EditState(TypedDict, total=False):
     fields: dict[str, FieldValue]  # overwrite
     extra_fields: dict[str, FieldValue]  # overwrite; keys not defined in fields.yaml
     _candidates: list[dict]  # [TEMPORARY CHANNEL] written by extract, cleared by normalize
+    # [SEMANTICS] config-driven-audit-extraction (D8): extraction provenance written by `extract`
+    # and projected into `verification.extraction` by the audit. Optional so a run that never
+    # extracted (or an older state) stays readable; `None` is reported as an unknown source.
+    _extraction: NotRequired[dict | None]
     findings: Annotated[list[Finding], operator.add]  # reducer
     legal: LegalOpinion | None  # overwrite
     retrieved: list[Chunk]  # overwrite

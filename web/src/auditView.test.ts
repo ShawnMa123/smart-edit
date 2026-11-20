@@ -17,13 +17,18 @@ import {
   NO_PROVIDER_REASON,
   ambiguousTemplateEnvelope,
   auditedEnvelope,
+  auditFinding,
+  auditReport,
   blockedAuditEnvelope,
+  deterministicEnvelope,
   doneEnvelope,
   envelope,
+  extractionConflictEnvelope,
   findingsEnvelope,
   noProviderEnvelope,
   stage,
   templatedEnvelope,
+  verification,
 } from './test/fixtures';
 
 const snapshot = (digest = 'digest-1'): Snapshot => ({
@@ -109,6 +114,47 @@ describe('when extraction completed (task 5.1)', () => {
       ['normalize', 'Done'],
     ]);
     expect(model.stages[1].reason).toContain('fixture:');
+  });
+});
+
+describe('extraction provenance (change D8 / task 5.1)', () => {
+  it('names a deterministic profile with its version, coverage and audit date', () => {
+    const { audit } = view(deterministicEnvelope());
+
+    expect(audit.extraction.source).toBe('deterministic');
+    expect(audit.extraction.profileId).toBe('guarantee-default');
+    expect(audit.extraction.version).toBe('1.0.0');
+    expect(audit.extraction.contentSha256).toBe('abc123def456');
+    expect(audit.extraction.fieldsFound).toBe(6);
+    expect(audit.extraction.fieldsMissing).toBe(1);
+    expect(audit.extraction.label).toBe('Deterministic profile · guarantee-default v1.0.0');
+    expect(audit.asOf).toBe('2026-03-12');
+  });
+
+  it('labels the fixture path as a demo, never as deterministic', () => {
+    const { audit } = view(auditedEnvelope());
+
+    expect(audit.extraction.source).toBe('fixture');
+    expect(audit.extraction.label).toContain('Fixture replay');
+    expect(audit.extraction.profileId).toBeNull();
+  });
+
+  it('lists the fields whose values conflicted', () => {
+    const model = view(extractionConflictEnvelope());
+
+    expect(model.audit.extraction.conflictFields).toEqual(['guarantee_amount']);
+    expect(model.checks.find((check) => check.key === 'guarantee_amount')?.notes).toContain(
+      'extraction_conflict',
+    );
+  });
+
+  it('reports an unknown source rather than assuming deterministic', () => {
+    const bare = auditedEnvelope({
+      verification: verification({ extraction: null }),
+    });
+
+    expect(view(bare).audit.extraction.source).toBe('unknown');
+    expect(view(bare).audit.extraction.label).toBe('Extraction source not recorded');
   });
 });
 
@@ -203,12 +249,46 @@ describe('the rule audit block (agent-audit `verification`)', () => {
     expect(audit.outcome).toBe('findings_present');
     expect(audit.hardBlockFindings).toBe(1);
     expect(audit.findings[0].id).toBe('B-001');
+    expect(audit.findings[0].headline).toBe('Required field is missing');
     expect(audit.findings[0].gateType).toBe('hard_block');
+    expect(audit.findings[0].gateLabel).toBe('Blocks');
     expect(audit.findings[0].targetOperations).toContain('start_approval');
-    expect(audit.findings[0].rule).toBe('SCHEMA:guarantee_amount:required@schema-1');
+    expect(audit.findings[0].operationLabels).toEqual([
+      'Start approval',
+      'Formal export',
+      'Handoff',
+    ]);
+    expect(audit.findings[0].fieldLabel).toBe('Amount');
+    expect(audit.findings[0].rule).toBe('SCHEMA:guarantee_amount:required');
     expect(audit.gate).toMatchObject({ asked: true, decision: 'blocked', openGaps: 0 });
     expect(audit.gate.reasonCodes).toEqual(['hard_block']);
     expect(audit.gate.authorizedFindingIds).toEqual(['B-001']);
+  });
+
+  it('keeps a business rule version and explains an advisory finding in words', () => {
+    const model = view(
+      auditedEnvelope({
+        verification: verification({
+          audit: auditReport({
+            findings: [
+              auditFinding({
+                rule_id: 'GR-AMOUNT-POSITIVE',
+                rule_version: 1,
+                gate_type: 'advisory',
+                target_operations: [],
+                message: 'Guarantee amount must be greater than zero',
+              }),
+            ],
+          }),
+        }),
+      }),
+    );
+    const row = model.audit.findings[0];
+
+    expect(row.headline).toBe('Guarantee amount must be greater than zero');
+    expect(row.rule).toBe('GR-AMOUNT-POSITIVE@1');
+    expect(row.gateLabel).toBe('Advisory');
+    expect(row.operationLabels).toEqual([]);
   });
 
   it('keeps the server digest separate from the browser digest', () => {

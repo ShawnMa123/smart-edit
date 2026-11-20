@@ -186,6 +186,26 @@ export interface AuditReport {
   engine_version: string;
   findings: AuditFinding[];
   template?: TemplateBaseline;
+  /** Audit date (`config-driven-audit-extraction` D5); absent in reports from older builds. */
+  as_of?: string;
+}
+
+/** `verification.extraction` — where the field values came from (change D8). */
+export interface ExtractionProvenance {
+  source: string;
+  profile_id: string | null;
+  version: string | null;
+  content_sha256: string | null;
+  fields_found: number | null;
+  fields_missing: number | null;
+  llm_fallback?: boolean;
+}
+
+/** `verification.policy` — which template, packs and audit date judged the document (change D8). */
+export interface PolicyProvenance {
+  template_id: string | null;
+  bundles: Record<string, string>;
+  as_of: string | null;
 }
 
 export interface VerificationReport {
@@ -200,6 +220,8 @@ export interface VerificationReport {
   /** Display only; the build never computes one (`null`). */
   score: number | null;
   audit?: AuditReport;
+  extraction?: ExtractionProvenance | null;
+  policy?: PolicyProvenance | null;
 }
 
 export interface GateDecision {

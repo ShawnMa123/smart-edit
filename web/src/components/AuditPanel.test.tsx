@@ -13,8 +13,10 @@ import {
   ambiguousTemplateEnvelope,
   auditedEnvelope,
   blockedAuditEnvelope,
+  deterministicEnvelope,
   doneEnvelope,
   envelope,
+  extractionConflictEnvelope,
   findingsEnvelope,
   noProviderEnvelope,
   stage,
@@ -270,9 +272,47 @@ describe('rule audit block (agent-audit verification)', () => {
     expect(screen.getByText('Findings reported')).toBeTruthy();
     expect(screen.getByText('Blocked')).toBeTruthy();
     expect(screen.getByText(/start_approval · reasons hard_block/)).toBeTruthy();
+    expect(screen.getByText('Audit findings (1)')).toBeTruthy();
+    expect(screen.getByText('Required field is missing')).toBeTruthy();
     expect(screen.getByText(/B-001/)).toBeTruthy();
-    expect(screen.getByText(/gate: hard_block/)).toBeTruthy();
-    expect(screen.getByText(/→ start_approval, formal_export, handoff/)).toBeTruthy();
+    expect(screen.getByText(/Field: Amount/)).toBeTruthy();
+    expect(screen.getByText('Blocks: Start approval, Formal export, Handoff')).toBeTruthy();
+    expect(screen.getByText('SCHEMA:guarantee_amount:required')).toBeTruthy();
+    expect(screen.getByText(/deterministic/)).toBeTruthy();
+    expect(screen.queryByText(/@schema-1/)).toBeNull();
+  });
+});
+
+describe('extraction provenance block (change D8 / task 5.1)', () => {
+  const reportState = (envelopeValue: ReturnType<typeof auditedEnvelope>) => ({
+    phase: 'report' as const,
+    envelope: envelopeValue,
+    snapshot: snapshot(),
+    completedAt: 2_000,
+  });
+
+  it('shows the deterministic profile, its version and field coverage', () => {
+    renderPanel(reportState(deterministicEnvelope()));
+
+    const block = screen.getByTestId('extraction-source');
+    expect(block.getAttribute('data-source')).toBe('deterministic');
+    expect(screen.getByText('Deterministic profile · guarantee-default v1.0.0')).toBeTruthy();
+    expect(screen.getByText(/6 fields found · 1 missing/)).toBeTruthy();
+    expect(screen.getByText(/audit date 2026-03-12/)).toBeTruthy();
+  });
+
+  it('labels a fixture replay as a demo instead of claiming deterministic extraction', () => {
+    renderPanel(reportState(auditedEnvelope()));
+
+    const block = screen.getByTestId('extraction-source');
+    expect(block.getAttribute('data-source')).toBe('fixture');
+    expect(screen.getByText('Fixture replay (demo, not this document)')).toBeTruthy();
+  });
+
+  it('warns about conflicting values that still need confirmation', () => {
+    renderPanel(reportState(extractionConflictEnvelope()));
+
+    expect(screen.getByTestId('extraction-conflicts').textContent).toContain('guarantee_amount');
   });
 });
 

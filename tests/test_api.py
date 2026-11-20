@@ -183,7 +183,7 @@ def test_agent4_is_standalone_through_the_audit_target(tmp_path):
     client, _ = _build(tmp_path)
     thread_id = _new_run(client)
 
-    body = client.post(f"/runs/{thread_id}/stages/agent4").json()
+    body = client.post(f"/runs/{thread_id}/stages/agent4?as_of=2026-03-12").json()
 
     assert [report["stage"] for report in body["stages"]] == [
         "parse",
@@ -191,7 +191,7 @@ def test_agent4_is_standalone_through_the_audit_target(tmp_path):
         "normalize",
         "audit",
     ]
-    assert body["verification"]["audit"]["planned"] == 51
+    assert body["verification"]["audit"]["planned"] == 56
 
 
 def test_a_non_standalone_agent_is_still_403(tmp_path, monkeypatch):
@@ -317,6 +317,19 @@ def test_no_provider_is_reported_not_faked(tmp_path):
     assert {value["status"] for value in body["fields"].values()} == {"missing"}
 
 
+def test_without_a_profile_or_provider_the_audit_reports_an_unknown_source(tmp_path):
+    """Task 6.2: the honest path is unchanged and never claims deterministic extraction."""
+    client, _ = _build(tmp_path, provider=False)
+    thread_id = _new_run(client)
+
+    body = client.post(f"/runs/{thread_id}/stages/audit?as_of=2026-03-12").json()
+
+    extract = next(report for report in body["stages"] if report["stage"] == "extract")
+    assert extract["status"] == "failed"
+    assert body["verification"]["extraction"]["source"] == "unknown"
+    assert body["verification"]["extraction"]["profile_id"] is None
+
+
 def test_refusal_codes_end_to_end(tmp_path):
     """6.3 The documented refusals, over HTTP."""
     client, store = _build(tmp_path)
@@ -330,12 +343,117 @@ def test_refusal_codes_end_to_end(tmp_path):
     assert client.post(f"/runs/{thread_id}/stages/parse").json()["code"] == "REFUSED"
 
 
+def test_an_unusable_extraction_profile_is_refused_not_replaced(api):
+    """Task 4.2: `?profile=` must name a published, usable profile — no silent fixture fallback."""
+    client, _ = api
+    thread_id = _new_run(client)
+
+    response = client.post(f"/runs/{thread_id}/stages/extract?profile=does-not-exist")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_extraction_profile"
+    assert "does-not-exist" in response.json()["message"]
+
+
+def test_an_explicit_profile_does_not_skip_the_requested_template(tmp_path):
+    """Task 4.2/4.3: a profile narrows extraction only; template + company policy still run."""
+    client, _ = _build(tmp_path, provider=False)
+    text = (
+        "保函金额：USD 500,000.00\n"
+        "币种：USD\n"
+        "开立日期：2026-03-12\n"
+        "到期日：2027-03-12\n"
+        "适用规则：URDG 758\n"
+    )
+    thread_id = _new_run(client, text)
+
+    response = client.post(
+        f"/runs/{thread_id}/stages/audit"
+        "?template=adidas-guarantee&profile=guarantee-default&as_of=2026-03-12"
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    extract = next(report for report in body["stages"] if report["stage"] == "extract")
+    assert extract["reason"] == "deterministic profile guarantee-default@1.0.0"
+    assert extract["model_calls"] == 0
+    verification = body["verification"]
+    assert verification["extraction"]["source"] == "deterministic"
+    assert verification["audit"]["template"]["requested"] is True
+    assert verification["policy"]["bundles"] == {
+        "company-guarantee": "1.0.0",
+        "guarantee-core": "1.0.0",
+    }
+
+
+def test_a_named_template_selects_the_profile_at_extraction_time(tmp_path):
+    """The UI sends `?template=` on `normalize`; extraction there must use the template's profile."""
+    client, _ = _build(tmp_path, provider=False)
+    text = (
+        "保函金额：USD 500,000.00\n"
+        "币种：USD\n"
+        "开立日期：2026-03-12\n"
+        "到期日：2027-03-12\n"
+        "适用规则：URDG 758\n"
+    )
+    thread_id = _new_run(client, text)
+
+    body = client.post(f"/runs/{thread_id}/stages/normalize?template=adidas-guarantee").json()
+
+    extract = next(report for report in body["stages"] if report["stage"] == "extract")
+    assert extract["status"] == "done"
+    assert extract["reason"] == "deterministic profile guarantee-default@1.0.0"
+    assert extract["model_calls"] == 0
+    assert body["fields"]["issue_date"]["value"] == "2026-03-12"
+    assert body["fields"]["governing_rules"]["value"] == "URDG 758"
+    assert "value_truncated" not in body["fields"]["governing_rules"]["notes"]
+
+
+def test_editing_the_text_changes_the_findings_without_a_fixture(tmp_path):
+    """Task 6.1: the same run profile reads whatever text was submitted — no fixture replay."""
+    client, _ = _build(tmp_path, provider=False)  # no LLM at all
+
+    def audit(issue_date: str, amount: str = "USD 500,000.00") -> dict:
+        text = (
+            f"保函编号：BG-2026-0001\n"
+            f"保函金额：{amount}\n"
+            "币种：USD\n"
+            f"开立日期：{issue_date}\n"
+            "到期日：2027-11-19\n"
+            "适用规则：URDG 758\n"
+        )
+        thread_id = _new_run(client, text)
+        response = client.post(
+            f"/runs/{thread_id}/stages/audit"
+            "?profile=guarantee-default&as_of=2026-11-19"
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    clean = audit("2026-11-19")
+    past = audit("2026-11-18")
+    negative = audit("2026-11-19", "-500.00")
+
+    assert clean["fields"]["issue_date"]["value"] == "2026-11-19"
+    assert "CO-ISSUE-NOT-PAST" not in {finding["rule_id"] for finding in clean["findings"]}
+
+    assert past["fields"]["issue_date"]["value"] == "2026-11-18"
+    assert "CO-ISSUE-NOT-PAST" in {finding["rule_id"] for finding in past["findings"]}
+
+    assert negative["fields"]["guarantee_amount"]["value"] == "-500.00"
+    assert "GR-AMOUNT-POSITIVE" in {finding["rule_id"] for finding in negative["findings"]}
+
+    for body in (clean, past, negative):
+        assert body["verification"]["extraction"]["source"] == "deterministic"
+        assert body["verification"]["extraction"]["profile_id"] == "guarantee-default"
+
+
 def test_audit_stage_over_http(api):
     """6.2 `POST /stages/audit` backfills the shared layer and returns the envelope."""
     client, _ = api
     thread_id = _new_run(client)
 
-    body = client.post(f"/runs/{thread_id}/stages/audit").json()
+    body = client.post(f"/runs/{thread_id}/stages/audit?as_of=2026-03-12").json()
 
     assert [report["stage"] for report in body["stages"]] == [
         "parse",
@@ -349,10 +467,21 @@ def test_audit_stage_over_http(api):
     assert audit_stage["model_calls"] == 0
 
     verification = body["verification"]
-    assert len(verification["checks"]) == 51, "one Issue per planned unit"
-    assert verification["audit"]["planned"] == 51
+    assert len(verification["checks"]) == 56, "one Issue per planned unit"
+    assert verification["audit"]["planned"] == 56
     assert verification["audit"]["engine_version"] == "1.0.0"
-    assert verification["audit"]["bundle_versions"] == {"guarantee-core": "1.0.0"}
+    assert verification["audit"]["bundle_versions"] == {
+        "company-guarantee": "1.0.0",
+        "guarantee-core": "1.0.0",
+    }
+    assert verification["audit"]["as_of"] == "2026-03-12"
+    assert verification["extraction"]["source"] == "fixture", "a fixture run must say so"
+    assert verification["extraction"]["profile_id"] is None
+    assert verification["policy"] == {
+        "template_id": None,
+        "bundles": {"company-guarantee": "1.0.0", "guarantee-core": "1.0.0"},
+        "as_of": "2026-03-12",
+    }
     assert verification["verdict"] in ("pass", "warn", "fail")
     assert verification["score"] is None, "score is display-only and never computed here"
 

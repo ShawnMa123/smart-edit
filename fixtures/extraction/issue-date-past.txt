@@ -1,0 +1,10 @@
+DEMAND GUARANTEE (deterministic extraction sample - issue date in the past)
+
+保函编号：BG-2026-0002
+保函金额：USD 500,000.00
+币种：USD
+开立日期：2026-11-18
+到期日：2027-11-19
+适用规则：URDG 758
+付款条件：
+Payment shall be made in USD within 30 days of presentation.

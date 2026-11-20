@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from app.nodes.extract import extract_node
 from app.parsing.extract import build_prompt, extract, locate_span
+from app.parsing.extraction_profile import load_profile_by_id
 from app.state import TRAIL_OPS
 from tests.helpers import make_doc
 
@@ -77,6 +80,77 @@ def test_schema_violation_marks_stage_partial(fields_yaml, tmp_path):
     assert report["status"] == "partial"
     assert "batch" in report["reason"]
     assert update["_candidates"] == []
+
+
+def test_a_profile_runs_deterministically_without_any_provider(fields_yaml):
+    """Task 2.4: profile selected -> no LLM needed, `model_calls=0`, provenance is recorded."""
+    state = {
+        "docs": [make_doc("保函金额：USD 500.00\n币种：USD\n开立日期：12/03/26")],
+        "trail": [],
+        "stages": [],
+    }
+    profile = load_profile_by_id("guarantee-default", fields_config=fields_yaml)
+
+    update = extract_node(state, llm=None, profile=profile, fields_yaml=fields_yaml)
+
+    report = update["stages"][0]
+    assert report["status"] == "done"
+    assert report["model_calls"] == 0
+    assert report["reason"] == "deterministic profile guarantee-default@1.0.0"
+    assert {candidate["key"] for candidate in update["_candidates"]} >= {
+        "guarantee_amount",
+        "currency",
+        "issue_date",
+    }
+    assert update["_extraction"] == {
+        "source": "deterministic",
+        "profile_id": "guarantee-default",
+        "version": "1.0.0",
+        "content_sha256": profile.content_sha256,
+        "document_types": ["guarantee"],
+        "fields_found": 3,
+        "fields_missing": 3,
+        "llm_fallback": False,
+    }
+    assert all(entry["op"] in TRAIL_OPS for entry in update["trail"])
+
+
+def test_without_a_profile_a_missing_provider_still_fails_loudly():
+    """Task 2.4: the old path is unchanged; a profile must be explicit, never assumed."""
+    update = extract_node({"docs": [make_doc("保函金额：USD 500.00")], "trail": [], "stages": []})
+
+    assert update["stages"][0]["status"] == "failed"
+    assert "no model provider" in update["stages"][0]["reason"]
+    assert update["_extraction"] is None
+
+
+def test_llm_fallback_is_opt_in_and_only_fills_missing_fields(fields_yaml):
+    """Task 2.4 / spec: fallback candidates are unconfirmed and never override a deterministic hit."""
+    state = {
+        "docs": [make_doc("保函金额：USD 500.00")],
+        "trail": [],
+        "stages": [],
+    }
+    profile = replace(
+        load_profile_by_id("guarantee-default", fields_config=fields_yaml),
+        llm_fallback={"enabled": True},
+    )
+
+    def llm(prompt: str):
+        return [
+            _cand("guarantee_amount", "999.00", "999.00"),
+            _cand("currency", "EUR", "EUR"),
+        ]
+
+    update = extract_node(state, llm=llm, profile=profile, fields_yaml=fields_yaml)
+
+    by_key = {candidate["key"]: candidate for candidate in update["_candidates"]}
+    assert by_key["guarantee_amount"]["raw_value"] == "USD 500.00", "deterministic hit is final"
+    assert "status" not in by_key["guarantee_amount"]
+    assert by_key["currency"]["raw_value"] == "EUR"
+    assert by_key["currency"]["status"] == "unconfirmed"
+    assert update["stages"][0]["model_calls"] > 0
+    assert update["_extraction"]["llm_fallback"] is True
 
 
 def test_extract_trail_ops_are_contract_values():

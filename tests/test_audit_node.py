@@ -7,6 +7,8 @@ entries and store the report. Everything asserted here is about that shell — t
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from app.audit.gate import evaluate as gate_for_state
@@ -28,6 +30,8 @@ VALUES = {
     "expiry_date": "2027-03-12",
     "governing_rules": "URDG 758",
 }
+# The audit date is fixed so `CO-ISSUE-NOT-PAST` (relative to `today`) stays deterministic.
+TEST_AS_OF = "2026-03-12"
 DOCUMENT = "DEMAND GUARANTEE\n" + "\n".join(f"{key}: {value}" for key, value in VALUES.items())
 
 
@@ -63,7 +67,7 @@ def _state(**overrides) -> dict:
 
 def test_a_clean_document_audits_into_one_done_stage_report():
     """6.1 One report, agent4, zero model calls, findings counted."""
-    update = audit_node(_state())
+    update = audit_node(_state(), as_of=TEST_AS_OF)
     report = update["stages"][0]
 
     assert list(report) == ["stage", "agent", "status", "reason", "produced", "model_calls"]
@@ -78,23 +82,79 @@ def test_a_clean_document_audits_into_one_done_stage_report():
 def test_the_verification_slot_carries_the_report_baseline():
     """3.3 / 6.1 `verification.audit` is where the report lives (`VerificationReport.audit`)."""
     state = _state()
-    update = audit_node(state)
+    update = audit_node(state, as_of=TEST_AS_OF)
     verification = update["verification"]
 
-    assert set(verification) == {"checks", "verdict", "credibility", "score", "audit"}
+    assert set(verification) == {
+        "checks",
+        "verdict",
+        "credibility",
+        "score",
+        "audit",
+        "extraction",
+        "policy",
+    }
+    assert verification["extraction"]["source"] == "unknown", "no extract provenance must not read as deterministic"
+    assert verification["policy"] == {
+        "template_id": None,
+        "bundles": {"company-guarantee": "1.0.0", "guarantee-core": "1.0.0"},
+        "as_of": TEST_AS_OF,
+    }
     assert verification["score"] is None
     assert verification["verdict"] == "pass"
-    assert len(verification["checks"]) == 51
+    assert len(verification["checks"]) == 56
     assert verification["audit"]["snapshot_digest"] == snapshot_digest(state)
-    assert verification["audit"]["planned"] == 51
+    assert verification["audit"]["planned"] == 56
     assert verification["audit"]["outcome"] == "no_findings"
+
+
+def test_verification_records_the_extraction_source_and_field_coverage():
+    """Task 2.5: deterministic and fixture sources are named; counts come from the extract stage."""
+    deterministic = audit_node(
+        _state(
+            _extraction={
+                "source": "deterministic",
+                "profile_id": "guarantee-default",
+                "version": "1.0.0",
+                "content_sha256": "abc123def456",
+                "fields_found": 7,
+                "fields_missing": 1,
+                "llm_fallback": False,
+            }
+        )
+    )["verification"]["extraction"]
+    assert deterministic == {
+        "source": "deterministic",
+        "profile_id": "guarantee-default",
+        "version": "1.0.0",
+        "content_sha256": "abc123def456",
+        "fields_found": 7,
+        "fields_missing": 1,
+        "llm_fallback": False,
+    }
+
+    fixture = audit_node(
+        _state(
+            _extraction={
+                "source": "fixture",
+                "profile_id": None,
+                "version": None,
+                "content_sha256": None,
+                "fields_found": 3,
+                "fields_missing": 12,
+            }
+        )
+    )["verification"]["extraction"]
+    assert fixture["source"] == "fixture"
+    assert fixture["profile_id"] is None
+    assert fixture["fields_found"] == 3
 
 
 def test_trail_entries_use_contract_ops_and_unique_ids():
     """6.1 The receipt plus one `emit` per finding, with ids that never collide."""
     state = _state()
     state["fields"]["expiry_date"] = _field("expiry_date", "2025-03-12")
-    update = audit_node(state)
+    update = audit_node(state, as_of=TEST_AS_OF)
     trail = update["trail"]
 
     assert {entry["op"] for entry in trail} <= set(TRAIL_OPS)
@@ -121,14 +181,38 @@ def test_a_failing_audit_returns_a_stage_report_instead_of_raising():
     assert update["trail"][0]["detail"]["audited"] is False
 
 
+def test_the_audit_report_records_the_as_of_used_and_replays_identically():
+    """Task 3.3: the report echoes `as_of`; the same as_of produces the same findings."""
+    first = audit_node(_state(), as_of="2026-11-19")
+    second = audit_node(_state(), as_of="2026-11-19")
+
+    assert first["verification"]["audit"]["as_of"] == "2026-11-19"
+    assert first["trail"][0]["detail"]["as_of"] == "2026-11-19"
+    assert first["verification"] == second["verification"]
+
+
+def test_as_of_defaults_to_the_server_date_and_is_echoed():
+    update = audit_node(_state())
+
+    assert update["verification"]["audit"]["as_of"] == date.today().isoformat()
+
+
+def test_an_invalid_as_of_fails_the_audit_instead_of_using_today():
+    update = audit_node(_state(), as_of="19/11/2026")
+
+    assert update["stages"][0]["status"] == "failed"
+    assert "as_of" in update["stages"][0]["reason"]
+    assert update["verification"] is None
+
+
 def test_the_gate_is_written_only_when_an_operation_is_asked():
     """6.3 An audit alone approves nothing; asking for an operation stores one decision."""
-    clean = audit_node(_state())
+    clean = audit_node(_state(), as_of=TEST_AS_OF)
     assert "gate" not in clean
 
     state = _state()
     state["fields"].pop("guarantee_amount")
-    decided = audit_node(state, operation=START_APPROVAL)
+    decided = audit_node(state, operation=START_APPROVAL, as_of=TEST_AS_OF)
 
     assert decided["gate"]["operation"] == START_APPROVAL
     assert decided["gate"]["decision"] == BLOCKED
@@ -140,7 +224,7 @@ def test_the_stored_report_is_what_the_gate_reads():
     """The contract `Finding` has no gate type, so the gate must read the audit's own copy."""
     state = _state()
     state["fields"].pop("guarantee_amount")
-    merge_update(state, audit_node(state))
+    merge_update(state, audit_node(state, as_of=TEST_AS_OF))
 
     decision = gate_for_state(state, START_APPROVAL, candidate_digest=snapshot_digest(state))
 

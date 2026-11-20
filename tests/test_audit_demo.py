@@ -25,7 +25,7 @@ def test_the_demo_reports_a_matched_template_and_an_ambiguous_one():
     assert matched["template_id"] == "adidas-guarantee"
     assert matched["version"] == "1.0.0"
     assert matched["synthetic"] is True
-    assert matched["planned"] == 58
+    assert matched["planned"] == 63
     assert matched["template_units"] == 6
     assert matched["outcome"] == "no_findings"
     assert matched["conflicts"] == []
@@ -46,7 +46,7 @@ def test_the_demo_still_reports_the_untemplated_baseline():
     """14.2 The three rule-bundle scenarios are untouched by the template work."""
     payload = _demo().build_report()
 
-    assert [run["planned"] for run in payload["runs"]] == [51, 51, 51]
+    assert [run["planned"] for run in payload["runs"]] == [56, 56, 56]
     assert [run["outcome"] for run in payload["runs"]] == [
         "no_findings",
         "findings_present",

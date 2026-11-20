@@ -39,6 +39,8 @@ CLEAN_VALUES = {
     "governing_rules": "URDG 758",
 }
 DOCUMENT = "DEMAND GUARANTEE\n" + "\n".join(f"{key}: {value}" for key, value in CLEAN_VALUES.items())
+# `CO-ISSUE-NOT-PAST` compares against `today`; pin the audit date so the fixture stays current.
+TEST_AS_OF = "2026-03-12"
 
 
 def _field(key: str, value: str, *, status: str = "extracted") -> dict:
@@ -83,6 +85,7 @@ def _audited(
         state or _state(),
         snapshot_digest=snapshot_digest,
         current_digest=current_digest,
+        as_of=TEST_AS_OF,
     )
 
 
@@ -94,9 +97,9 @@ def test_the_report_carries_its_baseline():
 
     assert audit["snapshot_digest"] == "digest-clean"
     assert audit["schema_version"] == load_schema().version
-    assert audit["bundle_versions"] == {"guarantee-core": "1.0.0"}
+    assert audit["bundle_versions"] == {"company-guarantee": "1.0.0", "guarantee-core": "1.0.0"}
     assert audit["engine_version"] == "1.0.0"
-    assert audit["planned"] == 51
+    assert audit["planned"] == 56
     assert audit["findings"] == []
     assert verification["score"] is None
 
@@ -116,8 +119,8 @@ def test_every_planned_unit_becomes_exactly_one_issue():
     units = {unit.check_id: unit for unit in result["units"]}
     issues = [project_issue(item, units[item.check_id]) for item in result["results"]]
 
-    assert len(issues) == result["report"]["planned"] == 51
-    assert len({issue["checker"] for issue in issues}) == 51
+    assert len(issues) == result["report"]["planned"] == 56
+    assert len({issue["checker"] for issue in issues}) == 56
     passing = next(issue for issue in issues if issue["detail"] == "pass")
     assert passing["level"] == "info"
     assert passing["finding_ids"] == []
@@ -260,9 +263,9 @@ def test_credibility_is_recomputable_from_the_plan():
     report = _audited()["report"]
     entry = credibility(report)
 
-    assert entry["assessed"] == report["coverage"]["assessed"] == 33
-    assert entry["planned"] == 51
-    assert entry["ratio"] == 0.647
+    assert entry["assessed"] == report["coverage"]["assessed"] == 37
+    assert entry["planned"] == 56
+    assert entry["ratio"] == 0.661
     assert "not_applicable never counts" in entry["formula"]
 
 

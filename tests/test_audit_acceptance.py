@@ -58,7 +58,13 @@ def _state(*, statuses: dict | None = None, omit: tuple[str, ...] = ()) -> dict:
 
 
 def _audit(state: dict, *, snapshot_digest: str = "digest-1", current_digest: str | None = None) -> dict:
-    return audit_state(state, snapshot_digest=snapshot_digest, current_digest=current_digest)
+    # `CO-ISSUE-NOT-PAST` compares against `today`; pin it so the clean fixture stays clean.
+    return audit_state(
+        state,
+        snapshot_digest=snapshot_digest,
+        current_digest=current_digest,
+        as_of="2026-03-12",
+    )
 
 
 def _gate(report: dict, findings: list[dict], operation: str = START_APPROVAL, digest: str = "digest-1"):

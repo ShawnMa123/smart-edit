@@ -15,6 +15,9 @@ counterparty:
   match: exact_normalized
   field: beneficiary_name
 policy_packs: [guarantee-core]
+# Deterministic extraction profile this customer's documents are read with (change D7). The request
+# may override it with `?profile=`, but only with another published, type-matching profile.
+extraction_profile: guarantee-default
 
 body: |
   DEMAND GUARANTEE — CUSTOMER TEMPLATE (synthetic)

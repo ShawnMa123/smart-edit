@@ -14,11 +14,14 @@ Design: `openspec/changes/frontend-console/design.md` D1-D2.
 
 from __future__ import annotations
 
+from app.audit.resolve import resolve_template
 from app.config import FieldsConfigError, load_fields_config
 from app.nodes.audit import audit_node
 from app.nodes.extract import extract_node
 from app.nodes.normalize import normalize_node
 from app.nodes.parse import parse_node
+from app.parsing.extraction_profile import resolve_profile
+from app.rules.templates import load_templates
 from app.stages import STAGE_TARGETS, latest_stage
 
 # The only keys with a reducer in `app/state.py`. Anything else overwrites.
@@ -52,6 +55,41 @@ def is_done(state: dict, stage: str) -> bool:
     return bool(report) and report.get("status") == "done"
 
 
+def resolve_extraction_profile(
+    state: dict,
+    *,
+    requested: str | None = None,
+    template_id: str | None = None,
+    templates=None,
+    fields_config: dict[str, dict] | None = None,
+):
+    """Resolve the profile for one run (change D7): request `?profile=` > template > none.
+
+    A named template narrows the template pool directly, because the counterparty-based resolution
+    runs on fields that do not exist yet at extraction time. Without a reference, the template is
+    resolved from the current state; before extraction there are no fields, so that yields no
+    profile and the existing fixture/LLM path applies.
+
+    Unknown / unpublished / type-mismatched profiles raise `ProfileError`; the caller refuses the
+    request instead of silently falling back to the fixture.
+    """
+    pool = list(templates) if templates is not None else load_templates()
+    pack = None
+    if template_id:
+        pack = next(
+            (item for item in pool if item.template_id == template_id and item.published),
+            None,
+        )
+    else:
+        pack = resolve_template(state, pool).template
+    return resolve_profile(
+        requested=requested,
+        template=pack,
+        fields_config=fields_config,
+        document_type=state.get("business_type"),
+    )
+
+
 def execute_chain(
     state: dict,
     chain: list[str],
@@ -59,6 +97,8 @@ def execute_chain(
     llm=None,
     fields_yaml: dict[str, dict] | None = None,
     template_reference: dict | None = None,
+    profile=None,
+    as_of: str | None = None,
 ) -> dict:
     """Run `chain` in order, merging each node update into `state` (mutated in place).
 
@@ -67,6 +107,8 @@ def execute_chain(
       `normalize` clears them, so re-running them would rebuild `fields` from nothing and turn every
       required field into a `missing` placeholder (design Risks).
     - `template_reference` reaches the audit node only; it asks for template-driven audit (design D18).
+    - `profile` reaches the extract node only; it selects the deterministic path (change
+      `config-driven-audit-extraction` D3). `None` keeps the fixture/LLM path.
     """
     unknown = [stage for stage in chain if stage not in STAGE_TARGETS]
     if unknown:
@@ -87,9 +129,15 @@ def execute_chain(
         if stage == "parse":
             update = parse_node(state)
         elif stage == "extract":
-            update = extract_node(state, llm=llm, field_keys=field_keys)
+            update = extract_node(
+                state,
+                llm=llm,
+                field_keys=field_keys,
+                profile=profile,
+                fields_yaml=fields_yaml,
+            )
         elif stage == "audit":
-            update = audit_node(state, template_reference=template_reference)
+            update = audit_node(state, template_reference=template_reference, as_of=as_of)
         else:
             update = normalize_node(state, fields_yaml=fields_yaml)
         merge_update(state, update)

@@ -112,6 +112,30 @@ function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
         </div>
       </div>
 
+      <h3 className="tiny muted">Where the values came from</h3>
+      <div
+        className="notice tiny"
+        role="status"
+        data-testid="extraction-source"
+        data-source={audit.extraction.source}
+      >
+        <div>{audit.extraction.label}</div>
+        <div className="tiny muted">
+          {audit.extraction.fieldsFound === null
+            ? 'Field coverage not recorded for this run'
+            : `${audit.extraction.fieldsFound} fields found · ${
+                audit.extraction.fieldsMissing ?? 0
+              } missing`}
+          {audit.asOf ? ` · audit date ${audit.asOf}` : ''}
+          {audit.extraction.llmFallback ? ' · model fallback used (unconfirmed)' : ''}
+        </div>
+        {audit.extraction.conflictFields.length > 0 ? (
+          <div className="tiny" data-testid="extraction-conflicts">
+            Conflicting values need confirmation: {audit.extraction.conflictFields.join(', ')}
+          </div>
+        ) : null}
+      </div>
+
       <h3 className="tiny muted">Gate</h3>
       <div className="row" data-testid="gate" data-decision={gate.decision} data-asked={String(gate.asked)}>
         <StatusChip token={gateDecisionToken(gate.decision)} />
@@ -130,21 +154,40 @@ function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
 
       {audit.findings.length > 0 ? (
         <div>
-          <h3 className="tiny muted">Rule findings (from the audit)</h3>
+          <h3 className="tiny muted">Audit findings ({audit.findings.length})</h3>
+          <p className="tiny muted">
+            Each finding says what is wrong, which field it points at, and which actions it blocks.
+          </p>
           {audit.findings.map((finding) => (
-            <div className="finding" key={finding.key}>
+            <div className="finding" key={finding.key} data-testid="audit-finding">
               <div className="row">
                 <StatusChip token={severityToken(finding.severity)} />
-                <span className="tiny muted">
-                  {finding.id ?? 'un-numbered'} · {finding.rule ?? 'rule'} · gate: {finding.gateType ?? '—'}
-                  {finding.targetOperations.length > 0
-                    ? ` → ${finding.targetOperations.join(', ')}`
-                    : ''}
-                </span>
+                <strong>{finding.headline}</strong>
+                {finding.id ? <code className="tiny muted">{finding.id}</code> : null}
               </div>
-              <div>{finding.message}</div>
+              {finding.fieldId ? (
+                <div className="tiny muted">
+                  Field:{' '}
+                  {finding.fieldLabel ? `${finding.fieldLabel} ` : ''}
+                  <code>{finding.fieldId}</code>
+                </div>
+              ) : null}
+              <div className="tiny muted">
+                {finding.gateLabel}
+                {finding.operationLabels.length > 0
+                  ? `: ${finding.operationLabels.join(', ')}`
+                  : finding.gateType === 'advisory'
+                    ? ' — does not block an action'
+                    : ''}
+              </div>
+              {finding.rule ? (
+                <div className="tiny muted">
+                  Check: <code>{finding.rule}</code>
+                  {finding.method ? ` · ${finding.method}` : ''}
+                </div>
+              ) : null}
               {finding.evidence ? (
-                <div className="tiny muted">evidence: {finding.evidence}</div>
+                <div className="tiny muted">Evidence: “{finding.evidence}”</div>
               ) : null}
             </div>
           ))}

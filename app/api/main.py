@@ -40,8 +40,9 @@ from app.identity.principal import has_csrf_signal, is_public_path, requires_csr
 from app.identity.resources import DocumentAccess
 from app.llm import resolve_llm
 from app.logging_setup import get_logger
+from app.parsing.extraction_profile import ProfileError
 from app.runs import RunStore, UnknownRun
-from app.runtime import UnknownStage, execute_chain
+from app.runtime import UnknownStage, execute_chain, resolve_extraction_profile
 from app.standalone import plan_standalone
 from app.stages import AGENT_SPECS
 
@@ -335,8 +336,21 @@ def create_app(
         return JSONResponse(status_code=201, content=to_envelope(state))
 
     @app.post("/runs/{thread_id}/stages/{stage}")
-    async def trigger_stage(thread_id: str, stage: str, template: str | None = None) -> dict:
+    async def trigger_stage(
+        thread_id: str,
+        stage: str,
+        template: str | None = None,
+        as_of: str | None = None,
+        profile: str | None = None,
+    ) -> dict:
         """Run a stage chain. `?template=<id>` asks for template-driven audit (design D18).
+
+        `?as_of=YYYY-MM-DD` fixes the audit date (change D5); without it the server's today is used
+        and echoed in `verification.audit.as_of`.
+
+        `?profile=<id>` selects a published extraction profile (change D7). Without it, a named
+        template's `extraction_profile` applies. Unlike the audit template, an unusable profile is
+        **refused**, never silently replaced by the fixture path.
 
         The query parameter can only *narrow* which published template applies; it can never select a
         version or an unpublished pack.
@@ -358,6 +372,15 @@ def create_app(
         if plan.get("status") != 200:
             raise _read_plan_refusal(plan)
 
+        extraction_profile = None
+        if "extract" in plan["chain"]:
+            try:
+                extraction_profile = resolve_extraction_profile(
+                    state, requested=profile, template_id=template
+                )
+            except ProfileError as exc:
+                raise ApiFailure(400, "invalid_extraction_profile", str(exc)) from exc
+
         async with store_.lock(thread_id):
             try:
                 execute_chain(
@@ -365,6 +388,8 @@ def create_app(
                     list(plan["chain"]),
                     llm=app.state.llm,
                     template_reference={"template_id": template} if template else None,
+                    as_of=as_of,
+                    profile=extraction_profile,
                 )
             except UnknownStage as exc:
                 raise ApiFailure(409, "unknown_stage", str(exc)) from exc

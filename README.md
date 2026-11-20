@@ -154,6 +154,43 @@ curl -s "localhost:8000/runs/$TID" | python3 -m json.tool | head -20
 `fixture:<path>` → replays that file and says so in the stage `reason`; `openai:<model>` → reserved,
 raises `NotImplementedError`.
 
+#### Deterministic extraction (config-driven-audit-extraction)
+
+`fixture:` is a **demo / regression path only** — it replays the same candidates for every document.
+For real text, name a published extraction profile; the `extract` stage then reads the current
+`docs.blocks`, needs no model (`model_calls=0`) and is reproducible:
+
+```bash
+# the shipped profile: app/configs/extraction/guarantee-default.json
+curl -s -X POST \
+  "localhost:8000/runs/$TID/stages/audit?profile=guarantee-default&as_of=2026-03-12" \
+  | python3 -m json.tool | head -40
+
+# the customer template names the same profile; an explicit ?profile= wins over it
+curl -s -X POST \
+  "localhost:8000/runs/$TID/stages/audit?template=adidas-guarantee&as_of=2026-03-12" \
+  | python3 -m json.tool | head -40
+```
+
+- Profile = **where** a value is found (labels/aliases, `value_kind`, `same_block` /
+  `same_or_next_block`, confidence). It only references `fields.yaml` keys; unknown keys, unknown
+  `value_kind`, regexes or scripts are load errors.
+- An unknown / unpublished / type-mismatched profile is refused (`400 invalid_extraction_profile`) —
+  never silently replaced by the fixture.
+- `verification.extraction` names the source (`deterministic` / `fixture` / `llm` / `unknown`),
+  profile id/version/hash and `fields_found` / `fields_missing`; `verification.policy` names the
+  template id, bundle versions and `as_of`. The UI shows the same block above the gate.
+- `?as_of=YYYY-MM-DD` fixes the audit date used by `relative_date: today`; it defaults to the server's
+  today and is always echoed in `verification.audit.as_of`, so the same date + text replays exactly.
+- Company policy is a normal rule bundle: `app/rules/bundles/company-guarantee.yaml` (issue date not
+  before `today`, desk amount limit, URDG 758 / payment wording, allowed currencies). Every rule has
+  test vectors; `.venv/bin/python -m app.rules.doctor` must stay green before publishing.
+
+To add a field: declare it in `app/configs/fields.yaml`, add its locator to the profile JSON, and (if
+it needs a business rule) add a rule + vectors to a bundle. To add a policy: copy the company bundle,
+bump `version`, publish it, and run the doctor. `openspec/changes/config-driven-audit-extraction/`
+describes the contract in full.
+
 ### Statute evidence (knowledge-statute-retrieval, off by default)
 
 The knowledge assistant answers rule questions through Mercatoria's `/v1/chat` endpoint

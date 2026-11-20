@@ -1,0 +1,161 @@
+# Company policy pack — the desk's own minimums, layered on top of `guarantee-core`.
+#
+# Design D6 of `config-driven-audit-extraction`: company policy is data in the same closed DSL, never
+# a second rule language. Every rule ships executable vectors (pass / finding / needs_input) so
+# `python -m app.rules.doctor` can prove it before publication.
+#
+# Gate types are deliberate: a stricter rule on a field `guarantee-core` already gates at another
+# level would be a cross-bundle policy conflict, and a conflict must be resolved by a human, not by
+# whichever bundle loaded last. These rules either cover fields the core pack leaves alone, or agree
+# with the core pack's gate type.
+bundle_id: company-guarantee
+version: 1.0.0
+published: true
+owner: Trade Finance Compliance
+valid_from: "2026-11-01"
+valid_to: null
+document_types: [guarantee]
+rules:
+  - rule_id: CO-ISSUE-NOT-PAST
+    version: 1
+    title: Issue date must not be earlier than the audit date
+    category: consistency
+    severity: critical
+    gate_type: hard_block
+    target_operations: [start_approval, formal_export, handoff]
+    field_id: issue_date
+    expression:
+      op: compare
+      left: {kind: field, field_id: issue_date}
+      comparator: ge
+      right: {kind: relative_date, value: today}
+    test_vectors:
+      - name: issue date today passes
+        fields:
+          issue_date: {state: confirmed, value: "2026-11-19"}
+        expect: pass
+      - name: issue date in the past is a finding
+        fields:
+          issue_date: {state: confirmed, value: "2026-11-18"}
+        expect: finding
+      - name: unconfirmed issue date needs input
+        fields:
+          issue_date: {state: unconfirmed, value: "2026-11-18"}
+        expect: needs_input
+
+  - rule_id: CO-AMOUNT-DESK-LIMIT
+    version: 1
+    title: Guarantee amount must not exceed the desk limit
+    # `policy` (not `field`) so this stricter desk limit does not read as a competing gate on the
+    # same `(guarantee_amount, field)` pair that `guarantee-core` already gates. It is hard because a
+    # customer template may already demand `guarantee_amount`; an advisory company rule would then be
+    # a cross-source conflict, and a conflict is never resolved by load order.
+    category: policy
+    severity: critical
+    gate_type: hard_block
+    target_operations: [start_approval, formal_export, handoff]
+    field_id: guarantee_amount
+    expression:
+      op: compare
+      left: {kind: field, field_id: guarantee_amount}
+      comparator: le
+      right: {kind: literal, value_type: decimal, value: "20000000"}
+    test_vectors:
+      - name: within the desk limit passes
+        fields:
+          guarantee_amount: {state: confirmed, value: "500000.00"}
+        expect: pass
+      - name: above the desk limit is a finding
+        fields:
+          guarantee_amount: {state: confirmed, value: "25000000.00"}
+        expect: finding
+      - name: unconfirmed amount needs input
+        fields:
+          guarantee_amount: {state: unconfirmed, value: "25000000.00"}
+        expect: needs_input
+
+  - rule_id: CO-CURRENCY-ALLOWED
+    version: 1
+    title: Settlement currency must be USD or EUR
+    category: field
+    severity: warn
+    gate_type: advisory
+    target_operations: []
+    field_id: currency
+    expression:
+      op: any
+      args:
+        - {op: compare, left: {kind: field, field_id: currency}, comparator: eq, right: {kind: literal, value_type: string, value: USD}}
+        - {op: compare, left: {kind: field, field_id: currency}, comparator: eq, right: {kind: literal, value_type: string, value: EUR}}
+    test_vectors:
+      - name: USD passes
+        fields:
+          currency: {state: confirmed, value: "USD"}
+        expect: pass
+      - name: an unlisted currency is a finding
+        fields:
+          currency: {state: confirmed, value: "CNY"}
+        expect: finding
+      - name: unconfirmed currency needs input
+        fields:
+          currency: {state: unconfirmed, value: "CNY"}
+        expect: needs_input
+
+  - rule_id: CO-GOVERNING-URDG
+    version: 1
+    title: Guarantee must reference URDG 758
+    category: template
+    severity: warn
+    gate_type: advisory
+    target_operations: []
+    field_id: governing_rules
+    expression:
+      op: contains_clause
+      field_id: governing_rules
+      match_kind: exact_text
+      value: URDG 758
+    test_vectors:
+      - name: URDG 758 passes
+        fields:
+          governing_rules: {state: confirmed, value: "适用 URDG 758"}
+        expect: pass
+      - name: another governing law is a finding
+        fields:
+          governing_rules: {state: confirmed, value: "适用当地法律"}
+        expect: finding
+      - name: unconfirmed rules need input
+        fields:
+          governing_rules: {state: unconfirmed, value: "适用 URDG 758"}
+        expect: needs_input
+
+  - rule_id: CO-PAYMENT-TERMS
+    version: 1
+    title: Payment terms must describe payment
+    category: template
+    severity: warn
+    gate_type: advisory
+    target_operations: []
+    field_id: payment_terms
+    # Only judged when the document actually yields payment terms; a document with no such field is
+    # not evidence of missing payment wording (template clauses cover that separately).
+    applicability:
+      op: exists
+      field_id: payment_terms
+    expression:
+      op: contains_clause
+      field_id: payment_terms
+      match_kind: exact_text
+      value: Payment
+    test_vectors:
+      - name: payment wording passes
+        fields:
+          payment_terms: {state: confirmed, value: "Payment shall be made in USD within 30 days of presentation."}
+        expect: pass
+      - name: unrelated terms are a finding
+        fields:
+          payment_terms: {state: confirmed, value: "The beneficiary shall present documents."}
+        expect: finding
+      - name: unconfirmed terms need input
+        fields:
+          payment_terms: {state: unconfirmed, value: "Payment shall be made in USD within 30 days of presentation."}
+        expect: needs_input

@@ -22,6 +22,9 @@ OPS = (
 COMPARATORS = ("eq", "ne", "lt", "le", "gt", "ge")
 LENGTH_UNITS = ("code_point", "grapheme", "byte")
 LITERAL_TYPES = ("string", "decimal", "date", "datetime", "boolean")
+# Operands that resolve against the audit context instead of the document or a literal. The set is
+# closed on purpose: `today` is the only relative date the DSL understands (change D5/D6).
+RELATIVE_DATE_VALUES = ("today",)
 
 MAX_DEPTH = 8
 MAX_NODES = 200
@@ -51,6 +54,14 @@ def validate_operand(operand: object) -> dict:
             raise RuleEvaluationError(f"literal operand must be {{kind, value_type, value}}: {operand!r}")
         if operand["value_type"] not in LITERAL_TYPES:
             raise RuleEvaluationError(f"unsupported literal type {operand['value_type']!r}")
+        return operand
+    if kind == "relative_date":
+        if set(operand) != {"kind", "value"}:
+            raise RuleEvaluationError(f"relative_date operand must be {{kind, value}}: {operand!r}")
+        if operand["value"] not in RELATIVE_DATE_VALUES:
+            raise RuleEvaluationError(
+                f"relative_date value {operand['value']!r} is not one of {RELATIVE_DATE_VALUES}"
+            )
         return operand
     raise RuleEvaluationError(f"unknown operand kind {kind!r}")
 
