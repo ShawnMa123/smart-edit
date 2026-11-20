@@ -260,9 +260,10 @@ repeat trigger is refused.
 
 
 -----------
-邮箱	密码	角色	部门
-admin@atlas-trade.test	AtlasAdmin!2026	Organisation administrator	—
-applicant@atlas-trade.test	Applicant!2026	Applicant	Trade Operations
-bankops@atlas-trade.test	BankOps!2026	Bank Operations (First Approver)	Bank Operations
-compliance@atlas-trade.test	Compliance!2026	Compliance (Second Approver)	Compliance
-auditor@atlas-trade.test	Auditor!2026	Auditor	—
+邮箱	                      密码	            角色	                              部门
+admin@atlas-trade.test	    AtlasAdmin!2026	  Organisation                      administrator	—
+applicant@atlas-trade.test	Applicant!2026	  Applicant	Trade                   Operations
+bankops@atlas-trade.test	  BankOps!2026	    Bank Operations (First Approver)	Bank Operations
+compliance@atlas-trade.test	Compliance!2026	  Compliance (Second Approver)	    Compliance
+auditor@atlas-trade.test	  Auditor!2026	                                      Auditor	—
+-----------

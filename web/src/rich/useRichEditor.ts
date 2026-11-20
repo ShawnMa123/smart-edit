@@ -52,7 +52,10 @@ export function useRichEditor({ document, onChange, editable = true }: UseRichEd
   });
 
   useEffect(() => {
-    if (editor) editor.setEditable(editable);
+    // `setEditable` emits an update by default, which the parent cannot tell apart from a real
+    // edit: on mount it would report the still-empty editor as "the user typed", so a server draft
+    // loaded a moment later is discarded and overwritten with empty content.
+    if (editor) editor.setEditable(editable, false);
   }, [editor, editable]);
 
   // Replace the content when a *different* document arrives (import, version restore), without
