@@ -26,6 +26,7 @@ def test_extracts_amount_date_currency_and_text_from_the_current_document(fields
 
     by_key = {candidate["key"]: candidate for candidate in result.candidates}
     assert set(by_key) == {
+        "guarantee_number",
         "guarantee_amount",
         "currency",
         "issue_date",
@@ -42,7 +43,7 @@ def test_extracts_amount_date_currency_and_text_from_the_current_document(fields
     assert by_key["payment_terms"]["raw_value"].startswith("Payment shall be made")
     assert by_key["payment_terms"]["_match"]["via"] == "next_block"
     assert result.model_calls == 0
-    assert result.missing == ()
+    assert set(result.missing) == {"applicant_name", "beneficiary_name"}
 
 
 def test_normalization_reuses_the_single_implementation(fields_yaml):
@@ -128,6 +129,9 @@ def test_missing_label_never_invents_a_candidate(fields_yaml):
 
     assert result.candidates == []
     assert set(result.missing) == {
+        "guarantee_number",
+        "applicant_name",
+        "beneficiary_name",
         "guarantee_amount",
         "currency",
         "issue_date",

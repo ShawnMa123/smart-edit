@@ -1,10 +1,31 @@
 {
   "profile_id": "guarantee-default",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "published": true,
   "document_types": ["guarantee"],
   "description": "Deterministic field locators for a demand guarantee. Values are found by label/alias inside the parsed blocks; no regular expressions or scripts are accepted.",
   "fields": {
+    "guarantee_number": {
+      "labels": ["保函编号", "保函号", "GUARANTEE NO", "GUARANTEE NUMBER", "BG NO"],
+      "value_kind": "text",
+      "search": "same_block",
+      "max_chars": 64,
+      "confidence": 0.9
+    },
+    "applicant_name": {
+      "labels": ["申请人", "申请人名称", "APPLICANT", "APPLICANT NAME"],
+      "value_kind": "text",
+      "search": "same_block",
+      "max_chars": 120,
+      "confidence": 0.9
+    },
+    "beneficiary_name": {
+      "labels": ["受益人", "受益人名称", "BENEFICIARY", "BENEFICIARY NAME"],
+      "value_kind": "text",
+      "search": "same_block",
+      "max_chars": 120,
+      "confidence": 0.9
+    },
     "guarantee_amount": {
       "labels": ["保函金额", "金额", "GUARANTEE AMOUNT", "AMOUNT", "SUM"],
       "value_kind": "amount",

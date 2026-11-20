@@ -49,10 +49,13 @@ def test_shipped_profile_loads_with_a_stable_identity(fields_yaml):
 
     assert isinstance(profile, ExtractionProfile)
     assert profile.profile_id == "guarantee-default"
-    assert profile.version == "1.0.0"
+    assert profile.version == "1.1.0"
     assert len(profile.content_sha256) == 12
     assert profile.identity["content_sha256"] == profile.content_sha256
     assert set(profile.fields) == {
+        "guarantee_number",
+        "applicant_name",
+        "beneficiary_name",
         "guarantee_amount",
         "currency",
         "issue_date",

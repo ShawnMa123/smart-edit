@@ -158,7 +158,9 @@ CONTRACT_ELEMENTS: tuple[ElementSpec, ...] = (
     _BY_KEY["jurisdiction"],
 )
 
-_GUARANTEE_TYPE_RE = re.compile(r"保函|guarantee|standby|见索即付", _I)
+_GUARANTEE_TYPE_RE = re.compile(
+    r"保函|guarantee|standby|undertaking|见索即付|申请人|受益人", _I
+)
 _LC_TYPE_RE = re.compile(r"信用证|letter\s+of\s+credit|\bUCP\s?\d{3}\b|\bISP\s?98\b", _I)
 _CONTRACT_TYPE_RE = re.compile(r"合同|协议|agreement|contract", _I)
 

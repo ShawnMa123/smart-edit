@@ -41,7 +41,7 @@ def test_the_normal_sample_is_read_from_the_current_text(fields_yaml):
     state = _run("normal", fields_yaml)
 
     extract = next(report for report in state["stages"] if report["stage"] == "extract")
-    assert extract["reason"] == "deterministic profile guarantee-default@1.0.0"
+    assert extract["reason"] == "deterministic profile guarantee-default@1.1.0"
     assert extract["model_calls"] == 0
     assert state["verification"]["extraction"]["source"] == "deterministic"
     assert state["fields"]["guarantee_amount"]["value"] == "500000.00"

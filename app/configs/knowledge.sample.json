@@ -50,6 +50,7 @@
     "escrow": ["第三方托管", "escrow account"]
   },
   "suggested_questions": [
+    "独立保函必须载明哪些事项才有效？",
     "What rules apply to the customs value of imported goods?",
     "What does URDG 758 article 20 require for claims?"
   ]

@@ -375,7 +375,7 @@ def test_an_explicit_profile_does_not_skip_the_requested_template(tmp_path):
     assert response.status_code == 200, response.text
     body = response.json()
     extract = next(report for report in body["stages"] if report["stage"] == "extract")
-    assert extract["reason"] == "deterministic profile guarantee-default@1.0.0"
+    assert extract["reason"] == "deterministic profile guarantee-default@1.1.0"
     assert extract["model_calls"] == 0
     verification = body["verification"]
     assert verification["extraction"]["source"] == "deterministic"
@@ -402,7 +402,7 @@ def test_a_named_template_selects_the_profile_at_extraction_time(tmp_path):
 
     extract = next(report for report in body["stages"] if report["stage"] == "extract")
     assert extract["status"] == "done"
-    assert extract["reason"] == "deterministic profile guarantee-default@1.0.0"
+    assert extract["reason"] == "deterministic profile guarantee-default@1.1.0"
     assert extract["model_calls"] == 0
     assert body["fields"]["issue_date"]["value"] == "2026-03-12"
     assert body["fields"]["governing_rules"]["value"] == "URDG 758"

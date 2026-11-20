@@ -96,7 +96,7 @@ def test_a_profile_runs_deterministically_without_any_provider(fields_yaml):
     report = update["stages"][0]
     assert report["status"] == "done"
     assert report["model_calls"] == 0
-    assert report["reason"] == "deterministic profile guarantee-default@1.0.0"
+    assert report["reason"] == "deterministic profile guarantee-default@1.1.0"
     assert {candidate["key"] for candidate in update["_candidates"]} >= {
         "guarantee_amount",
         "currency",
@@ -105,11 +105,11 @@ def test_a_profile_runs_deterministically_without_any_provider(fields_yaml):
     assert update["_extraction"] == {
         "source": "deterministic",
         "profile_id": "guarantee-default",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "content_sha256": profile.content_sha256,
         "document_types": ["guarantee"],
         "fields_found": 3,
-        "fields_missing": 3,
+        "fields_missing": 6,
         "llm_fallback": False,
     }
     assert all(entry["op"] in TRAIL_OPS for entry in update["trail"])

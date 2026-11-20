@@ -170,3 +170,14 @@ def test_evasion_wording_alone_is_a_human_review_finding():
     assert check.status == "finding"
     assert finding.gate_type == "human_review"
     assert finding.document_anchors
+
+
+def test_document_type_keeps_an_undertaking_in_the_guarantee_catalogue():
+    from app.legal_review.checks import detect_document_type
+
+    assert detect_document_type(EXPORT_EN) == "contract"
+    assert detect_document_type(CLEAN) == "contract"
+    assert detect_document_type(
+        "DRAFT PAYMENT UNDERTAKING\nApplicant: A\nBeneficiary: B\nURDG 758"
+    ) == "guarantee"
+    assert detect_document_type("独立保函\n申请人：甲公司\n受益人：乙公司") == "guarantee"
