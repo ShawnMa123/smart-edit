@@ -1,4 +1,4 @@
-/** LegalPanel: deterministic rule check renders the three fact-state outcomes. */
+/** LegalPanel: statute advice (question scope) and the draft document scan. */
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,23 +10,21 @@ import type { Finding, ReviewReport, ReviewRun } from '../api/legal';
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
     finding_id: 'lf_1',
-    check_id: 'check_demo_amount_required',
+    check_id: 'LEGAL:element:amount',
     method: 'deterministic',
-    category: 'field',
+    category: 'element',
     severity: 'Critical',
     gate_type: 'hard_block',
     target_operations: ['start_approval'],
-    title: 'Missing amount',
-    explanation: 'The synthetic template requires an amount before approval.',
+    title: 'Missing guarantee / contract amount',
+    explanation: 'The draft does not mention the amount.',
     anchors: [],
-    rule_refs: [{ rule_id: 'DEMO-AMOUNT-REQUIRED', version: '1' }],
+    document_anchors: [],
+    suggestion: 'Add the amount with its currency.',
+    basis: 'rule',
+    rule_refs: [{ rule_id: 'LEGAL-AMOUNT', version: '1' }],
     evidence_ids: [],
-    applicability: {
-      jurisdictions: [],
-      assessment_date: '2026-11-20',
-      conditions: [],
-      limitations: ['Missing field has no text anchor'],
-    },
+    applicability: { jurisdictions: [], assessment_date: '2026-11-20', limitations: [] },
     support_level: 'not_applicable',
     disposition: 'open',
     version: 1,
@@ -38,27 +36,56 @@ function makeReport(overrides: Partial<ReviewReport> = {}): ReviewReport {
   return {
     report_id: 'rep_1',
     run_id: 'run_1',
-    completion: 'complete',
+    completion: 'partial',
     outcome: 'findings_present',
     findings: [makeFinding()],
     coverage: [
       {
-        check_id: 'check_demo_amount_required',
+        check_id: 'LEGAL:element:amount',
         method: 'deterministic',
-        scope_key: 'template',
+        scope_key: 'document',
         status: 'finding',
-        rule_refs: [{ rule_id: 'DEMO-AMOUNT-REQUIRED', version: '1' }],
-        reason_codes: ['rule_violated'],
+        rule_refs: [{ rule_id: 'LEGAL-AMOUNT', version: '1' }],
+        reason_codes: ['element_missing'],
         finding_ids: ['lf_1'],
         missing_facts: [],
       },
+      {
+        check_id: 'LEGAL:clause:clause-01:statute',
+        method: 'legal',
+        scope_key: 'clause-01',
+        status: 'unable_to_assess',
+        rule_refs: [],
+        reason_codes: ['composer_unavailable'],
+        finding_ids: [],
+        missing_facts: [],
+        clause_id: 'clause-01',
+        evidence_count: 2,
+      },
     ],
-    limitations: [],
+    limitations: [{ code: 'truncated', message: 'Only the first 12 clauses were scanned.' }],
+    snapshot: { document_id: 'doc-1', revision: 3, content_sha256: 'abcdef1234567890' },
+    coverage_summary: {
+      planned: 4,
+      settled: 2,
+      assessed: 2,
+      assessed_ratio: 0.5,
+      by_status: { finding: 1, unable_to_assess: 2, pass: 1 },
+      clauses: 2,
+      truncated: false,
+    },
+    retrieval: { queries: 2, hits: 3, web_requested: false, web_used: false, web_calls: 0 },
+    gate: {
+      status: 'blocked',
+      reasons: ['hard_block_finding', 'limited_coverage'],
+      coverage_ratio: 0.5,
+      policy: 'legal-scan/1',
+    },
     ...overrides,
   };
 }
 
-function makeRun(): ReviewRun {
+function makeRun(overrides: Partial<ReviewRun> = {}): ReviewRun {
   return {
     run_id: 'run_1',
     status: 'succeeded',
@@ -68,76 +95,162 @@ function makeRun(): ReviewRun {
     report_id: 'rep_1',
     error: null,
     finished_at: '2026-11-20T00:00:01Z',
+    progress: { stage: 'done', planned: 4, done: 4 },
+    ...overrides,
   };
 }
 
-describe('LegalPanel', () => {
-  it('runs the deterministic rule and renders a Critical finding for a missing amount', async () => {
+function documentClient(report = makeReport()) {
+  return {
+    submitReview: vi.fn().mockResolvedValue(
+      makeRun({ status: 'queued', report_id: 'rep_1', progress: { stage: 'queued' } }),
+    ),
+    getRun: vi.fn().mockResolvedValue(makeRun()),
+    getReport: vi.fn().mockResolvedValue(report),
+  };
+}
+
+describe('LegalPanel · statute advice', () => {
+  it('asks the statute service and renders the answer with citations', async () => {
     const submitReview = vi.fn().mockResolvedValue(makeRun());
-    const getReport = vi.fn().mockResolvedValue(makeReport());
+    const getReport = vi.fn().mockResolvedValue(
+      makeReport({
+        findings: [
+          makeFinding({
+            method: 'legal',
+            basis: 'statute',
+            support_level: 'strong',
+            severity: 'Warning',
+            gate_type: 'human_review',
+            title: 'Amount clause',
+            explanation: '该情形下应依据第 12 条办理。',
+            anchors: [{ chunk_id: 'chunk_1', article_label: '第十二条', title: 'URDG 758' }],
+          }),
+        ],
+      }),
+    );
     render(<LegalPanel documentId="doc-1" client={{ submitReview, getReport }} />);
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Rule check' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Amount missing' }));
+    await userEvent.click(screen.getByRole('button', { name: '银行保函的金额条款有哪些法律要求？' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
 
-    await waitFor(() => expect(screen.getByText('Missing amount')).toBeTruthy());
-    expect(screen.getByText('Critical')).toBeTruthy();
-    expect(screen.getByText('Findings')).toBeTruthy();
-    expect(screen.getByText('Blocks')).toBeTruthy();
-    expect(screen.getByText('Complete')).toBeTruthy();
-    expect(screen.getByText(/DEMO-AMOUNT-REQUIRED v1/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Amount clause')).toBeTruthy());
+    expect(screen.getByText('Strong support')).toBeTruthy();
+    expect(screen.getByText('第十二条')).toBeTruthy();
     expect(submitReview).toHaveBeenCalledWith(
-      expect.objectContaining({ modes: ['deterministic'], facts: {} }),
+      expect.objectContaining({ modes: ['legal'], question: '银行保函的金额条款有哪些法律要求？' }),
       expect.anything(),
     );
   });
+});
 
-  it('shows the confirmed and unconfirmed fact states without turning them into a pass', async () => {
-    const submitReview = vi.fn().mockResolvedValue(makeRun());
-    const getReport = vi
-      .fn()
-      .mockResolvedValueOnce(
-        makeReport({
-          outcome: 'no_findings',
-          findings: [],
-          coverage: [{ ...makeReport().coverage[0], status: 'pass', reason_codes: [], finding_ids: [] }],
-        }),
-      )
-      .mockResolvedValueOnce(
-        makeReport({
-          outcome: 'unable_to_assess',
-          findings: [],
-          coverage: [
-            {
-              ...makeReport().coverage[0],
-              status: 'unable_to_assess',
-              reason_codes: ['unconfirmed_fact'],
-              finding_ids: [],
-            },
-          ],
-        }),
-      );
-    render(<LegalPanel documentId="doc-1" client={{ submitReview, getReport }} />);
-
-    await userEvent.click(screen.getByRole('tab', { name: 'Rule check' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Amount confirmed' }));
-
-    await waitFor(() => expect(screen.getByText('No findings')).toBeTruthy());
-    expect(screen.getByText('Pass')).toBeTruthy();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Amount unconfirmed' }));
-
-    await waitFor(() =>
-      expect(screen.getByText(/not confirmed yet/)).toBeTruthy(),
+describe('LegalPanel · document check', () => {
+  it('pins the draft revision, polls the run and renders coverage, gate and anchors', async () => {
+    const client = documentClient(
+      makeReport({
+        findings: [
+          makeFinding({
+            document_anchors: [
+              {
+                clause_id: 'clause-02',
+                block_index: 4,
+                start_cp: 120,
+                end_cp: 144,
+                quote: 'The guarantee will be automatically extended',
+              },
+            ],
+          }),
+        ],
+      }),
     );
-    expect(screen.getAllByText('Unable to assess').length).toBeGreaterThanOrEqual(1);
+    const onJumpToBlock = vi.fn();
+    render(
+      <LegalPanel
+        documentId="doc-1"
+        revision={3}
+        contentSha="abcdef1234567890"
+        client={client}
+        onJumpToBlock={onJumpToBlock}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    expect(screen.getByTestId('legal-scan-target').textContent).toContain('rev 3');
+    await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() => expect(screen.getByText('Missing guarantee / contract amount')).toBeTruthy());
+
+    expect(client.submitReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'document',
+        modes: ['deterministic', 'legal'],
+        expected_revision: 3,
+        expected_content_sha256: 'abcdef1234567890',
+        web_search: false,
+      }),
+      expect.anything(),
+    );
+    expect(client.getRun).toHaveBeenCalledWith('run_1', expect.anything());
+    expect(screen.getByTestId('legal-coverage-summary').textContent).toContain('Planned 4');
+    expect(screen.getByText('Gate: Blocked')).toBeTruthy();
+    expect(screen.getByText(/A blocking finding must be fixed first/)).toBeTruthy();
+    expect(screen.getByText(/Only the first 12 clauses were scanned/)).toBeTruthy();
+    expect(screen.getByText('clause-02')).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Jump to clause' }));
+    expect(onJumpToBlock).toHaveBeenCalledWith(4);
   });
 
-  it('shows the statute advice surface by default', () => {
-    render(<LegalPanel documentId="doc-1" client={{ submitReview: vi.fn(), getReport: vi.fn() }} />);
+  it('keeps the web leg off unless the operator switches it on', async () => {
+    const client = documentClient(makeReport({ findings: [], outcome: 'unable_to_assess' }));
+    render(<LegalPanel documentId="doc-1" revision={3} client={client} />);
 
-    expect(screen.getByLabelText('Legal question')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Ask' })).toBeTruthy();
-    expect(screen.getByText(/Advisory only/)).toBeTruthy();
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    const toggle = screen.getByRole('checkbox', { name: /Use web search/i });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() =>
+      expect(client.submitReview).toHaveBeenCalledWith(
+        expect.objectContaining({ web_search: true }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it('surfaces a failed run instead of rendering an empty report', async () => {
+    const client = {
+      submitReview: vi.fn().mockResolvedValue(
+        makeRun({ status: 'queued', report_id: 'rep_1' }),
+      ),
+      getRun: vi
+        .fn()
+        .mockResolvedValue(
+          makeRun({ status: 'failed', report_id: 'rep_1', error: 'stale_snapshot' }),
+        ),
+      getReport: vi.fn(),
+    };
+    render(<LegalPanel documentId="doc-1" revision={3} client={client} />);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(client.getReport).not.toHaveBeenCalled();
+  });
+
+  it('warns that a report predates the draft on screen', async () => {
+    const client = documentClient(
+      makeReport({ snapshot: { document_id: 'doc-1', revision: 1, content_sha256: 'old' } }),
+    );
+    render(<LegalPanel documentId="doc-1" revision={3} client={client} />);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/The draft changed since this scan/)).toBeTruthy(),
+    );
   });
 });

@@ -1,8 +1,11 @@
 /**
  * Legal-review HTTP client (`/legal/*`).
  *
- * Mirrors `app/api/legal.py`: POST `/legal/reviews` (202 + `ReviewRun`) and GET
- * `/legal/reports/{id}`. The report shape mirrors `app/legal_review/contracts.py`.
+ * Mirrors `app/api/legal.py`:
+ * - POST `/legal/reviews` -> 202 + `ReviewRun` (question scope answers synchronously, a document
+ *   scan comes back `queued`);
+ * - GET `/legal/runs/{id}` -> the polled run (progress line);
+ * - GET `/legal/reports/{id}` -> the report (`app/legal_review/contracts.py`).
  */
 
 import { API_BASE } from './client';
@@ -10,6 +13,9 @@ import { ApiError, NETWORK_CODE, TIMEOUT_CODE } from './errors';
 
 export const LEGAL_BASE = `${API_BASE}/legal`;
 export const LEGAL_TIMEOUT_MS = 90_000;
+/** A scan is 8-20 s; the client polls until this budget is exhausted. */
+export const LEGAL_SCAN_TIMEOUT_MS = 120_000;
+export const LEGAL_POLL_INTERVAL_MS = 900;
 
 export interface LegalOptions {
   fetchImpl?: typeof fetch;
@@ -17,6 +23,7 @@ export interface LegalOptions {
 }
 
 export type LegalMethod = 'deterministic' | 'semantic' | 'legal';
+export type LegalScope = 'question' | 'document';
 export type CheckStatus =
   | 'pass'
   | 'finding'
@@ -27,6 +34,8 @@ export type CheckStatus =
 export type Severity = 'Critical' | 'Warning' | 'Info';
 export type GateType = 'advisory' | 'human_review' | 'hard_block';
 export type SupportLevel = 'strong' | 'qualified' | 'insufficient' | 'not_applicable';
+export type FindingBasis = 'rule' | 'statute' | 'web';
+export type LegalGateStatus = 'clear' | 'advisory' | 'needs_human_review' | 'blocked';
 
 export interface RuleRef {
   rule_id: string;
@@ -42,9 +51,22 @@ export interface CheckResult {
   reason_codes: string[];
   finding_ids: string[];
   missing_facts: string[];
+  clause_id?: string | null;
+  evidence_count?: number;
+  search_queries?: string[];
 }
 
-export interface FindingAnchor {
+/** Where in the draft a finding applies. `quote` is a real substring of the draft text. */
+export interface DocumentAnchor {
+  clause_id: string;
+  block_index: number;
+  start_cp: number;
+  end_cp: number;
+  quote: string;
+}
+
+/** A statute or web citation. */
+export interface EvidenceAnchor {
   chunk_id?: string | null;
   doc_id?: string | null;
   article_label?: string | null;
@@ -53,6 +75,8 @@ export interface FindingAnchor {
   title?: string | null;
   source_version?: string | null;
   excerpt?: string | null;
+  url?: string | null;
+  unverified?: boolean;
 }
 
 export interface Finding {
@@ -65,7 +89,10 @@ export interface Finding {
   target_operations: string[];
   title: string;
   explanation: string;
-  anchors: FindingAnchor[];
+  anchors: EvidenceAnchor[];
+  document_anchors?: DocumentAnchor[];
+  suggestion?: string | null;
+  basis?: FindingBasis;
   rule_refs: RuleRef[];
   evidence_ids: string[];
   applicability: Record<string, unknown>;
@@ -83,6 +110,31 @@ export interface ReviewRun {
   report_id: string | null;
   error: string | null;
   finished_at: string | null;
+  progress?: {
+    stage?: string;
+    planned?: number;
+    done?: number;
+    current?: string | null;
+    findings?: number;
+  };
+}
+
+export interface CoverageSummary {
+  planned: number;
+  settled: number;
+  assessed: number;
+  assessed_ratio: number;
+  by_status: Record<string, number>;
+  clauses: number;
+  truncated: boolean;
+  coverage_ratio_policy?: number;
+}
+
+export interface LegalGate {
+  status: LegalGateStatus;
+  reasons: string[];
+  coverage_ratio: number;
+  policy: string;
 }
 
 export interface ReviewReport {
@@ -93,16 +145,41 @@ export interface ReviewReport {
   findings: Finding[];
   coverage: CheckResult[];
   limitations: Record<string, unknown>[];
+  snapshot?: {
+    document_id?: string;
+    revision?: number | null;
+    content_sha256?: string | null;
+  };
+  coverage_summary?: CoverageSummary;
+  retrieval?: {
+    queries?: number;
+    hits?: number;
+    web_requested?: boolean;
+    web_used?: boolean;
+    web_calls?: number;
+    layers?: Record<string, unknown>[];
+  };
+  gate?: LegalGate;
 }
 
 export interface ReviewInput {
   workspace_id: string;
   document_id: string;
-  snapshot_id: string;
-  facts_version_id: string;
+  /** `question` scope only; defaults keep the old call sites working. */
+  snapshot_id?: string;
+  facts_version_id?: string;
   modes: LegalMethod[];
   question?: string;
   facts?: Record<string, unknown>;
+  scope?: LegalScope;
+  draft_id?: string;
+  expected_revision?: number;
+  expected_content_sha256?: string;
+  business_type?: string;
+  applicable_on?: string;
+  jurisdiction_codes?: string[];
+  /** The user's choice for the outbound web leg; `undefined` = deployment default. */
+  web_search?: boolean;
 }
 
 interface LegalRequestConfig extends LegalOptions {
@@ -162,16 +239,25 @@ export function submitReview(input: ReviewInput, options: LegalOptions = {}): Pr
   return requestJson('/reviews', { ...options, method: 'POST', body: input });
 }
 
+export function getRun(runId: string, options: LegalOptions = {}): Promise<ReviewRun> {
+  return requestJson(`/runs/${encodeURIComponent(runId)}`, { ...options, method: 'GET' });
+}
+
 export function getReport(reportId: string, options: LegalOptions = {}): Promise<ReviewReport> {
   return requestJson(`/reports/${encodeURIComponent(reportId)}`, { ...options, method: 'GET' });
 }
 
+/** Kept for older imports: evidence anchors used to be called finding anchors. */
+export type FindingAnchor = EvidenceAnchor;
+
 export interface LegalClient {
   submitReview: typeof submitReview;
   getReport: typeof getReport;
+  getRun?: typeof getRun;
 }
 
 export const legalClient: LegalClient = {
   submitReview,
   getReport,
+  getRun,
 };

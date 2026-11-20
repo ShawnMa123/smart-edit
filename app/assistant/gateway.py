@@ -149,6 +149,42 @@ class DoubaoGateway:
     def label(self) -> str:
         return f"doubao:{self.model}"
 
+    # --- structured JSON (legal document scan) ---------------------------------------------
+    def compose_json(
+        self, system: str, payload: dict[str, Any], *, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """One JSON-only call whose schema the caller owns.
+
+        `compose` is tied to the assistant's `Answer` schema; a document scan needs its own
+        contract, so it reuses the transport (payload shape, retries, error codes, logging) but
+        validates the result itself.
+        """
+        content = [
+            {"type": "input_text", "text": system},
+            {"type": "input_text", "text": json.dumps(payload, ensure_ascii=False)},
+        ]
+        started = time.monotonic()
+        text = self._request(self._payload(content), timeout=timeout or self.timeout)
+        for candidate in self._json_candidates(text):
+            try:
+                raw = json.loads(candidate)
+            except ValueError:
+                continue
+            if isinstance(raw, dict):
+                self.logger.info(
+                    "json reply model=%s keys=%d duration_ms=%d",
+                    self.model,
+                    len(raw),
+                    int((time.monotonic() - started) * 1000),
+                )
+                return raw
+        self.logger.error(
+            "json reply invalid model=%s duration_ms=%d",
+            self.model,
+            int((time.monotonic() - started) * 1000),
+        )
+        raise ModelGatewayError("MODEL_OUTPUT_INVALID")
+
     # --- compose (no tools) ---------------------------------------------------------------
     def compose(self, plan: Any, bundle: EvidenceBundle, context: dict[str, Any]) -> Composition:
         payload = self._compose_payload(plan, bundle, context)

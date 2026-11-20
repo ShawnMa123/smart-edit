@@ -82,7 +82,7 @@ def test_legal_answer_produces_finding_with_traceable_evidence():
     assert finding.support_level == "strong"
     # Bottom line 2: evidence is traceable and the chunk id is not dropped.
     assert finding.evidence_ids
-    assert "chunk_1" in [anchor["chunk_id"] for anchor in finding.anchors]
+    assert "chunk_1" in [anchor.chunk_id for anchor in finding.anchors]
     assert report.coverage[0].status == "finding"
 
 

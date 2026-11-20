@@ -126,15 +126,15 @@ describe('AssistantPanel', () => {
     expect(screen.queryByRole('button', { name: /Run spec audit/i })).toBeNull();
   });
 
-  it('switches to the deterministic rule check with three fact states', async () => {
+  it('switches to the document check with a scan action', async () => {
     renderPanel();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Legal advice' }));
-    await userEvent.click(screen.getByRole('tab', { name: 'Rule check' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
 
-    expect(screen.getByRole('button', { name: 'Amount missing' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Amount confirmed' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Amount unconfirmed' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Scan document' })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /Use web search/i })).toBeTruthy();
+    expect(screen.getByTestId('legal-scan-target')).toBeTruthy();
     expect(screen.queryByLabelText('Legal question')).toBeNull();
   });
 

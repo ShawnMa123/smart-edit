@@ -104,6 +104,32 @@ systemctl reload nginx               # 改完 /etc/nginx/sites-available/smart-e
 `web/src/rich/useRichEditor.test.tsx`（去掉 `false` 时两条用例会红）。本地 `npm --prefix web run test`
 542 passed / 12 skipped。
 
+## 法规风险扫描（legal 模块）
+
+`Legal → Document check` 扫描当前草稿：条款计划 → 确定性检查（要素/日期/高风险措辞）→ 逐条款
+`/v1/retrieve` 取法条 → 豆包在给定证据内归纳 → 可选联网补检 → 报告带草稿锚点、覆盖率与闸门。
+规格见 `openspec/changes/legal-document-risk-scan/`。
+
+| 变量 | 默认 | 作用 |
+|---|---|---|
+| `SMART_EDIT_LEGAL_MAX_CLAUSES` | `12` | 单次扫描的条款上限（超出会标 `truncated`） |
+| `SMART_EDIT_LEGAL_CLAUSE_CHARS` | `1200` | 单条款字符上限 |
+| `SMART_EDIT_LEGAL_SCAN_DEADLINE` | `90` | 扫描总预算（秒）；超时余下条款记 `deadline_exceeded` |
+| `SMART_EDIT_LEGAL_COVERAGE_RATIO` | `0.6` | 低于该覆盖率，闸门带 `limited_coverage` |
+| `SMART_EDIT_LEGAL_WEB_DEFAULT` | `0` | 联网补检的部署默认；UI 勾选优先 |
+| `SMART_EDIT_LEGAL_MAX_WEB_CALLS` | `2` | 单次扫描联网调用上限（当前实现最多 1 次） |
+| `SMART_EDIT_LEGAL_COMPOSE_TIMEOUT` | `45` | 单条款综合的超时 |
+| `SMART_EDIT_LEGAL_MAX_EVIDENCE` | `5` | 每条条款最多交给模型的证据条数 |
+| `SMART_EDIT_LEGAL_DB` | `runs/legal.db` | run/report 的 SQLite 路径 |
+
+排障口径：
+
+- **每个条款都是 `composer_unavailable`**：`SMART_EDIT_ASSISTANT_MODEL/API_KEY` 没配，或
+  `SMART_EDIT_ASSISTANT_PROCESSOR_APPROVED` 不为 1。确定性检查仍然会给出结论。
+- **大量 `uncovered:XX`**：语料没有覆盖该法域/主题；这是如实告知，报告会把它列进闸门原因。
+- **`stale_snapshot`**：扫描期间草稿被保存过；重新扫描即可。
+- **联网从不发生**：未在面板勾选 `Use web search…`，或 `SMART_EDIT_LEGAL_WEB_DEFAULT=0`（默认）。
+
 ## 已知取舍 / 排障
 
 - **无 TLS**：目前是 `http://IP:8082`，所以 `SMART_EDIT_AUTH_COOKIE_SECURE=0`（带 `Secure` 的 cookie 在 HTTP 下不会被浏览器回传，表现为“登录成功但立刻 401”）。挂上 HTTPS 后删掉这行即可。

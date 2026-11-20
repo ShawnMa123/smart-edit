@@ -299,6 +299,21 @@ class EgressPolicy:
         return EgressDecision("redact", reasons[0], redacted, self.version, tuple(reasons))
 
     # --- helpers --------------------------------------------------------------------------
+    def redact(
+        self, text: str, *, entities: tuple[str, ...] = ()
+    ) -> tuple[str, tuple[str, ...]] | None:
+        """Apply the configured presets to one outbound payload.
+
+        Returns `None` when the redaction budget is exhausted: the caller must treat that as a
+        policy failure (deny), never as "clean text". Used by the legal document scan, whose payload
+        (a clause) is far longer than a search query and therefore not screened by `check()`.
+        """
+        try:
+            redacted, reasons = self._redact(text, entities)
+        except _OverBudget:
+            return None
+        return redacted, tuple(reasons)
+
     def _overlaps(self, query: str, selection: str) -> bool:
         if not query or not selection:
             return False

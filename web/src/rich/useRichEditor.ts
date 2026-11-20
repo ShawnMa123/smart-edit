@@ -16,9 +16,19 @@ export interface UseRichEditorOptions {
   onChange: (document: RichDocument) => void;
   /** Approval read-only mode: the document is frozen for this role/status. */
   editable?: boolean;
+  /** Focus a top-level block (document-anchor jump from the legal panel). */
+  focusBlock?: number | null;
+  /** Bumped by the caller to re-apply the same focus request. */
+  focusToken?: number;
 }
 
-export function useRichEditor({ document, onChange, editable = true }: UseRichEditorOptions): Editor | null {
+export function useRichEditor({
+  document,
+  onChange,
+  editable = true,
+  focusBlock = null,
+  focusToken = 0,
+}: UseRichEditorOptions): Editor | null {
   // The last document the editor itself produced. The parent echoes it back as a prop; tracking the
   // exact object is what lets the effect tell "my own edit" from "an import/version restore".
   const applied = useRef<RichDocument>(document);
@@ -66,6 +76,19 @@ export function useRichEditor({ document, onChange, editable = true }: UseRichEd
     applied.current = document;
     editor.commands.setContent(toEditorContent(document), { emitUpdate: false });
   }, [editor, document]);
+
+  useEffect(() => {
+    if (!editor || focusBlock == null) return;
+    let position: number | null = null;
+    let index = 0;
+    editor.state.doc.forEach((_node, offset) => {
+      if (position === null && index === focusBlock) position = offset + 1;
+      index += 1;
+    });
+    if (position === null) return;
+    const from = Math.min(position, editor.state.doc.content.size);
+    editor.chain().focus().setTextSelection(from).scrollIntoView().run();
+  }, [editor, focusBlock, focusToken]);
 
   return editor;
 }

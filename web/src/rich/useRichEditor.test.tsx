@@ -92,3 +92,28 @@ describe('mounting the editor (deployment regression)', () => {
     expect(container.querySelector('.ProseMirror')?.textContent).toContain('server draft body');
   });
 });
+
+function FocusHarness({ block, token }: { block: number | null; token: number }) {
+  const editor = useRichEditor({
+    document: plainTextToDocument('one\n\ntwo\n\nthree'),
+    onChange: () => {},
+    focusBlock: block,
+    focusToken: token,
+  });
+  return <EditorContent editor={editor} />;
+}
+
+describe('document-anchor jump ("legal-document-risk-scan")', () => {
+  it('moves the caret into the requested top-level block', async () => {
+    const { container, rerender } = render(<FocusHarness block={null} token={0} />);
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+
+    rerender(<FocusHarness block={2} token={1} />);
+
+    await waitFor(() => {
+      const focused = (container.querySelector('.ProseMirror') as HTMLElement | null)
+        ?.ownerDocument.activeElement;
+      expect(focused?.className ?? '').toContain('ProseMirror');
+    });
+  });
+});

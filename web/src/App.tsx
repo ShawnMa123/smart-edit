@@ -453,6 +453,16 @@ function AppContent() {
 
   const refreshVersions = () => setVersions(versionStore.list(DOCUMENT_ID));
 
+  // `legal-document-risk-scan`: a finding's anchor is a top-level block index, so "jump to clause"
+  // only has to focus the editor and let it place the caret in that block.
+  const [focusBlock, setFocusBlock] = useState<number | null>(null);
+  const [focusToken, setFocusToken] = useState(0);
+  const handleJumpToBlock = (blockIndex: number) => {
+    setPane('editor');
+    setFocusBlock(blockIndex);
+    setFocusToken((value) => value + 1);
+  };
+
   const recordActivity = (input: ActivityInput) => {
     activityStore.record(DOCUMENT_ID, input);
     setActivity(activityStore.list(DOCUMENT_ID));
@@ -690,6 +700,8 @@ function AppContent() {
         versions={facts.versions}
         draftRevision={facts.draftRevision}
         lockHeld={lockHeld}
+        focusBlock={focusBlock}
+        focusToken={focusToken}
       />
     ),
     assistant: (
@@ -723,7 +735,13 @@ function AppContent() {
           onChange: handleDocumentChange,
           onVariableHandled: () => setPendingVariable(null),
         }}
-        legal={{ documentId: DOCUMENT_ID, workspaceId }}
+        legal={{
+          documentId: DOCUMENT_ID,
+          workspaceId,
+          revision: facts.draftRevision,
+          contentSha: draft?.content_sha256 ?? null,
+          onJumpToBlock: handleJumpToBlock,
+        }}
       />
     ),
   };

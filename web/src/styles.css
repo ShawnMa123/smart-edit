@@ -958,16 +958,6 @@ button.primary {
   resize: vertical;
 }
 
-.legal-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.legal-presets button {
-  font-size: 12px;
-}
-
 .legal-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -998,6 +988,55 @@ button.primary {
 .legal-finding h4 {
   margin: 0;
   font-size: 13px;
+}
+
+/* Document scan (`legal-document-risk-scan`). */
+.legal-scan {
+  gap: 6px;
+}
+
+.legal-web-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.legal-web-toggle input {
+  margin: 2px 0 0;
+}
+
+.legal-suggestion {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.legal-document-anchors {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legal-document-anchor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legal-jump {
+  font-size: 12px;
+}
+
+.legal-gate-reasons,
+.legal-limitations {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 /* Citation cards: same look as knowledge citations. */

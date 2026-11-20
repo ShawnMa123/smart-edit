@@ -17,6 +17,9 @@ GateType = Literal["advisory", "human_review", "hard_block"]
 Method = Literal["deterministic", "semantic", "legal"]
 Disposition = Literal["open", "accepted", "rejected", "needs_human_review"]
 FactState = Literal["confirmed", "missing", "unconfirmed"]
+# Document scan (`legal-document-risk-scan`): one contract, two scopes.
+Scope = Literal["question", "document"]
+Basis = Literal["rule", "statute", "web"]
 
 TARGET_OPERATIONS = ("submit_version", "start_approval", "formal_export", "handoff", "formal_mapping")
 
@@ -27,8 +30,9 @@ class ReviewCreate(BaseModel):
 
     workspace_id: str
     document_id: str
-    snapshot_id: str
-    facts_version_id: str
+    # `question` scope keeps the L1 contract; a document scan resolves the draft itself.
+    snapshot_id: str = ""
+    facts_version_id: str = ""
     modes: list[Method] = Field(min_length=1)
     attachment_refs: list[dict] = Field(default_factory=list, max_length=5)
     # Legal mode only: the question sent to the statute service (`/v1/chat`). The deterministic
@@ -36,6 +40,47 @@ class ReviewCreate(BaseModel):
     question: str | None = None
     applicable_on: str | None = None
     jurisdiction_codes: list[str] = Field(default_factory=list)
+
+    # ── document scan (`scope="document"`) ────────────────────────────────────
+    scope: Scope = "question"
+    draft_id: str | None = None
+    # Optional pin: the revision the user was looking at. A mismatch is `stale_snapshot`.
+    expected_revision: int | None = None
+    expected_content_sha256: str | None = None
+    business_type: str | None = None
+    # The user's choice for the outbound web leg; `None` means "deployment default".
+    web_search: bool | None = None
+
+
+# ── anchors ────────────────────────────────────────────────────────────────────
+class DocumentAnchor(BaseModel):
+    """Where in the draft a finding applies. `quote` is always a substring of the draft text."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    clause_id: str
+    block_index: int
+    start_cp: int
+    end_cp: int
+    quote: str = ""
+
+
+class EvidenceAnchor(BaseModel):
+    """A statute or web citation. Kept apart from document anchors so the UI cannot confuse
+    "this part of the draft" with "this article"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    chunk_id: str | None = None
+    doc_id: str | None = None
+    article_label: str | None = None
+    jurisdiction: str | None = None
+    effective_from: str | None = None
+    title: str | None = None
+    source_version: str | None = None
+    excerpt: str | None = None
+    url: str | None = None
+    unverified: bool = False
 
 
 # ── rule contract ──────────────────────────────────────────────────────────────
@@ -57,6 +102,10 @@ class CheckResult(BaseModel):
     reason_codes: list[str] = Field(default_factory=list)
     finding_ids: list[str] = Field(default_factory=list)
     missing_facts: list[str] = Field(default_factory=list)
+    # Document scan only (`legal-document-risk-scan`).
+    clause_id: str | None = None
+    evidence_count: int = 0
+    search_queries: list[str] = Field(default_factory=list)
 
 
 class Finding(BaseModel):
@@ -71,7 +120,10 @@ class Finding(BaseModel):
     target_operations: list[str] = Field(default_factory=list)
     title: str
     explanation: str
-    anchors: list[dict] = Field(default_factory=list)
+    anchors: list[EvidenceAnchor] = Field(default_factory=list)
+    document_anchors: list[DocumentAnchor] = Field(default_factory=list)
+    suggestion: str | None = None
+    basis: Basis = "rule"
     rule_refs: list[RuleRef] = Field(default_factory=list)
     evidence_ids: list[str] = Field(default_factory=list)
     applicability: dict = Field(default_factory=dict)
@@ -92,6 +144,8 @@ class ReviewRun(BaseModel):
     report_id: str | None = None
     error: str | None = None
     finished_at: str | None = None
+    # Document scans are asynchronous; the panel polls this for a progress line.
+    progress: dict = Field(default_factory=dict)
 
 
 class ReviewReport(BaseModel):
@@ -104,3 +158,30 @@ class ReviewReport(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     coverage: list[CheckResult] = Field(default_factory=list)
     limitations: list[dict] = Field(default_factory=list)
+    # Document scan only; empty for `question` scope so the old contract stays unchanged.
+    snapshot: dict = Field(default_factory=dict)
+    coverage_summary: dict = Field(default_factory=dict)
+    retrieval: dict = Field(default_factory=dict)
+    gate: dict = Field(default_factory=dict)
+
+
+__all__ = [
+    "Basis",
+    "CheckResult",
+    "CheckStatus",
+    "Disposition",
+    "DocumentAnchor",
+    "EvidenceAnchor",
+    "FactState",
+    "Finding",
+    "GateType",
+    "Method",
+    "ReviewCreate",
+    "ReviewReport",
+    "ReviewRun",
+    "RuleRef",
+    "RunStatus",
+    "Scope",
+    "Severity",
+    "TARGET_OPERATIONS",
+]

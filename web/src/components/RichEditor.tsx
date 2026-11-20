@@ -56,6 +56,9 @@ export interface RichEditorProps {
   draftRevision?: number | null;
   /** Whether this session holds the edit lock (unknown is its own word). */
   lockHeld?: boolean;
+  /** Focus this top-level block (document-anchor jump); `focusToken` re-applies it. */
+  focusBlock?: number | null;
+  focusToken?: number;
   /** Test seam: a throwing implementation exercises the fallback path. */
   useEditorImpl?: (typeof defaultUseRichEditor);
 }
@@ -157,6 +160,8 @@ export function RichEditor(props: RichEditorProps) {
       document: props.document,
       onChange: props.onChange,
       editable: !props.readOnly,
+      focusBlock: props.focusBlock ?? null,
+      focusToken: props.focusToken ?? 0,
     });
   } catch (error) {
     if (!failure) setFailure(error instanceof Error ? error.message : String(error));

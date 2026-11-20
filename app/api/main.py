@@ -10,6 +10,7 @@ to `poc-skeleton` §8-§9 once the graph exists.
 from __future__ import annotations
 
 import logging
+import os
 import time
 import uuid
 from pathlib import Path
@@ -60,6 +61,44 @@ def _authorization_version(store, workspace_id: str) -> str | None:
         return None
     version = store.authorization_version(organization["org_id"])
     return f"org:{organization['org_id']}:{version}" if version is not None else None
+
+
+def _build_legal_service(host, assistant_services, *, store) -> object:
+    """Wire the legal module to the document host, statute retriever and composer it already has.
+
+    One composer instance keeps the provider client, timeouts and error codes in one place; when the
+    gateway cannot emit JSON (fixture mode) `LegalComposer.available` is False and the legal leg
+    reports `composer_unavailable` instead of returning a clean pass.
+    """
+    from app.legal_review.compose import LegalComposer
+    from app.legal_review.scan import ScanSettings
+    from app.legal_review.service import LegalService
+    from app.legal_review.store import LegalStore
+
+    settings = ScanSettings.from_env()
+    gateway = getattr(assistant_services, "gateway", None)
+    assistant_settings = getattr(assistant_services, "settings", None)
+    egress = getattr(assistant_services, "egress", None)
+    redact = None
+    if egress is not None and getattr(egress, "loaded", False) and hasattr(egress, "redact"):
+        redact = getattr(egress, "redact")
+    composer = LegalComposer(
+        gateway,
+        approved=bool(getattr(assistant_settings, "approved_processor", False)),
+        timeout=settings.compose_timeout,
+        max_evidence=settings.max_evidence,
+        redact=redact,
+    )
+    db_path = os.environ.get("SMART_EDIT_LEGAL_DB") or str(
+        Path(getattr(store, "runs_dir", "runs")) / "legal.db"
+    )
+    return LegalService(
+        store=LegalStore(db_path),
+        statute=getattr(assistant_services, "statute", None),
+        composer=composer,
+        documents=getattr(host, "documents", None),
+        settings=settings,
+    )
 
 
 def _read_plan_refusal(plan: dict) -> ApiFailure:
@@ -145,6 +184,7 @@ def create_app(
     app.state.assistant = AssistantService(
         assistant_services, deadline_seconds=assistant_deadline_seconds
     )
+    app.state.legal = _build_legal_service(host, assistant_services, store=app.state.store)
     app.include_router(auth_router)
     app.include_router(organization_router)
     app.include_router(activity_router)

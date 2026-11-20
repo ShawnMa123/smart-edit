@@ -16,12 +16,17 @@ import { ApiError, explainError } from '../api/errors';
 import { AiWaitBox } from './AiWaitBox';
 import {
   legalClient,
+  LEGAL_POLL_INTERVAL_MS,
+  LEGAL_SCAN_TIMEOUT_MS,
   type CheckStatus,
+  type DocumentAnchor,
+  type EvidenceAnchor,
   type Finding,
-  type FindingAnchor,
   type LegalClient,
+  type LegalGate,
   type LegalMethod,
   type LegalOptions,
+  type ReviewRun,
   type ReviewReport,
   type SupportLevel,
 } from '../api/legal';
@@ -29,14 +34,21 @@ import {
 export interface LegalPanelProps {
   documentId: string;
   workspaceId?: string;
+  /** The draft revision on screen; a scan pins it so a stale answer is refused, not silently used. */
+  revision?: number | null;
+  contentSha?: string | null;
   /** Injected in tests; defaults to the real client. */
   client?: LegalClient;
   options?: LegalOptions;
+  /** Scroll the editor to the anchor's top-level block. */
+  onJumpToBlock?: (blockIndex: number) => void;
+  /** Lets the workbench know whether the last scan blocks a submission. */
+  onGate?: (gate: LegalGate) => void;
   /** Lets the assistant pane show a "Working" marker on this tab while a review runs. */
   onBusyChange?: (busy: boolean) => void;
 }
 
-type Mode = 'advice' | 'rule';
+type Mode = 'advice' | 'document';
 type Tone = 'ok' | 'warn' | 'bad' | 'muted';
 
 const OUTCOME_LABEL: Record<ReviewReport['outcome'], string> = {
@@ -97,15 +109,42 @@ const CHECK_STATUS_LABEL: Record<CheckStatus, string> = {
   failed: 'Failed',
 };
 
-const RULE_PRESETS = [
-  { id: 'missing', label: 'Amount missing', facts: {} },
-  {
-    id: 'confirmed',
-    label: 'Amount confirmed',
-    facts: { amount: { state: 'confirmed', value: '500000.00' } },
-  },
-  { id: 'unconfirmed', label: 'Amount unconfirmed', facts: { amount: { state: 'unconfirmed' } } },
-] as const;
+const DOCUMENT_MODE_NOTE =
+  'Scans the draft on screen: required elements, date consistency, risky wording, then statute evidence per clause. Web sources are only used when you switch them on, and they never block a submission.';
+
+const WEB_TOGGLE_NOTE =
+  'Sends the uncovered clause headings to the model’s web search. Results are labelled unverified.';
+
+const GATE_STATUS_LABEL: Record<string, string> = {
+  clear: 'Clear',
+  advisory: 'Advisory',
+  needs_human_review: 'Needs human review',
+  blocked: 'Blocked',
+};
+
+const GATE_STATUS_TONE: Record<string, Tone> = {
+  clear: 'ok',
+  advisory: 'warn',
+  needs_human_review: 'warn',
+  blocked: 'bad',
+};
+
+const GATE_REASON_COPY: Record<string, string> = {
+  hard_block_finding: 'A blocking finding must be fixed first.',
+  limited_coverage: 'Too little of the draft could be assessed.',
+  unchecked_units: 'Some checks could not run; this result does not cover them.',
+  human_review_finding: 'At least one finding needs a human decision.',
+  no_document_text: 'The draft has no text to scan.',
+};
+
+const STAGE_COPY: Record<string, string> = {
+  queued: 'Queued',
+  splitting: 'Splitting the draft into clauses',
+  deterministic: 'Running deterministic checks',
+  retrieving: 'Checking statute evidence',
+  done: 'Done',
+  failed: 'Failed',
+};
 
 /** One-click questions for the statute corpus — keeps a live demo from stalling. */
 const SUGGESTIONS = [
@@ -198,7 +237,7 @@ function Excerpt({ text }: { text: string }) {
   );
 }
 
-function Citations({ anchors }: { anchors: FindingAnchor[] }) {
+function Citations({ anchors }: { anchors: EvidenceAnchor[] }) {
   const sorted = [...anchors].sort(
     (a, b) => articleNumber(a.article_label) - articleNumber(b.article_label),
   );
@@ -222,6 +261,14 @@ function Citations({ anchors }: { anchors: FindingAnchor[] }) {
             <p className="tiny">
               <strong>{anchor.title ?? 'Statute'}</strong>
             </p>
+            {anchor.url ? (
+              <p className="tiny">
+                <a href={anchor.url} target="_blank" rel="noreferrer noopener">
+                  {anchor.url}
+                </a>
+                {anchor.unverified ? ' · unverified' : ''}
+              </p>
+            ) : null}
             {anchor.excerpt ? <Excerpt text={anchor.excerpt} /> : null}
             {anchor.chunk_id ? (
               <p className="tiny muted legal-chunk">chunk {anchor.chunk_id}</p>
@@ -237,7 +284,7 @@ function Citations({ anchors }: { anchors: FindingAnchor[] }) {
 // markers. Render that subset without pulling in a markdown dependency.
 const INLINE_RE = /(\*\*[^*]+\*\*|\[[0-9a-f]{8,}\]|`[^`]+`)/g;
 
-function CiteChip({ id, anchors }: { id: string; anchors: FindingAnchor[] }) {
+function CiteChip({ id, anchors }: { id: string; anchors: EvidenceAnchor[] }) {
   const anchor = anchors.find((candidate) => candidate.chunk_id === id);
   const label = anchor ? [anchor.article_label, anchor.title].filter(Boolean).join(' · ') : undefined;
   const jump = () => {
@@ -254,7 +301,7 @@ function CiteChip({ id, anchors }: { id: string; anchors: FindingAnchor[] }) {
   );
 }
 
-function renderInline(text: string, key: string, anchors: FindingAnchor[]): ReactNode[] {
+function renderInline(text: string, key: string, anchors: EvidenceAnchor[]): ReactNode[] {
   return text.split(INLINE_RE).map((part, index) => {
     if (!part) return null;
     if (part.startsWith('**') && part.endsWith('**')) {
@@ -270,7 +317,7 @@ function renderInline(text: string, key: string, anchors: FindingAnchor[]): Reac
   });
 }
 
-function AdviceText({ text, anchors }: { text: string; anchors: FindingAnchor[] }) {
+function AdviceText({ text, anchors }: { text: string; anchors: EvidenceAnchor[] }) {
   const lines = text.split('\n');
   const blocks: ReactNode[] = [];
   let list: string[] = [];
@@ -306,22 +353,66 @@ function AdviceText({ text, anchors }: { text: string; anchors: FindingAnchor[] 
   return <div className="legal-advice">{blocks}</div>;
 }
 
-function FindingView({ finding }: { finding: Finding }) {
+function DocumentAnchors({
+  anchors,
+  onJump,
+}: {
+  anchors: DocumentAnchor[];
+  onJump?: (blockIndex: number) => void;
+}) {
+  return (
+    <div className="legal-document-anchors">
+      <h5 className="tiny muted">In the draft ({anchors.length})</h5>
+      {anchors.map((anchor, index) => (
+        <div className="legal-document-anchor" key={`${anchor.clause_id}-${anchor.block_index}-${index}`}>
+          <blockquote className="tiny legal-excerpt">{anchor.quote}</blockquote>
+          <div className="row">
+            <Badge label={anchor.clause_id} tone="muted" />
+            {onJump ? (
+              <button
+                type="button"
+                className="legal-jump"
+                onClick={() => onJump(anchor.block_index)}
+              >
+                Jump to clause
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FindingView({
+  finding,
+  onJump,
+}: {
+  finding: Finding;
+  onJump?: (blockIndex: number) => void;
+}) {
   const limitations = finding.applicability?.limitations;
+  const basis = finding.basis ?? (finding.method === 'legal' ? 'statute' : 'rule');
+  const documentAnchors = finding.document_anchors ?? [];
   return (
     <div className="legal-finding" aria-label="Finding">
       <div className="row">
         <Badge label={finding.severity} tone={SEVERITY_TONE[finding.severity] ?? 'muted'} />
         <Badge label={GATE_LABEL[finding.gate_type] ?? finding.gate_type} tone="muted" />
-        {finding.method === 'legal' ? (
+        {basis === 'statute' ? (
           <Badge
             label={SUPPORT_LABEL[finding.support_level]}
             tone={SUPPORT_TONE[finding.support_level]}
           />
         ) : null}
+        {basis === 'web' ? <Badge label="Unverified web source" tone="muted" /> : null}
       </div>
       <h4>{finding.title}</h4>
       <AdviceText text={finding.explanation} anchors={finding.anchors} />
+      {finding.suggestion ? (
+        <p className="tiny legal-suggestion">Suggested edit: {finding.suggestion}</p>
+      ) : null}
+      {documentAnchors.length ? <DocumentAnchors anchors={documentAnchors} onJump={onJump} /> : null}
       {finding.rule_refs.length ? (
         <p className="tiny muted">
           Rule: {finding.rule_refs.map((ref) => `${ref.rule_id} v${ref.version}`).join(', ')}
@@ -337,7 +428,21 @@ function FindingView({ finding }: { finding: Finding }) {
   );
 }
 
-function ReportView({ report }: { report: ReviewReport }) {
+const SEVERITY_ORDER: readonly string[] = ['Critical', 'Warning', 'Info'];
+
+function ReportView({
+  report,
+  onJump,
+}: {
+  report: ReviewReport;
+  onJump?: (blockIndex: number) => void;
+}) {
+  const summary = report.coverage_summary;
+  const gate = report.gate;
+  const ordered = [...report.findings].sort(
+    (left, right) =>
+      SEVERITY_ORDER.indexOf(left.severity) - SEVERITY_ORDER.indexOf(right.severity),
+  );
   return (
     <div className="legal-report" aria-label="Legal review">
       <div className="row">
@@ -345,7 +450,29 @@ function ReportView({ report }: { report: ReviewReport }) {
         <span className="tiny muted">
           {report.completion === 'complete' ? 'Complete' : 'Partial'}
         </span>
+        {gate ? (
+          <Badge
+            label={`Gate: ${GATE_STATUS_LABEL[gate.status] ?? gate.status}`}
+            tone={GATE_STATUS_TONE[gate.status] ?? 'muted'}
+          />
+        ) : null}
       </div>
+
+      {summary ? (
+        <p className="tiny muted" data-testid="legal-coverage-summary">
+          Planned {summary.planned} · assessed {summary.assessed} (
+          {Math.round((summary.assessed_ratio ?? 0) * 100)}%)
+          {summary.clauses ? ` · ${summary.clauses} clauses` : ''}
+          {summary.truncated ? ' · truncated' : ''}
+        </p>
+      ) : null}
+      {gate && gate.reasons.length ? (
+        <ul className="legal-gate-reasons tiny muted">
+          {gate.reasons.map((reason) => (
+            <li key={reason}>{GATE_REASON_COPY[reason] ?? reason}</li>
+          ))}
+        </ul>
+      ) : null}
 
       {report.coverage.map((check) =>
         check.status === 'finding' ? null : (
@@ -353,6 +480,8 @@ function ReportView({ report }: { report: ReviewReport }) {
             <Badge label={CHECK_STATUS_LABEL[check.status]} tone={CHECK_TONE[check.status]} />
             <span className="tiny muted">
               {check.method}
+              {check.clause_id ? ` · ${check.clause_id}` : ''}
+              {check.evidence_count ? ` · ${check.evidence_count} evidence` : ''}
               {check.reason_codes.length
                 ? ` · ${check.reason_codes.map(reasonText).join(' · ')}`
                 : ''}
@@ -361,9 +490,19 @@ function ReportView({ report }: { report: ReviewReport }) {
         ),
       )}
 
-      {report.findings.map((finding) => (
-        <FindingView key={finding.finding_id} finding={finding} />
+      {ordered.map((finding) => (
+        <FindingView key={finding.finding_id} finding={finding} onJump={onJump} />
       ))}
+
+      {report.limitations.length ? (
+        <ul className="legal-limitations tiny muted">
+          {report.limitations.map((item, index) => (
+            <li key={index}>
+              {String((item as { message?: string }).message ?? JSON.stringify(item))}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -371,13 +510,19 @@ function ReportView({ report }: { report: ReviewReport }) {
 export function LegalPanel({
   documentId,
   workspaceId = DEFAULT_WORKSPACE,
+  revision = null,
+  contentSha = null,
   client = legalClient,
   options = {},
+  onJumpToBlock,
+  onGate,
   onBusyChange,
 }: LegalPanelProps) {
   const [mode, setMode] = useState<Mode>('advice');
   const [question, setQuestion] = useState('');
+  const [webSearch, setWebSearch] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [run, setRun] = useState<ReviewRun | null>(null);
   const [report, setReport] = useState<ReviewReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
@@ -393,27 +538,6 @@ export function LegalPanel({
     [],
   );
 
-  const run = async (
-    modes: LegalMethod[],
-    extra: { question?: string; facts?: Record<string, unknown> },
-  ) => {
-    const accepted = await client.submitReview(
-      {
-        workspace_id: workspaceId,
-        document_id: documentId,
-        snapshot_id: 'demo-snapshot',
-        facts_version_id: 'demo-facts',
-        modes,
-        ...extra,
-      },
-      options,
-    );
-    if (!accepted.report_id) {
-      throw new Error('The review was accepted but produced no report id.');
-    }
-    return client.getReport(accepted.report_id, options);
-  };
-
   const askAdvice = async () => {
     const trimmed = question.trim();
     if (!trimmed || busy) return;
@@ -421,7 +545,21 @@ export function LegalPanel({
     setError(null);
     setReport(null);
     try {
-      setReport(await run(['legal'], { question: trimmed }));
+      const accepted = await client.submitReview(
+        {
+          workspace_id: workspaceId,
+          document_id: documentId,
+          snapshot_id: 'demo-snapshot',
+          facts_version_id: 'demo-facts',
+          modes: ['legal'] as LegalMethod[],
+          question: trimmed,
+        },
+        options,
+      );
+      if (!accepted.report_id) {
+        throw new Error('The review was accepted but produced no report id.');
+      }
+      setReport(await client.getReport(accepted.report_id, options));
     } catch (failure) {
       setError(failure instanceof ApiError ? explainError(failure.code) : String(failure));
     } finally {
@@ -429,13 +567,50 @@ export function LegalPanel({
     }
   };
 
-  const runRule = async (facts: Record<string, unknown>) => {
+  /** Scan the draft on screen: queue a run, poll it, then read the report. */
+  const scanDocument = async () => {
     if (busy) return;
     setBusy(true);
     setError(null);
     setReport(null);
+    setRun(null);
     try {
-      setReport(await run(['deterministic'], { facts }));
+      const getRun = client.getRun;
+      let current = await client.submitReview(
+        {
+          workspace_id: workspaceId,
+          document_id: documentId,
+          scope: 'document',
+          modes: ['deterministic', 'legal'],
+          expected_revision: revision ?? undefined,
+          expected_content_sha256: contentSha ?? undefined,
+          web_search: webSearch,
+        },
+        options,
+      );
+      setRun(current);
+      const deadline = Date.now() + LEGAL_SCAN_TIMEOUT_MS;
+      while (
+        getRun &&
+        (current.status === 'queued' || current.status === 'running')
+      ) {
+        if (Date.now() > deadline) {
+          throw new ApiError(0, 'SCAN_TIMEOUT', 'the scan did not finish in time');
+        }
+        await new Promise((resolve) => setTimeout(resolve, LEGAL_POLL_INTERVAL_MS));
+        current = await getRun(current.run_id, options);
+        setRun(current);
+      }
+      if (current.status !== 'succeeded' || !current.report_id) {
+        throw new ApiError(
+          0,
+          current.error ?? 'SCAN_FAILED',
+          `the scan ended as ${current.status}`,
+        );
+      }
+      const next = await client.getReport(current.report_id, options);
+      setReport(next);
+      if (next.gate) onGate?.(next.gate);
     } catch (failure) {
       setError(failure instanceof ApiError ? explainError(failure.code) : String(failure));
     } finally {
@@ -446,9 +621,16 @@ export function LegalPanel({
   const switchMode = (next: Mode) => {
     setMode(next);
     setReport(null);
+    setRun(null);
     setError(null);
     setQuestion('');
   };
+
+  const stage = run?.progress?.stage ?? run?.stage;
+  const stale =
+    report?.snapshot?.revision != null &&
+    revision != null &&
+    report.snapshot.revision !== revision;
 
   return (
     <div className="legal-panel">
@@ -464,10 +646,10 @@ export function LegalPanel({
         <button
           type="button"
           role="tab"
-          aria-selected={mode === 'rule'}
-          onClick={() => switchMode('rule')}
+          aria-selected={mode === 'document'}
+          onClick={() => switchMode('document')}
         >
-          Rule check
+          Document check
         </button>
       </div>
 
@@ -510,38 +692,52 @@ export function LegalPanel({
           </div>
         </div>
       ) : (
-        <div className="legal-section">
+        <div className="legal-section legal-scan">
           <p className="notice tiny" role="status">
-            Synthetic rule <code>DEMO-AMOUNT-REQUIRED</code> — the amount must be present before
-            approval.
+            {DOCUMENT_MODE_NOTE}
           </p>
-          <div className="legal-presets" role="group" aria-label="Fact state">
-            {RULE_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                disabled={busy}
-                onClick={() => void runRule({ ...preset.facts })}
-              >
-                {preset.label}
-              </button>
-            ))}
+          <p className="tiny muted" data-testid="legal-scan-target">
+            Draft {revision != null ? `rev ${revision}` : 'current revision'}
+            {contentSha ? ` · ${contentSha.slice(0, 12)}…` : ''}
+          </p>
+          <label className="legal-web-toggle tiny">
+            <input
+              type="checkbox"
+              checked={webSearch}
+              disabled={busy}
+              onChange={(event) => setWebSearch(event.target.checked)}
+            />
+            Use web search for clauses the corpus does not cover
+          </label>
+          <p className="tiny muted">{WEB_TOGGLE_NOTE}</p>
+          <div className="row">
+            <button type="button" onClick={() => void scanDocument()} disabled={busy}>
+              {report ? 'Scan again' : 'Scan document'}
+            </button>
           </div>
+          {stale ? (
+            <p className="notice notice--warn tiny" role="status">
+              The draft changed since this scan (scanned rev {report?.snapshot?.revision}). Scan
+              again to cover the current text.
+            </p>
+          ) : null}
         </div>
       )}
 
       {busy ? (
         <AiWaitBox
-          title={mode === 'advice' ? 'Asking the statute service' : 'Running the rule check'}
+          title={mode === 'advice' ? 'Asking the statute service' : 'Scanning the draft'}
           message={
             mode === 'advice'
               ? 'Searching the statute corpus — usually 2–5 seconds…'
-              : 'Checking the synthetic DEMO-AMOUNT-REQUIRED rule…'
+              : `${STAGE_COPY[String(stage ?? 'queued')] ?? stage ?? 'Scanning'}${
+                  run?.progress?.current ? ` (${run.progress.current})` : ''
+                }…`
           }
           hint={
             mode === 'advice'
               ? 'The answer will cite the statute chunks it used, or say it could not assess them.'
-              : undefined
+              : 'Deterministic checks run first; statute evidence follows per clause.'
           }
         />
       ) : null}
@@ -552,7 +748,7 @@ export function LegalPanel({
         </p>
       ) : null}
 
-      {report ? <ReportView report={report} /> : null}
+      {report ? <ReportView report={report} onJump={onJumpToBlock} /> : null}
     </div>
   );
 }

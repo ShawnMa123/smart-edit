@@ -212,6 +212,35 @@ export MERCATORIA_API_TOKEN=<token>
 .venv/bin/python scripts/statute_eval.py                # offline decision-layer report (15 cases)
 ```
 
+### Document risk scan (`legal-document-risk-scan`)
+
+`Legal → Document check` in the assistant pane scans **the draft on screen**, not a free-form question:
+
+```text
+draft → clauses (with code-point anchors) → plan (= coverage denominator)
+      → deterministic checks (elements / dates / risky wording)
+      → one /v1/retrieve per clause (never /v1/chat for a scan)
+      → Doubao composes only from the given evidence ids
+      → optional web supplement (user switch, unverified, never hard-blocks)
+      → findings + coverage_summary + gate
+```
+
+Things that will not happen, by construction:
+
+- A clause that was never planned can never read as "checked". `assessed/planned < 0.6` adds
+  `limited_coverage`; any `failed`/`unable_to_assess`/`needs_input` unit adds `unchecked_units`.
+- The model cannot invent evidence (`evidence_ids` are filtered), cannot raise `severity` above
+  `Warning`, and cannot `hard_block`. Only deterministic rules (missing amount/expiry, inverted
+  dates, expired undertaking) do that.
+- A `quote` in `document_anchors` is always a real substring of the draft; the panel's
+  "Jump to clause" focuses the editor at that block.
+- The web leg is off unless the operator ticks it (`web_search`); results are `unverified` and
+  carry a link, and an unlinkable result is dropped.
+
+`scope=document` runs in the background (202 + `GET /legal/runs/{id}`); reports persist in
+`SMART_EDIT_LEGAL_DB` (default `runs/legal.db`), and a scan pinned to a revision that changed is
+refused with `stale_snapshot`. Spec: `openspec/changes/legal-document-risk-scan/`.
+
 A run may also carry an **explicit scope** (`jurisdiction_codes`, `applicable_on`, `rule_version`).
 Declaring any of them marks the question as a rule question: it is routed to statute retrieval first
 and only falls back to the web when that evidence is unusable. Unscoped runs behave exactly as before,

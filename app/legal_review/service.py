@@ -375,3 +375,241 @@ def create_review(
         coverage=checks,
     )
     return run, report
+
+
+# ── document scan orchestration (`legal-document-risk-scan`) ──────────────────
+class LegalRequestError(RuntimeError):
+    """A request the service refuses; the API maps it onto the project error contract."""
+
+    def __init__(
+        self, status: int, code: str, message: str, detail: dict | None = None
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.code = code
+        self.message = message
+        self.detail = detail or {}
+
+
+class LegalService:
+    """Question reviews (synchronous) and document scans (queued + polled)."""
+
+    def __init__(
+        self,
+        *,
+        store: Any,
+        statute: Any = None,
+        composer: Any = None,
+        documents: Any = None,
+        settings: Any = None,
+    ) -> None:
+        from app.legal_review.scan import ScanSettings
+
+        self.store = store
+        self.statute = statute
+        self.composer = composer
+        self.documents = documents
+        self.settings = settings or ScanSettings.from_env()
+
+    # --- submit -----------------------------------------------------------------------------
+    def submit(
+        self,
+        request: ReviewCreate,
+        facts: dict,
+        *,
+        principal: Any = None,
+        idempotency_key: str | None = None,
+    ) -> tuple[ReviewRun, bool]:
+        """Return `(run, needs_background_scan)`; repeats of a key return the original run."""
+        if idempotency_key:
+            existing = self.store.get_by_key(idempotency_key)
+            if existing is not None:
+                return existing, False
+
+        if request.scope == "question":
+            run, report = create_review(
+                request, facts, statute=self.statute, principal=principal
+            )
+            self._save(run, report, request)
+            if idempotency_key:
+                bound = self.store.remember(idempotency_key, run.run_id)
+                if bound is not None and bound.run_id != run.run_id:
+                    return bound, False
+            return run, False
+
+        now = _utcnow()
+        run_id = f"lr_{uuid.uuid4().hex[:12]}"
+        report_id = f"lrep_{uuid.uuid4().hex[:12]}"
+        deadline = now + timedelta(seconds=self.settings.deadline_seconds + 30)
+        run = ReviewRun(
+            run_id=run_id,
+            status="queued",
+            stage="queued",
+            created_at=_iso(now),
+            deadline_at=_iso(deadline),
+            report_id=report_id,
+            progress={"stage": "queued", "planned": 0, "done": 0, "current": None},
+        )
+        self.store.save_run(
+            run, workspace_id=request.workspace_id, document_id=request.document_id
+        )
+        if idempotency_key:
+            bound = self.store.remember(idempotency_key, run.run_id)
+            if bound is not None and bound.run_id != run.run_id:
+                return bound, False
+        return run, True
+
+    # --- scan -------------------------------------------------------------------------------
+    def execute_document_scan(
+        self, run_id: str, request: ReviewCreate, principal: Any = None
+    ) -> None:
+        """Background task: resolve the draft, scan it, persist the report. Never raises."""
+        from app.legal_review.scan import run_document_scan
+
+        run = self.store.get_run(run_id)
+        if run is None:
+            return
+
+        def progress(payload: dict) -> None:
+            current = self.store.get_run(run_id) or run
+            self.store.save_run(
+                current.model_copy(
+                    update={
+                        "status": "running",
+                        "stage": str(payload.get("stage") or "running"),
+                        "progress": payload,
+                    }
+                ),
+                workspace_id=request.workspace_id,
+                document_id=request.document_id,
+            )
+
+        try:
+            snapshot = self._snapshot(principal, request)
+            progress({"stage": "splitting", "planned": 0, "done": 0, "current": None})
+            report = run_document_scan(
+                request,
+                snapshot,
+                run_id=run.run_id,
+                report_id=run.report_id or f"lrep_{uuid.uuid4().hex[:12]}",
+                statute=self.statute,
+                composer=self.composer,
+                principal=principal,
+                settings=self.settings,
+                progress=progress,
+            )
+        except LegalRequestError as exc:
+            self._fail(run, exc.code, request)
+            return
+        except Exception as exc:  # noqa: BLE001 - the polled run must show the failure
+            self._fail(run, f"scan_error:{type(exc).__name__}", request)
+            return
+
+        self.store.save_report(
+            report, workspace_id=request.workspace_id, document_id=request.document_id
+        )
+        finished = self.store.get_run(run_id) or run
+        self.store.save_run(
+            finished.model_copy(
+                update={
+                    "status": "succeeded",
+                    "stage": "done",
+                    "finished_at": _iso(_utcnow()),
+                    "progress": {
+                        "stage": "done",
+                        "planned": report.coverage_summary.get("planned", 0),
+                        "done": len(report.coverage),
+                        "current": None,
+                        "findings": len(report.findings),
+                    },
+                }
+            ),
+            workspace_id=request.workspace_id,
+            document_id=request.document_id,
+        )
+
+    def _snapshot(self, principal: Any, request: ReviewCreate) -> dict:
+        if self.documents is None:
+            raise LegalRequestError(
+                409,
+                "document_host_unavailable",
+                "this server has no document host, so the draft cannot be read",
+            )
+        try:
+            view = self.documents.document_view(principal, request.document_id)
+        except Exception as exc:  # noqa: BLE001 - HostError carries its own status/code
+            status = int(getattr(exc, "status", 404) or 404)
+            code = str(getattr(exc, "code", "document_unavailable") or "document_unavailable")
+            raise LegalRequestError(status, code, str(exc)) from exc
+        if request.draft_id and view.get("draft_id") != request.draft_id:
+            raise LegalRequestError(
+                409,
+                "stale_snapshot",
+                "the draft changed since this scan was requested",
+                {"revision": view.get("revision")},
+            )
+        if request.expected_revision is not None and int(view.get("revision") or 0) != int(
+            request.expected_revision
+        ):
+            raise LegalRequestError(
+                409,
+                "stale_snapshot",
+                "the draft changed since this scan was requested",
+                {"revision": view.get("revision")},
+            )
+        expected_sha = request.expected_content_sha256
+        if expected_sha and str(view.get("content_sha256") or "") != expected_sha:
+            raise LegalRequestError(
+                409,
+                "stale_snapshot",
+                "the draft content changed since this scan was requested",
+                {"revision": view.get("revision")},
+            )
+        return view
+
+    def _save(self, run: ReviewRun, report: ReviewReport, request: ReviewCreate) -> None:
+        self.store.save_report(
+            report, workspace_id=request.workspace_id, document_id=request.document_id
+        )
+        self.store.save_run(
+            run, workspace_id=request.workspace_id, document_id=request.document_id
+        )
+
+    def _fail(self, run: ReviewRun, code: str, request: ReviewCreate) -> None:
+        self.store.save_run(
+            run.model_copy(
+                update={
+                    "status": "failed",
+                    "stage": "failed",
+                    "error": code,
+                    "finished_at": _iso(_utcnow()),
+                }
+            ),
+            workspace_id=request.workspace_id,
+            document_id=request.document_id,
+        )
+
+    # --- reads ------------------------------------------------------------------------------
+    def get_run(self, run_id: str) -> ReviewRun:
+        run = self.store.get_run(run_id)
+        if run is None:
+            raise LegalRequestError(404, "resource_unavailable", "legal run not found")
+        return run
+
+    def get_report(self, report_id: str) -> ReviewReport:
+        report = self.store.get_report(report_id)
+        if report is None:
+            raise LegalRequestError(404, "resource_unavailable", "legal report not found")
+        return report
+
+    def report_workspace(self, report_id: str) -> str | None:
+        return self.store.report_workspace(report_id)
+
+
+__all__ = [
+    "LegalRequestError",
+    "LegalService",
+    "create_review",
+    "run_deterministic",
+    "run_legal",
+]
