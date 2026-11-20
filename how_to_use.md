@@ -14,7 +14,8 @@
 | 右栏「Knowledge Q&A」知识助手（fixture 语料） | 能跑 | `/api/assistant/*`：202 + 轮询、Claim 级引用、support_level、澄清/弃答/转交、反馈 |
 | 后端 / 前端测试 | 539 后端 / 345 前端全绿 | `.venv/bin/python -m pytest -q`、`npm --prefix web run test` |
 
-还没做（跑的时候会看到"未实现"而不是假成功）：审批流、法规 tab、语义检查、法规覆盖；Automation tab 只有
+还没做（跑的时候会看到"未实现"而不是假成功）：语义检查、法规覆盖；Legal tab 已点亮 L1（法规问答 +
+合成规则检查，见 §7.4）；Automation tab 只有
 前端工作台（template 为浏览器本地快照并支持 apply/更新；下游系统 browser-local + 绑定 spec；variable 与 synthetic mapping 为 mock；OpenAPI JSON 在本地解析、下载，并可用不触网的 mock send 模拟 200/500），服务端 template/系统持久化、真实模型匹配与真实发送未实现；
 知识助手的 PostgreSQL / Worker / 真实身份与快照 / 真实模型与向量检索 / 联网、语音、管理端 UI 都不在 A 里，
 界面用 `Fixture-backed` 横幅明确标注。
@@ -376,9 +377,33 @@ DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**�
 .venv/bin/python scripts/demo_submission_approval.py
 ```
 
+## 7.4 Legal advice tab（L1，`/legal/*`）
+
+右栏 **AI assistant → Legal advice** 已点亮（角标 `Full`），有两个子模式：
+
+1. **Statute advice**：输入法律问题（或点一个建议问题）→ `POST /legal/reviews`（`modes=["legal"]`）→
+   展示法规建议 + 引用卡片（条文号 / 法域 / 生效日 / 摘录 / chunk id）。正文里的 `[chunk_id]`
+   是可点击 chip，会跳到对应引用卡片。没有 `MERCATORIA_*` 配置时 legal 模式返回
+   `unable_to_assess · statute_unavailable`，不会假装“无发现”。
+2. **Rule check**：`DEMO-AMOUNT-REQUIRED` 合成规则的三种事实态——金额缺失 → `Critical` finding；
+   确认 → `pass`；未确认 → `unable_to_assess`。这是 L1 的确定性内核，不是完整 DSL。
+
+诚实性约定（UI 与后端一致）：
+
+- 服务超时 / 法规库更新 / 无命中 / 离题分别显示独立原因，**不会**归为“无发现”；
+- `answer_status=unavailable/unsupported` 时即使服务返回了 references，也不会把无关引用展示成答案；
+- Finding 卡显示 support level（Strong/Qualified/Insufficient）、gate（Blocks/Advisory）和 limitations。
+
+L1 边界：同步 + 进程内报告（最多保留最近 200 份）、只实现 `exists/compare`；异步 Worker、PG 持久化、
+完整 DSL、规则包治理属于后续阶段。
+
+```bash
+.venv/bin/python -m pytest tests/test_legal_review.py tests/test_legal_review_legal.py tests/test_legal_api.py
+```
+
 ## 8. 知识助手（Knowledge Q&A）
 
-右栏除了 **Rule audit**，还有 **Knowledge Q&A**（Legal 仍明确标 `not implemented`；Automation 为 `fixture only`）。它只做
+右栏除了 **Rule audit**，还有 **Knowledge Q&A**、**Legal advice**（L1，见 §7.4）与 **Automation**（`fixture only`）。它只做
 "解释 + 引用 + 弃答/澄清/转交"，**不改正文、不审批、不提交、不联网**。
 
 当前演示语料为 **8 个 synthetic source / 74 chunks**（中文 37 + 英文 37：产品 12、规则 13、内部政策 8、帮助指南 4，各一份英文镜像），全部标

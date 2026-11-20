@@ -10,6 +10,7 @@ import type { ActivityKind } from '../workspace/activityStore';
 import { AuditPanel, type AuditPanelProps } from './AuditPanel';
 import { AutomationPanel } from './AutomationPanel';
 import { KnowledgePanel } from './KnowledgePanel';
+import { LegalPanel, type LegalPanelProps } from './LegalPanel';
 
 type TabStatus = 'full' | 'fixture-only' | 'not-implemented';
 
@@ -53,9 +54,9 @@ const TABS: Tab[] = [
     id: 'legal',
     label: 'Legal advice',
     shortLabel: 'Legal',
-    status: 'not-implemented',
-    statusLabel: 'Not implemented',
-    statusTone: 'tag--muted',
+    status: 'full',
+    statusLabel: 'Full',
+    statusTone: 'tag--ok',
   },
 ];
 
@@ -97,13 +98,14 @@ export interface AutomationPanelBinding {
 export interface AssistantPanelProps extends AuditPanelProps {
   knowledge: KnowledgePanelBinding;
   automation: AutomationPanelBinding;
+  legal: LegalPanelProps;
 }
 
 /**
- * Right pane: the prototype's four tabs. Audit, knowledge and the fixture-backed automation
- * surface are available; legal stays labelled as unimplemented and never renders sample output.
+ * Right pane: the prototype's four tabs. Audit, knowledge, fixture-backed automation and the
+ * legal advice surface are all wired; the assistant never approves or submits.
  */
-export function AssistantPanel({ knowledge, automation, ...auditProps }: AssistantPanelProps) {
+export function AssistantPanel({ knowledge, automation, legal, ...auditProps }: AssistantPanelProps) {
   const [activeTab, setActiveTab] = useState<string>('audit');
   const active = TABS.find((tab) => tab.id === activeTab) ?? TABS[0];
 
@@ -141,15 +143,9 @@ export function AssistantPanel({ knowledge, automation, ...auditProps }: Assista
           <KnowledgePanel {...knowledge} />
         ) : active.id === 'automation' ? (
           <AutomationPanel {...automation} />
-        ) : (
-          <div className="notice" role="status">
-            <h3>{active.label} is not implemented in this build</h3>
-            <p className="tiny">
-              No answers, findings or citations are produced for this capability. The rule audit,
-              knowledge and fixture-backed automation tabs are wired to a backend in this build.
-            </p>
-          </div>
-        )}
+        ) : active.id === 'legal' ? (
+          <LegalPanel {...legal} />
+        ) : null}
       </div>
 
       <div className="assistant-footer">

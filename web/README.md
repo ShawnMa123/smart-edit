@@ -439,7 +439,7 @@ for p in 8000 8010 5173 5174; do lsof -nP -iTCP:$p -sTCP:LISTEN -t | xargs -r ki
 
 | Project | Backend | Frontend | Viewport | Covers |
 |---|---|---|---|---|
-| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, knowledge Q&A, fixture-backed automation workbench, unimplemented legal tab, three-pane layout |
+| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, knowledge Q&A, fixture-backed automation workbench, legal advice panel, three-pane layout |
 | `honesty` | `:8010` with `SMART_EDIT_LLM=''` | `:5174` (`VITE_PROXY_TARGET`) | 1440×900 | "checks did not run", and **no** `/stages/audit` request |
 | `narrow` | `:8000` | `:5173` | iPhone 13 | one pane + tabs below 1366px, audit still reachable |
 

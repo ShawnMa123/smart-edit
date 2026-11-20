@@ -1,0 +1,39 @@
+# Spec Delta
+
+## Purpose
+
+规定法律审查模块（`/legal/*`）的契约与行为：`modes=["deterministic"]` 跑受限 DSL 确定性规则，`modes=["legal"]` 复用 `/v1/chat` 把法规建议映射为可追溯的 Finding；同时以诚实性不变量保证「没检查/答不了」绝不被展示成「没问题」。
+
+## ADDED Requirements
+
+### Requirement: 法律审查 MUST 支持 deterministic 与 legal 两种 mode
+
+系统 SHALL 支持 `modes` 至少包含 `deterministic` 与 `legal` 两种 method。`deterministic` SHALL 走受限 DSL 与合成规则；`legal` SHALL 复用 `StatuteRetriever.chat_detailed()`（`/v1/chat`）而不重新实现检索。
+
+#### Scenario: 金额缺失报 Critical
+
+- **WHEN** `modes=["deterministic"]` 且 `facts` 不含 `amount`
+- **THEN** 报告 `outcome=findings_present`，产生一条 `Critical`/`hard_block` finding（`DEMO-AMOUNT-REQUIRED`）
+
+#### Scenario: legal 复用 chat
+
+- **WHEN** `modes=["legal"]` 且问题命中法规语料
+- **THEN** 产生 `method=legal` 的 Finding，`evidence_ids` 非空、`anchors` 含 `chunk_id`
+
+### Requirement: 法规回答 MUST 以 `answer_status` 判定可用性
+
+系统 SHALL 以服务返回的 `answer_status` 判定是否产出 Finding：`answered`/`partial` SHALL 产出 Finding；`unavailable`/`unsupported`/`error` 或零引用 SHALL 记为 `unable_to_assess`，且 MUST NOT 把服务返回的无关联 references 展示为引用。
+
+#### Scenario: 离题问题不硬凑
+
+- **WHEN** 服务对离题问题返回 `answer_status=unavailable`（references 非空但无关）
+- **THEN** 报告 `outcome=unable_to_assess`，无 Finding、无引用展示
+
+### Requirement: 诚实性不变量 MUST 成立
+
+传输失败/超时/无引用/无法回答 MUST 归为 `unable_to_assess` 或 `needs_input`，MUST NOT 归为 `no_findings`；失败原因 SHALL 通过 `reason_codes` 可区分；正常 Finding 的 `evidence_ids` SHALL 非空且 `chunk_id` 不丢失。
+
+#### Scenario: 失败可区分
+
+- **WHEN** 法规服务分别返回 `timeout` / `corpus_updating` / `unsupported`
+- **THEN** 对应 `reason_codes` 分别为 `["timeout"]` / `["corpus_updating"]` / `["unsupported"]`
