@@ -1,182 +1,160 @@
-这是当前版本（两个 tab：`Automate` / `Sandbox`）的完整页面测试指引，每一步的预期都是我刚在线上实测的输出。
+下面是**只在网页上点**的逐步 guide（命令行只用于“启动 worker / 重置演示文档”这两个页面外的前置），每一步都写了你应看到的界面反馈。完整版（含排错与负向场景）也在仓库 `DEMO_auto_dispatch.md`。
 
-## 0. 前置（30 秒）
+---
 
+## 0. 先确认 3 个前置（不在页面上）
+
+1. 打开 **http://59.110.213.187:8082/**（Chrome，窗口宽度 ≥ 1400px）。
+2. 服务器上 **worker 必须启动**（部署脚本默认不启用它）：
+
+```bash
+ssh -i ~/.ssh/team04_ecs root@59.110.213.187 'systemctl enable --now smart-edit-automation'
+# 或者只跑一次：cd /opt/smart-edit && set -a && . ./.env && set +a && .venv/bin/python -m app.automation.worker --once
 ```
-① 打开 http://59.110.213.187:8082/ ，登录 applicant@atlas-trade.test / Applicant!2026
-② 回显服务（决定"发送"能不能拿到真实回执）：
-   ssh -i ~/.ssh/team04_ecs root@59.110.213.187 'curl -s http://127.0.0.1:18080/health'
-   期望：{"status": "ok"}
-```
 
-现场已有：
+3. echo 下游活着：`curl -s http://127.0.0.1:18080/health` → `{"status": "ok"}`。
 
-| 类型 | 对象 |
-|---|---|
-| 模板 | `Trade application (spec demo)` v1.0.1（6 变量）· `Demo (from draft)` v1.0.1（6 变量）· `Export contract (prose)` v1.0.0（0 变量） |
-| 连接器 | `Local echo (demo)`（flat）· `Refusal demo`（flat，故意不在白名单）· `Trade intake (spec demo)`（openapi，`POST /trade/applications`） |
+账号：
 
-## 1. 样例文档（粘贴进编辑器）
+| 角色 | 账号 / 密码 | 用途 |
+|---|---|---|
+| Applicant | `applicant@atlas-trade.test` / `Applicant!2026` | 编辑、提交 |
+| Bank Ops | `bankops@atlas-trade.test` / `BankOps!2026` | 配置、一审、看 Runs |
+| Compliance | `compliance@atlas-trade.test` / `Compliance!2026` | 二审（终审） |
 
-文件也在仓库：`fixtures/automation-samples/trade-application.txt`
+---
+
+## 1. applicant：把样例文档放进草稿
+
+1. 登录页填 **Email / Password** → 点 **Sign in**。
+2. 中间编辑器底部点 **Start editing**（出现 `lock: this session`）。
+3. `Cmd/Ctrl+A` → 粘贴下面文本：
 
 ```text
-TRADE APPLICATION
+DEMAND GUARANTEE APPLICATION
 Application type: guarantee
 Applicant: Atlas Trading Ltd
 Beneficiary: Meridian Exports Pte Ltd
 Amount: USD 250,000.00
 Currency: USD
 Expiry date: 2027-06-30
+Governing rules: URDG 758
+Requested by: Applicant
 ```
 
-为什么用它：7 行里 6 行是 `Label: value`，正好对上模板的 6 个变量；`Amount` 带币种和千分位，能验证"数字转换"。
+4. 等 2 秒，底部变 **Saved to server**。
+5. 点 **Release lock**。
 
-## 2. 进入模块
+---
 
-点编辑器 → `Cmd/Ctrl+A` → 粘贴 → 等 2 秒（约 **179 字符**自动保存）。
+## 2. bankops：一次配置（模板 → 变量 → 绑定 → 连接器 → 规则）
 
-右侧面板 → **`Automation`** → 默认就在 **`Automate`**：
+1. 右上角 **Sign out** → 用 bankops 登录。
+2. 右侧面板点 **Automation**（显示为 `Automation · server`，chip 是 `Server`）。
+3. 确认内层四个页签：**Automate / Rules / Runs / Sandbox**。
 
-```text
-tabs:     Automate | Sandbox
-sections: 1 · Template (server) | 2 · Fields | 3 · Downstream | 4 · Review & send
-引导条:   Step 4/5 …（会随状态变化）
-```
+### 2.1 保存模板
+4. 在 **Automate → `1 · Template (server)`**：**Template name** 填 `Auto dispatch demo`。
+5. 点 **Save current draft as template** → 列表出现 `Auto dispatch demo v1.0.0 · 0 vars`。
+   （若面板显示 `Section 1/4` + Back/Next，用 **Next** 走到对应小节。）
 
-> `Sandbox` 是本地演练（不发请求），测试真实链路只在 `Automate` 里做。
+### 2.2 确认变量
+6. 到 **`2 · Fields`** → 点 **Find variables with AI**。
+7. 看到建议列表（Applicant / Beneficiary / Amount / Currency / Expiry date …）→ 点
+   **Confirm N variables** → 顶部出现 `N confirmed: …`。
 
-## 3. 逐步骤（每步都写了预期）
+### 2.3 绑定文档（**最容易漏，漏了就是 no_binding**）
+8. 回到 **`1 · Template (server)`** 底部：`Document type: not bound` → 下拉选 `Auto dispatch demo v1.0.0`。
+9. 点 **Bind** → 标签从 `not bound` 变 **`bound`**。
 
-### 步骤 1 · 选模板（`1 · Template (server)`）
+### 2.4 建连接器
+10. 到 **`3 · Downstream`** → 展开 **Add connector**，填：
+    - Connector name：`Local echo (auto)`
+    - Connector base URL：`http://127.0.0.1:18080`
+    - Connector path：`/hooks/smart-edit`
+    - Connector auth：`No auth`（spec / custom fields 留空）
+11. 点 **Save connector** → 上方出现 `Target: Local echo (auto) · http://127.0.0.1:18080`。
 
-点 **`Trade application (spec demo) v1.0.1 · 6 vars`**。
+### 2.5 建规则（默认 shadow）
+12. 切到 **Rules** 页签 → **New rule**：
+    - Rule name：`Guarantee → ERP`
+    - Rule template：`Auto dispatch demo`
+    - Rule connector：`Local echo (auto)`
+    - Rule mode：保持 **`Shadow (record only)`**
+13. 点 **Save rule** → 提示 `Rule saved. New rules stay in shadow until you raise the tier.`
+14. 点规则行的 **Dry-run on this document** → 出现 `POST http://127.0.0.1:18080/hooks/smart-edit` 和
+    `would_send` 里的 `values`（`amount: USD 250,000.00`），**下游没有收到请求**。
 
-预期：`2 · Fields` 显示 `6 confirmed: Application type, Applicant, Beneficiary, Amount, Currency, Expiry date`。
+---
 
-管理动作（都在同一区块）：`Rename` / `Duplicate` / `Delete`（删除需 `Yes, delete` 二次确认）。
+## 3. 第一轮：终审后只记录（Shadow，不外发）
 
-### 步骤 2 · 选下游（`3 · Downstream`）
+1. **Sign out** → applicant 登录。
+2. 底部点 **Start editing** → 点 **Submit new version**。
+3. 对话框 `Submit for approval` 显示 `Bank Operations — First Approver` / `Compliance — Second Approver`
+   → 点 **Submit for approval**。
+   → 文档顶部变 **Pending first approval**，编辑器变只读。
+4. **Sign out** → bankops 登录 → 顶部 **Approval** → 页签 **First approval** → 点待办记录 → 右下 **Approve**。
+   → 状态变 **Pending second approval**。
+5. **Sign out** → compliance 登录 → **Approval** → 页签 **Second approval** → 选记录 → **Approve**。
+   → 状态 **Approved**。
+6. 跑一次 worker（见第 0 步；常驻的话等 5–10 秒）。
+7. **Sign out** → bankops 登录 → Automation → **Runs**：
+   - 顶部：`Automatic sending is enabled globally …`
+   - 交付徽标：**`Delivery: Shadowed`**
+   - 列表：`Shadowed · Local echo (auto) · Guarantee → ERP · shadow · required`
+   - **没有** Release/Retry/Cancel 按钮
+8. 回到 **Automate → Recent dispatches**：**没有新回执**（阴影档不写回执）。
 
-连接器下拉选 **`Trade intake (spec demo) · http://127.0.0.1:18080`**。
+---
 
-预期：
+## 4. 第二轮：升档后真实发送
 
-```text
-Trade Intake API 1.4.0 · POST /trade/applications · application/json
-字段：application_type, amount, expiry_date, beneficiary.name, beneficiary.country,
-      references(array，不可映射), structured.next.back(circular，不可映射)
-映射预填：amount=amount（beneficiary.name=beneficiary, expiry_date=expiry_date）
-```
+> `Approved` 是终态、文档永久只读，所以复测必须先重置文档（页面外的一步）。
 
-> 映射按（模板 × 连接器）保存，现在都处于"自动建议"状态；想改就在下方折叠的 **`Field mapping`** 里改，
-> 点 **`Save mapping`** 才会固定下来（`Reset to suggestions` 回到按标签自动建议）。
-
-### 步骤 3 · 复核（`4 · Review & send`）
-
-取值**自动完成**，不需要点按钮：模板、连接器、映射都就绪后，面板会从草稿取值并渲染复核卡
-（`Template → 连接器 · operation`、只读映射表、每个变量的值与来源、请求体预览）。
-
-预期：`bound 6/6`，`Payload preview`（就是下游请求体）：
-
-```json
-{
-  "application_type": "guarantee",
-  "amount": 250000,
-  "expiry_date": "2027-06-30",
-  "beneficiary": { "name": "Meridian Exports Pte Ltd" }
-}
-```
-
-注意 `amount` 是**数字** `250000`，草稿里写的是 `USD 250,000.00`。
-
-### 步骤 4 · 不发送也能看（dry-run）
-
-点 **`Preview request`**。
-
-预期：
-
-```text
-POST http://127.0.0.1:18080/trade/applications · openapi
-Content-Type: application/json
-{ "application_type": "guarantee", "amount": 250000, "expiry_date": "2027-06-30",
-  "beneficiary": { "name": "Meridian Exports Pte Ltd" } }
-```
-
-不会产生回执（历史条数不变）。
-
-### 步骤 5 · 真实发送
-
-点 **`Send`**。
-
-预期回执：
-
-```text
-succeeded | 200 · 15 ms · dsp_…
-{"accepted": true, "path": "/trade/applications", "authorization": "absent",
- "echo": {"application_type": "guarantee", "amount": 250000.0, "expiry_date": "2027-06-30",
-          "beneficiary": {"name": "Meridian Exports Pte Ltd"}}}
-```
-
-两个验证点：`path` 是 **`/trade/applications`**（来自 spec，不是手填），body 与第 3 步预览逐字段一致。
-
-### 步骤 6 · 回执（只读）
-
-`4 · Review & send` 里只有两个动作：**`Preview request`** 和 **`Send`**；回执卡只展示结果
-（`status · 200 · 15 ms · dispatch_id` 与响应摘录），不再有额外按钮。
-`Recent dispatches` 折叠起来，展开后可按 `All / Succeeded / Failed / Refused` 过滤。
-
-> 模板套用（`POST …/apply`）与值回填草稿（`POST …/write-back`）仍保留在 API；简化后的面板不再提供这两个按钮。
-
-## 4. 反向验证（各 20 秒）
-
-| 想验证 | 操作 | 预期 |
-|---|---|---|
-| 不在白名单就不发 | 连接器改选 `Refusal demo` → `Send` | 红字 `That downstream host is not on the server allow-list, so nothing was sent. An operator adds hosts to SMART_EDIT_AUTOMATION_ALLOW_HOSTS.`；历史里一条 `refused` |
-| 必填没映射就不发 | `3 · Downstream` → 展开 `Field mapping` → `beneficiary.name` 改 `(not sent)` → `Save mapping` | `beneficiary.name — Required field has no mapped variable.`，`Send` 变灰 |
-| 映射互不覆盖 | 切到 `Demo (from draft)`，把 `amount` 清空并 `Save mapping`，再切回 `Trade application (spec demo)` | 后者的 `amount` 仍是 `amount` |
-| 沙箱不发请求 | 切到 `Sandbox` → `Payload preview` → 选 `OpenAPI` | 顶部横幅 `Sandbox — nothing leaves this browser`；只有 `Download JSON`，没有发送按钮 |
-
-## 5. Sandbox 快速走查（1 分钟，可选）
-
-`Sandbox` 分三段：`Templates`（本地存模板、`Save as template`、应用到编辑器）、`Variables & fill`（框选文本标记变量、填值回文档）、`Payload preview`（选 fixture 或 OpenAPI → 预览 + `Download JSON`）。
-
-`Payload preview` 的 OpenAPI 解析与组包**已改由服务端**（`/automation/spec/parse`、`/spec/build`）完成，页面会显示 `Trade Intake API · 1.4.0 · 4 operation(s)`。
-
-## 6. 常见问题
-
-| 现象 | 处理 |
-|---|---|
-| 按钮全灰、提示只读 | 先点编辑器正文拿编辑锁（工具栏出现编辑态） |
-| `bound 0/6` | 编辑器里不是第 1 步那段文本（只按 `Label: value` 取值） |
-| `Send` 灰 | 看预览下方 issues；或连接器没选 |
-| 回执 `failed · transport_error` | 回显服务没起（见第 0 步） |
-| 回执 `refused · host_not_allowed` | 用的是 `Refusal demo`，属于预期 |
-| 想看服务端实际记录 | `ssh … 'cd /opt/smart-edit && .venv/bin/python -c "import sqlite3;c=sqlite3.connect(\"data/host.db\");print(c.execute(\"select status,count(*) from automation_dispatches group by status\").fetchall())"'` |
-
-## 7. 测完复原
+1. 服务器执行（重建 `demo-document`，会清掉该文档上一轮的自动投递记录）：
 
 ```bash
-# 草稿恢复成种子演示文本（188 字，sha e5fbb2ec…）
-cd /tmp && python3 /tmp/restore_demo_draft.py
-# 映射恢复成"自动建议"、清掉配对映射
-ssh -i ~/.ssh/team04_ecs root@59.110.213.187 \
-  'cd /opt/smart-edit && .venv/bin/python /tmp/reset_mappings.py && systemctl restart smart-edit'
+ssh -i ~/.ssh/team04_ecs root@59.110.213.187 'cd /opt/smart-edit && .venv/bin/python scripts/seed_identity_users.py'
 ```
 
-我刚测完已复原：`demo-document` rev 7 / 188 字（sha `e5fbb2ec0816…`）、配对映射 0 条、三个连接器映射均回到自动（历史遗留的 `doc_fd15c1fc94a6` 属正常业务数据，不影响演示）。
+2. 浏览器 **F5**。bankops 登录 → Automation → Automate → **重新 Bind**
+   （`Document type` 选 `Auto dispatch demo` → **Bind**）。重置后绑定会丢，必须重绑。
+3. 在 **Rules** 里把 `Tier for Guarantee → ERP` 从 `Shadow` 改为 **`Auto send`**。
+4. applicant 登录 → **Start editing** → 重新粘贴样例 → **Submit new version → Submit for approval**。
+5. bankops → **Approval → First approval → Approve**；compliance → **Second approval → Approve**。
+6. 跑 worker（或等常驻 unit）。
+7. bankops → Automation → **Runs**：
+   - 交付徽标 **`Delivery: Sent`**
+   - 列表 `Sent`；点 **Details** → 时间线 `queued → sending → sent`
+8. **Automate → Recent dispatches**：新增 `succeeded · 200 · …ms` + echo 响应摘录。
+9. 服务器 echo 终端/日志出现 `POST /hooks/smart-edit`。
 
-截图参考：`/tmp/automation-guide-final.png`。
+---
 
-## 8. 一页速记
+## 5. 第三轮：needs_review 人工放行
 
-```text
-Automation → Automate
-  1 选模板 Trade application (spec demo)
-  2 选连接器 Trade intake (spec demo)      → 看 7 个字段 + 预填映射
-  3 Review & send（自动取值）               → bound 6/6 + 嵌套 body
-  4 Preview request                        → 不发请求的 dry-run
-  5 Send                                   → succeeded 200 15ms，path=/trade/applications
-  6 回执只读；Recent dispatches 可展开
-  7 （反向）Refusal demo → refused；删映射 → Send 变灰
-```
+1. **Rules** 档位改 **`Needs review`**。
+2. 重置文档 + 重新 Bind（同第 4 步）→ applicant 提交 → 一审 → 二审 → 跑 worker。
+3. **Runs**：`Delivery: Needs review`，该行出现 **Release / Cancel**，下游仍未收到。
+4. 点 **Release** → 变 `Queued`；再跑一次 worker → `Sent`，下游只收到一次。
+
+---
+
+## 6. 两个负向验证（可选，各 1 分钟）
+
+- **规则暂停**：Rules → **Pause** → 重走终审 + worker → Runs 显示
+  `Delivery: Not configured` + `No enabled rule matches this template…`。
+- **未绑定**：重置文档后**不要 Bind** → 直接终审 + worker → Runs 显示
+  `No template binding, so automatic delivery is skipped.`。
+- **kill switch**（服务器改 `.env` 的 `SMART_EDIT_AUTOMATION_AUTO_SEND=0` 并重启 `smart-edit` 与
+  `smart-edit-automation`）：Runs 顶部横幅变红，规则仍是 `Auto send` 但结果是 `Shadowed`。
+
+---
+
+## 两个页面使用小贴士
+
+- **Runs 不自动轮询**：worker 跑完后，切到别的页签再切回 **Runs**（或 F5）才会刷新。
+- **合规角色**能看到 Automation 但只能读（没有 Release/Retry/Cancel）；**applicant 看不到 Automation 标签**——这是权限收口的预期结果。
+
+如果某一步和上面不一致，`DEMO_auto_dispatch.md` 的 §9 排错表按“现象 → 原因/处理”列出了常见情况（最常见的是：忘 Bind、worker 没启动、连接器主机不在白名单）。

@@ -18,6 +18,7 @@ from app.automation.registry_schemas import (
     DispatchPreview,
     DispatchReceipt,
     DispatchRequest,
+    DocumentTemplateView,
     MappingUpdate,
     MappingView,
     PreparedPayload,
@@ -29,6 +30,7 @@ from app.automation.registry_schemas import (
     SuggestionView,
     TemplateApplyRequest,
     TemplateApplyResult,
+    TemplateBindRequest,
     TemplateCreate,
     TemplateDuplicate,
     TemplatePage,
@@ -42,6 +44,22 @@ from app.automation.schemas import (
     ApplyRequest,
     ProposalDecision,
     UndoRequest,
+)
+from app.automation.job_schemas import (
+    AutomationSettings,
+    DocumentDelivery,
+    JobDetailView,
+    JobPage,
+    JobView,
+)
+from app.automation.rule_schemas import (
+    RuleCreate,
+    RuleDryRunRequest,
+    RuleDryRunResult,
+    RuleModeUpdate,
+    RulePage,
+    RuleUpdate,
+    RuleView,
 )
 from app.automation.service import AutomationService
 from app.documents.errors import HostError, PreconditionRequired
@@ -67,10 +85,36 @@ def _registry(request: Request):
     return registry
 
 
+def _rules(request: Request):
+    rules = getattr(request.app.state, "automation_rules", None)
+    if rules is None:
+        raise HostError(
+            409, "automation_rules_unavailable", "this server has no automation rule service"
+        )
+    return rules
+
+
+def _jobs(request: Request):
+    jobs = getattr(request.app.state, "automation_jobs", None)
+    if jobs is None:
+        raise HostError(
+            409, "automation_jobs_unavailable", "this server has no automation job service"
+        )
+    return jobs
+
+
 def _principal(request: Request):
     principal = getattr(request.state, "principal", None)
     if principal is None:
         raise HostError(401, "auth_required", "the request has no resolved principal")
+    return principal
+
+
+def _require(request: Request, capability: str):
+    """Route-level Automation capability gate (view / configure / dispatch / audit)."""
+    principal = _principal(request)
+    if not principal.has(capability):
+        raise HostError(403, "capability_denied", f"the principal lacks {capability}")
     return principal
 
 
@@ -261,17 +305,17 @@ def get_application(receipt_id: str, request: Request, response: Response) -> di
 # ── server-side template registry (templates → confirmed variables → dispatch) ────────────────
 @router.get("/templates", response_model=TemplatePage)
 def list_templates(request: Request) -> TemplatePage:
-    return TemplatePage(items=_registry(request).list_templates(_principal(request)))
+    return TemplatePage(items=_registry(request).list_templates(_require(request, "automation_view")))
 
 
 @router.post("/templates", status_code=201, response_model=TemplateView)
 def create_template(payload: TemplateCreate, request: Request) -> TemplateView:
-    return _registry(request).create_template(_principal(request), payload)
+    return _registry(request).create_template(_require(request, "automation_configure"), payload)
 
 
 @router.get("/templates/{template_id}", response_model=TemplateView)
 def get_template(template_id: str, request: Request) -> TemplateView:
-    return _registry(request).get_template(_principal(request), template_id)
+    return _registry(request).get_template(_require(request, "automation_view"), template_id)
 
 
 @router.post("/templates/{template_id}/variables/suggest", response_model=SuggestionView)
@@ -280,7 +324,7 @@ def suggest_template_variables(
 ) -> SuggestionView:
     """Deterministic + optional Doubao suggestions. Never persists; the user confirms."""
     return _registry(request).suggest_variables(
-        _principal(request), template_id, use_llm=use_llm
+        _require(request, "automation_view"), template_id, use_llm=use_llm
     )
 
 
@@ -288,7 +332,7 @@ def suggest_template_variables(
 def save_template_variables(
     template_id: str, payload: TemplateVariablesUpdate, request: Request
 ) -> TemplateView:
-    return _registry(request).save_variables(_principal(request), template_id, payload)
+    return _registry(request).save_variables(_require(request, "automation_configure"), template_id, payload)
 
 
 @router.post("/templates/{template_id}/prepare", response_model=PreparedPayload)
@@ -296,13 +340,13 @@ def prepare_template_payload(
     template_id: str, payload: PrepareRequest, request: Request
 ) -> PreparedPayload:
     """Bind confirmed variables to a draft; missing values are reported, never guessed."""
-    return _registry(request).prepare(_principal(request), template_id, payload)
+    return _registry(request).prepare(_require(request, "automation_view"), template_id, payload)
 
 
 @router.put("/templates/{template_id}", response_model=TemplateView)
 def rename_template(template_id: str, payload: TemplateUpdate, request: Request) -> TemplateView:
     """Rename a stored version (history keeps the name it was dispatched under)."""
-    return _registry(request).rename_template(_principal(request), template_id, payload)
+    return _registry(request).rename_template(_require(request, "automation_configure"), template_id, payload)
 
 
 @router.post("/templates/{template_id}/duplicate", status_code=201, response_model=TemplateView)
@@ -310,13 +354,13 @@ def duplicate_template(
     template_id: str, payload: TemplateDuplicate, request: Request
 ) -> TemplateView:
     """Copy the text and the confirmed variables under a new name."""
-    return _registry(request).duplicate_template(_principal(request), template_id, payload)
+    return _registry(request).duplicate_template(_require(request, "automation_configure"), template_id, payload)
 
 
 @router.delete("/templates/{template_id}", status_code=204)
 def delete_template(template_id: str, request: Request) -> Response:
     """Remove one template version; dispatch receipts keep their own snapshot."""
-    _registry(request).delete_template(_principal(request), template_id)
+    _registry(request).delete_template(_require(request, "automation_configure"), template_id)
     return Response(status_code=204)
 
 
@@ -325,7 +369,7 @@ def apply_template(
     template_id: str, payload: TemplateApplyRequest, request: Request
 ) -> TemplateApplyResult:
     """Render the template into a NEW document, filling the confirmed variables."""
-    return _registry(request).apply_template(_principal(request), template_id, payload)
+    return _registry(request).apply_template(_require(request, "automation_configure"), template_id, payload)
 
 
 @router.post("/templates/{template_id}/write-back", response_model=TemplateWriteBackResult)
@@ -333,29 +377,50 @@ def write_back_template(
     template_id: str, payload: TemplateWriteBackRequest, request: Request
 ) -> TemplateWriteBackResult:
     """Write the values into the CURRENT draft under the caller's lock and expected revision."""
-    return _registry(request).write_back(_principal(request), template_id, payload)
+    return _registry(request).write_back(_require(request, "automation_configure"), template_id, payload)
+
+
+@router.get("/documents/{document_id}/template", response_model=DocumentTemplateView)
+def read_document_template(document_id: str, request: Request) -> DocumentTemplateView:
+    """The template a document is bound to (the key automatic rules match on)."""
+    return _registry(request).document_template(
+        _require(request, "automation_view"), document_id
+    )
+
+
+@router.post("/documents/{document_id}/template", response_model=DocumentTemplateView)
+def bind_document_template(
+    document_id: str, payload: TemplateBindRequest, request: Request
+) -> DocumentTemplateView:
+    """Bind a history/import document to a template; the change is audited."""
+    return _registry(request).bind_document_template(
+        _require(request, "automation_configure"),
+        document_id,
+        payload,
+        request_id=_request_id(request),
+    )
 
 
 @router.post("/spec/parse", response_model=SpecParseResult)
 def parse_spec_document(payload: SpecParseRequest, request: Request) -> SpecParseResult:
     """Parse an OpenAPI document with the same code the registry uses (sandbox preview)."""
-    return _registry(request).parse_contract(_principal(request), payload.spec)
+    return _registry(request).parse_contract(_require(request, "automation_view"), payload.spec)
 
 
 @router.post("/spec/build", response_model=SpecBuildResult)
 def build_spec_body(payload: SpecBuildRequest, request: Request) -> SpecBuildResult:
     """Assemble a request body for a spec + mapping without persisting anything."""
-    return _registry(request).build_contract_body(_principal(request), payload)
+    return _registry(request).build_contract_body(_require(request, "automation_view"), payload)
 
 
 @router.get("/connectors", response_model=ConnectorPage)
 def list_connectors(request: Request) -> ConnectorPage:
-    return ConnectorPage(items=_registry(request).list_connectors(_principal(request)))
+    return ConnectorPage(items=_registry(request).list_connectors(_require(request, "automation_view")))
 
 
 @router.post("/connectors", status_code=201, response_model=ConnectorView)
 def create_connector(payload: ConnectorCreate, request: Request) -> ConnectorView:
-    return _registry(request).create_connector(_principal(request), payload)
+    return _registry(request).create_connector(_require(request, "automation_configure"), payload)
 
 
 @router.put("/connectors/{connector_id}", response_model=ConnectorView)
@@ -363,25 +428,25 @@ def update_connector(
     connector_id: str, payload: ConnectorUpdate, request: Request
 ) -> ConnectorView:
     """Edit a target in place; replacing the spec resets the field mapping (new contract)."""
-    return _registry(request).update_connector(_principal(request), connector_id, payload)
+    return _registry(request).update_connector(_require(request, "automation_configure"), connector_id, payload)
 
 
 @router.get("/connectors/{connector_id}/spec", response_model=ConnectorSpecView)
 def read_connector_spec(connector_id: str, request: Request) -> ConnectorSpecView:
     """The stored OpenAPI document (fetched on demand; list responses stay small)."""
-    return _registry(request).connector_spec(_principal(request), connector_id)
+    return _registry(request).connector_spec(_require(request, "automation_view"), connector_id)
 
 
 @router.delete("/connectors/{connector_id}", response_model=ConnectorView)
 def disable_connector(connector_id: str, request: Request) -> ConnectorView:
     """Soft delete: receipts stay for audit, dispatch can no longer target it."""
-    return _registry(request).disable_connector(_principal(request), connector_id)
+    return _registry(request).disable_connector(_require(request, "automation_configure"), connector_id)
 
 
 @router.get("/mappings", response_model=MappingView)
 def read_mapping(template_id: str, connector_id: str, request: Request) -> MappingView:
     """The stored (template, connector) mapping; `configured=false` means the panel should suggest."""
-    return _registry(request).mapping(_principal(request), template_id, connector_id)
+    return _registry(request).mapping(_require(request, "automation_view"), template_id, connector_id)
 
 
 @router.put("/connectors/{connector_id}/mapping", response_model=ConnectorView)
@@ -389,24 +454,114 @@ def set_connector_mapping(
     connector_id: str, payload: MappingUpdate, request: Request
 ) -> ConnectorView:
     """Bind the downstream's request-body fields to template variables (persisted per connector)."""
-    return _registry(request).set_mapping(_principal(request), connector_id, payload)
+    return _registry(request).set_mapping(_require(request, "automation_configure"), connector_id, payload)
 
 
 @router.get("/dispatches", response_model=DispatchPage)
 def list_dispatches(request: Request, limit: int = 50) -> DispatchPage:
-    return DispatchPage(items=_registry(request).list_dispatches(_principal(request), limit=limit))
+    return DispatchPage(items=_registry(request).list_dispatches(_require(request, "automation_audit"), limit=limit))
 
 
 @router.post("/dispatches/preview", response_model=DispatchPreview)
 def preview_dispatch(payload: DispatchRequest, request: Request) -> DispatchPreview:
     """What the call would look like: URL, masked headers, body and issues — no HTTP, no receipt."""
-    return _registry(request).preview(_principal(request), payload)
+    return _registry(request).preview(_require(request, "automation_view"), payload)
 
 
 @router.post("/dispatches", status_code=201, response_model=DispatchReceipt)
 def dispatch(payload: DispatchRequest, request: Request) -> DispatchReceipt:
     """Perform the outbound call (allow-listed hosts only) and record the receipt."""
-    return _registry(request).dispatch(_principal(request), payload)
+    return _registry(request).dispatch(_require(request, "automation_dispatch"), payload)
+
+
+@router.get("/rules", response_model=RulePage)
+def list_rules(request: Request) -> RulePage:
+    """Bank Ops rules: template kind → downstream, trigger and trust level."""
+    return RulePage(items=_rules(request).list(_require(request, "automation_view")))
+
+
+@router.post("/rules", status_code=201, response_model=RuleView)
+def create_rule(payload: RuleCreate, request: Request) -> RuleView:
+    return _rules(request).create(_require(request, "automation_configure"), payload)
+
+
+@router.put("/rules/{rule_id}", response_model=RuleView)
+def update_rule(rule_id: str, payload: RuleUpdate, request: Request) -> RuleView:
+    return _rules(request).update(_require(request, "automation_configure"), rule_id, payload)
+
+
+@router.post("/rules/{rule_id}/mode", response_model=RuleView)
+def set_rule_mode(rule_id: str, payload: RuleModeUpdate, request: Request) -> RuleView:
+    """Explicit tier change (shadow → needs_review → auto_send); audited."""
+    return _rules(request).set_mode(
+        _require(request, "automation_configure"), rule_id, payload.mode
+    )
+
+
+@router.delete("/rules/{rule_id}", status_code=204)
+def delete_rule(rule_id: str, request: Request) -> Response:
+    _rules(request).delete(_require(request, "automation_configure"), rule_id)
+    return Response(status_code=204)
+
+
+@router.post("/rules/{rule_id}/dry-run", response_model=RuleDryRunResult)
+def dry_run_rule(rule_id: str, payload: RuleDryRunRequest, request: Request) -> RuleDryRunResult:
+    """What this rule would send for one document — no HTTP, no receipt."""
+    return _rules(request).dry_run(_require(request, "automation_view"), rule_id, payload)
+
+
+@router.get("/settings", response_model=AutomationSettings)
+def read_settings(request: Request) -> AutomationSettings:
+    """Runtime switches (the global auto-send kill switch) for the Rules and Runs panels."""
+    return _jobs(request).settings(_require(request, "automation_view"))
+
+
+@router.get("/jobs", response_model=JobPage)
+def list_jobs(
+    request: Request,
+    document_id: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+) -> JobPage:
+    """Automatic-dispatch runs: one row per rule × submission × downstream."""
+    return _jobs(request).list(
+        _require(request, "automation_view"),
+        document_id=document_id,
+        status=status,
+        limit=max(1, min(limit, 500)),
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=JobDetailView)
+def get_job(job_id: str, request: Request) -> JobDetailView:
+    """One job plus its status timeline (queued → sending → sent / needs_attention / …)."""
+    return _jobs(request).detail(_require(request, "automation_view"), job_id)
+
+
+@router.post("/jobs/{job_id}/release", response_model=JobView)
+def release_job(job_id: str, request: Request) -> JobView:
+    """Approve a `needs_review` job; it is queued for the worker with the same idempotency key."""
+    return _jobs(request).release(_require(request, "automation_dispatch"), job_id)
+
+
+@router.post("/jobs/{job_id}/retry", response_model=JobView)
+def retry_job(job_id: str, request: Request) -> JobView:
+    """Retry a failed or cancelled job; the attempt suffix keeps the downstream call idempotent."""
+    return _jobs(request).retry(_require(request, "automation_dispatch"), job_id)
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobView)
+def cancel_job(job_id: str, request: Request) -> JobView:
+    """Cancel a queued, needs_review or failed job (sent jobs are terminal)."""
+    return _jobs(request).cancel(_require(request, "automation_dispatch"), job_id)
+
+
+@router.get("/documents/{document_id}/delivery", response_model=DocumentDelivery)
+def read_document_delivery(document_id: str, request: Request) -> DocumentDelivery:
+    """Document-level delivery status with one row per downstream and the skip reason."""
+    return _jobs(request).document_delivery(
+        _require(request, "automation_view"), document_id
+    )
 
 
 __all__ = ["router"]

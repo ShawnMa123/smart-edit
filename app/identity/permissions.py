@@ -21,6 +21,12 @@ DOCUMENT_SHARE = "document.share"
 DOCUMENT_EXPORT = "document.export"
 AUTOMATION_USE = "automation.use"
 AUTOMATION_APPLY = "automation.apply"
+# Fine-grained Automation (bank-ops back office) capabilities. The legacy `use` / `apply` scopes are
+# still accepted for API keys, but they no longer grant configuration.
+AUTOMATION_VIEW = "automation.view"
+AUTOMATION_CONFIGURE = "automation.configure"
+AUTOMATION_DISPATCH = "automation.dispatch"
+AUTOMATION_AUDIT = "automation.audit"
 ASSISTANT_USE = "assistant.use"
 ACTIVITY_READ = "activity.read"
 DEVELOPER_MANAGE = "developer.manage"
@@ -43,6 +49,10 @@ PERMISSIONS: tuple[str, ...] = (
     DOCUMENT_EXPORT,
     AUTOMATION_USE,
     AUTOMATION_APPLY,
+    AUTOMATION_VIEW,
+    AUTOMATION_CONFIGURE,
+    AUTOMATION_DISPATCH,
+    AUTOMATION_AUDIT,
     ASSISTANT_USE,
     ACTIVITY_READ,
     DEVELOPER_MANAGE,
@@ -101,8 +111,6 @@ ROLE_CATALOG: dict[str, dict] = {
             DOCUMENT_EDIT,
             DOCUMENT_LOCK,
             DOCUMENT_EXPORT,
-            AUTOMATION_USE,
-            AUTOMATION_APPLY,
             ASSISTANT_USE,
             ACTIVITY_READ,
             APPROVAL_SUBMIT,
@@ -119,6 +127,10 @@ ROLE_CATALOG: dict[str, dict] = {
             AUDIT_READ,
             ACTIVITY_READ,
             ASSISTANT_USE,
+            AUTOMATION_VIEW,
+            AUTOMATION_CONFIGURE,
+            AUTOMATION_DISPATCH,
+            AUTOMATION_AUDIT,
             APPROVAL_FIRST,
         ),
     },
@@ -132,6 +144,8 @@ ROLE_CATALOG: dict[str, dict] = {
             AUDIT_READ,
             ACTIVITY_READ,
             ASSISTANT_USE,
+            AUTOMATION_VIEW,
+            AUTOMATION_AUDIT,
             APPROVAL_SECOND,
         ),
     },
@@ -154,8 +168,10 @@ ROLE_CATALOG: dict[str, dict] = {
             DOCUMENT_LOCK,
             DOCUMENT_SHARE,
             DOCUMENT_EXPORT,
-            AUTOMATION_USE,
-            AUTOMATION_APPLY,
+            AUTOMATION_VIEW,
+            AUTOMATION_CONFIGURE,
+            AUTOMATION_DISPATCH,
+            AUTOMATION_AUDIT,
             ASSISTANT_USE,
             ACTIVITY_READ,
             AUDIT_READ,
@@ -170,8 +186,6 @@ ROLE_CATALOG: dict[str, dict] = {
             DOCUMENT_EDIT,
             DOCUMENT_LOCK,
             DOCUMENT_EXPORT,
-            AUTOMATION_USE,
-            AUTOMATION_APPLY,
             ASSISTANT_USE,
             ACTIVITY_READ,
         ),
@@ -211,7 +225,11 @@ __all__ = [
     "ASSISTANT_USE",
     "AUDIT_READ",
     "AUTOMATION_APPLY",
+    "AUTOMATION_AUDIT",
+    "AUTOMATION_CONFIGURE",
+    "AUTOMATION_DISPATCH",
     "AUTOMATION_USE",
+    "AUTOMATION_VIEW",
     "DEPARTMENT_MANAGE",
     "DEVELOPER_MANAGE",
     "DOCUMENT_CREATE",

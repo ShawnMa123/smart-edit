@@ -7,6 +7,21 @@
 ```
 
 - 后端：`systemd` 服务 `smart-edit`，单 worker（run 状态是进程内的，多 worker 会把同一 run 拆到不同进程）。
+- 自动投递：`systemd` 服务 `smart-edit-automation`（单实例，SQLite 单写者）。默认**不启用**；
+  终端审核通过后开启（`SMART_EDIT_ENABLE_AUTOMATION_WORKER=1 ./deploy/deploy.sh --remote-only`），
+  或手动 `systemctl enable --now smart-edit-automation`。
+
+### 自动投递的开关与回滚
+
+| 变量 / 命令 | 作用 |
+|---|---|
+| `SMART_EDIT_AUTOMATION_WORKER=0` | worker 启动后立即退出（保留 unit，不再消费终审事件） |
+| `SMART_EDIT_AUTOMATION_AUTO_SEND=0` | kill switch：worker 继续跑，但所有 `auto_send` 规则按 `shadow` 执行 |
+| `systemctl stop smart-edit-automation` | 立即停止自动投递；已发回执保留 |
+| `journalctl -u smart-edit-automation -n 100` | 查看 worker 迭代与失败（任务细节在 `automation_jobs`） |
+
+回滚：先 `SMART_EDIT_AUTOMATION_AUTO_SEND=0` 并重启后端，再停 worker；规则本身保持 `shadow`，
+不会产生新的外发。
 - 前端：本机构建好 `web/dist` 再上传，服务器不需要 node。
 - 数据：`/opt/smart-edit/data/{host,assistant}.db`（SQLite）+ `/opt/smart-edit/runs/`（上传件与 run 产物）；账号体系直连 RDS，不走 15432 隧道。
 

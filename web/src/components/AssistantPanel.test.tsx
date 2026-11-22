@@ -42,6 +42,26 @@ describe('AssistantPanel', () => {
     expect(screen.queryByRole('tab', { name: /Legal advice · not implemented/ })).toBeNull();
   });
 
+  it('hides the Automation tab for roles without automation.view', () => {
+    render(
+      <AssistantPanel
+        state={initialAuditState}
+        currentDigest="digest-1"
+        onRun={vi.fn()}
+        onStopWaiting={vi.fn()}
+        knowledge={knowledge}
+        automation={automation}
+        legal={legal}
+        canUseAutomation={false}
+      />,
+    );
+
+    expect(screen.queryByRole('tab', { name: /Automation/ })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Rule audit' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Knowledge Q&A' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Legal advice' })).toBeTruthy();
+  });
+
   it('shows short visible labels with the build status as a separate tag', () => {
     renderPanel();
 

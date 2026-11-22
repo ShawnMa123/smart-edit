@@ -23,6 +23,7 @@ vi.mock('./api/documents', () => ({
   saveDraft: vi.fn(),
   getDraft: vi.fn(),
   releaseLock: vi.fn(),
+  listDocuments: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('./components/RichEditor', () => ({

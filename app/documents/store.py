@@ -19,13 +19,14 @@ from typing import Any, Iterator
 from app.documents.errors import HostError, HostNotFound, LockConflict, RevisionConflict
 from app.documents.projection import plain_text_document, project_document, sha256_text
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 12
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS documents (
   document_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, owner_user_id TEXT NOT NULL,
-  title TEXT NOT NULL, created_at TEXT NOT NULL, department_id TEXT);
+  title TEXT NOT NULL, created_at TEXT NOT NULL, department_id TEXT,
+  template_id TEXT, template_name TEXT);
 CREATE TABLE IF NOT EXISTS document_drafts (
   draft_id TEXT PRIMARY KEY, document_id TEXT NOT NULL UNIQUE, workspace_id TEXT NOT NULL,
   revision INTEGER NOT NULL, content_json TEXT NOT NULL, text TEXT NOT NULL, text_sha256 TEXT NOT NULL,
@@ -123,7 +124,7 @@ CREATE TABLE IF NOT EXISTS automation_templates (
   version TEXT NOT NULL, source_kind TEXT NOT NULL, source_note TEXT,
   text TEXT NOT NULL, content_json TEXT, variables_json TEXT NOT NULL DEFAULT '[]',
   variables_source TEXT, document_id TEXT, created_by TEXT NOT NULL,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, department_id TEXT,
   UNIQUE (workspace_id, name, version));
 CREATE TABLE IF NOT EXISTS automation_connectors (
   connector_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL,
@@ -132,12 +133,31 @@ CREATE TABLE IF NOT EXISTS automation_connectors (
   timeout_seconds INTEGER NOT NULL DEFAULT 10, extra_headers_json TEXT NOT NULL DEFAULT '{}',
   spec_json TEXT, operation TEXT, body_map_json TEXT NOT NULL DEFAULT '{}',
   body_map_configured INTEGER NOT NULL DEFAULT 0, fields_json TEXT,
-  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, disabled_at TEXT);
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, disabled_at TEXT,
+  department_id TEXT);
 CREATE TABLE IF NOT EXISTS automation_dispatches (
   dispatch_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, template_id TEXT,
   connector_id TEXT NOT NULL, document_id TEXT, status TEXT NOT NULL, status_code INTEGER,
   latency_ms INTEGER, request_json TEXT NOT NULL, response_json TEXT, error_code TEXT,
-  idempotency_key TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL);
+  idempotency_key TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+  job_id TEXT, rule_id TEXT, trigger TEXT, submission_id TEXT);
+CREATE TABLE IF NOT EXISTS automation_jobs (
+  job_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, rule_id TEXT NOT NULL,
+  document_id TEXT NOT NULL, submission_id TEXT NOT NULL, template_id TEXT NOT NULL,
+  connector_id TEXT NOT NULL, status TEXT NOT NULL, mode TEXT NOT NULL, required INTEGER NOT NULL DEFAULT 1,
+  idempotency_key TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT, request_json TEXT, response_excerpt TEXT, error_code TEXT,
+  receipt_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE (workspace_id, idempotency_key));
+CREATE INDEX IF NOT EXISTS automation_jobs_due
+  ON automation_jobs(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS automation_jobs_doc
+  ON automation_jobs(document_id, created_at);
+CREATE TABLE IF NOT EXISTS automation_job_events (
+  event_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, from_status TEXT,
+  to_status TEXT NOT NULL, detail_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS automation_job_events_job
+  ON automation_job_events(job_id, created_at);
 CREATE INDEX IF NOT EXISTS automation_templates_ws ON automation_templates(workspace_id, created_at);
 CREATE INDEX IF NOT EXISTS automation_connectors_ws ON automation_connectors(workspace_id, created_at);
 CREATE TABLE IF NOT EXISTS automation_mappings (
@@ -147,6 +167,14 @@ CREATE TABLE IF NOT EXISTS automation_mappings (
 CREATE INDEX IF NOT EXISTS automation_dispatches_ws ON automation_dispatches(workspace_id, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS automation_dispatches_idem
   ON automation_dispatches(workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE TABLE IF NOT EXISTS automation_rules (
+  rule_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, department_id TEXT,
+  name TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, priority INTEGER NOT NULL DEFAULT 100,
+  required INTEGER NOT NULL DEFAULT 1, template_name TEXT NOT NULL, connector_id TEXT NOT NULL,
+  trigger TEXT NOT NULL DEFAULT 'final_approval', mode TEXT NOT NULL DEFAULT 'shadow',
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, disabled_at TEXT);
+CREATE INDEX IF NOT EXISTS automation_rules_ws
+  ON automation_rules(workspace_id, template_name, enabled);
 """
 
 
@@ -271,6 +299,88 @@ class HostStore:
                     " workspace_id TEXT NOT NULL, body_map_json TEXT NOT NULL DEFAULT '{}',"
                     " updated_at TEXT NOT NULL, PRIMARY KEY (template_id, connector_id))"
                 )
+            if found < 9:
+                # Template binding decides "same kind of document" (automation-auto-dispatch D3);
+                # templates/connectors carry a department so `dept_admin` stays inside its scope.
+                documents_columns = {
+                    row["name"] for row in conn.execute("PRAGMA table_info(documents)").fetchall()
+                }
+                for name in ("template_id", "template_name"):
+                    if name not in documents_columns:
+                        conn.execute(f"ALTER TABLE documents ADD COLUMN {name} TEXT")
+                for table in ("automation_templates", "automation_connectors"):
+                    columns = {
+                        row["name"]
+                        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+                    }
+                    if "department_id" not in columns:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN department_id TEXT")
+            if found < 10:
+                # Bank Ops rules: "this template kind → this downstream, at this trust level".
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS automation_rules ("
+                    " rule_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, department_id TEXT,"
+                    " name TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,"
+                    " priority INTEGER NOT NULL DEFAULT 100, required INTEGER NOT NULL DEFAULT 1,"
+                    " template_name TEXT NOT NULL, connector_id TEXT NOT NULL,"
+                    " trigger TEXT NOT NULL DEFAULT 'final_approval',"
+                    " mode TEXT NOT NULL DEFAULT 'shadow', created_by TEXT NOT NULL,"
+                    " created_at TEXT NOT NULL, updated_at TEXT NOT NULL, disabled_at TEXT)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS automation_rules_ws "
+                    "ON automation_rules(workspace_id, template_name, enabled)"
+                )
+            if found < 11:
+                # Automatic dispatch: one job per (rule, submission) plus its state timeline, and the
+                # receipt carries the job/rule/submission it belongs to (design D5/D7).
+                dispatch_columns = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(automation_dispatches)").fetchall()
+                }
+                for name in ("job_id", "rule_id", "trigger", "submission_id"):
+                    if name not in dispatch_columns:
+                        conn.execute(f"ALTER TABLE automation_dispatches ADD COLUMN {name} TEXT")
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS automation_jobs ("
+                    " job_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, rule_id TEXT NOT NULL,"
+                    " document_id TEXT NOT NULL, submission_id TEXT NOT NULL,"
+                    " template_id TEXT NOT NULL, connector_id TEXT NOT NULL,"
+                    " status TEXT NOT NULL, mode TEXT NOT NULL, idempotency_key TEXT NOT NULL,"
+                    " attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at TEXT,"
+                    " request_json TEXT, response_excerpt TEXT, error_code TEXT, receipt_id TEXT,"
+                    " created_at TEXT NOT NULL, updated_at TEXT NOT NULL,"
+                    " UNIQUE (workspace_id, idempotency_key))"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS automation_jobs_due "
+                    "ON automation_jobs(status, next_attempt_at)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS automation_jobs_doc "
+                    "ON automation_jobs(document_id, created_at)"
+                )
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS automation_job_events ("
+                    " event_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, from_status TEXT,"
+                    " to_status TEXT NOT NULL, detail_json TEXT NOT NULL DEFAULT '{}',"
+                    " created_at TEXT NOT NULL)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS automation_job_events_job "
+                    "ON automation_job_events(job_id, created_at)"
+                )
+            if found < 12:
+                # `required` is snapshotted on the job: an optional downstream failing keeps the
+                # document-level delivery status `sent`, a required failure makes it `needs_attention`.
+                job_columns = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(automation_jobs)").fetchall()
+                }
+                if "required" not in job_columns:
+                    conn.execute(
+                        "ALTER TABLE automation_jobs ADD COLUMN required INTEGER NOT NULL DEFAULT 1"
+                    )
             conn.execute(
                 "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
                 (str(SCHEMA_VERSION),),
@@ -314,6 +424,8 @@ class HostStore:
         document_id: str | None = None,
         created_by: str | None = None,
         department_id: str | None = None,
+        template_id: str | None = None,
+        template_name: str | None = None,
     ) -> dict[str, Any]:
         document_id = document_id or new_id("doc")
         draft_id = new_id("draft")
@@ -325,8 +437,17 @@ class HostStore:
         with self.transaction() as conn:
             conn.execute(
                 "INSERT INTO documents (document_id, workspace_id, owner_user_id, title, created_at, "
-                "department_id) VALUES (?,?,?,?,?,?)",
-                (document_id, workspace_id, owner_user_id, title, stamp, department_id),
+                "department_id, template_id, template_name) VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    document_id,
+                    workspace_id,
+                    owner_user_id,
+                    title,
+                    stamp,
+                    department_id,
+                    template_id,
+                    template_name,
+                ),
             )
             conn.execute(
                 "INSERT INTO document_drafts (draft_id, document_id, workspace_id, revision, "
@@ -367,6 +488,66 @@ class HostStore:
 
     def get_document(self, document_id: str) -> dict[str, Any] | None:
         return self.one("SELECT * FROM documents WHERE document_id = ?", (document_id,))
+
+    def list_documents(self, workspace_id: str, *, limit: int = 100) -> list[dict[str, Any]]:
+        """Workspace documents with their draft revision and latest submission status."""
+        return self.all(
+            "SELECT d.document_id, d.workspace_id, d.owner_user_id, d.title, d.created_at,"
+            " d.department_id, dr.draft_id, dr.revision, dr.updated_at AS draft_updated_at,"
+            " (SELECT s.status FROM document_submissions s WHERE s.document_id = d.document_id"
+            "  ORDER BY s.created_at DESC, s.rowid DESC LIMIT 1) AS submission_status"
+            " FROM documents d LEFT JOIN document_drafts dr ON dr.document_id = d.document_id"
+            " WHERE d.workspace_id = ?"
+            " ORDER BY COALESCE(dr.updated_at, d.created_at) DESC LIMIT ?",
+            (workspace_id, limit),
+        )
+
+    def bind_document_template(
+        self,
+        *,
+        document_id: str,
+        workspace_id: str,
+        template_id: str,
+        template_name: str,
+        actor: str,
+        request_id: str = "",
+    ) -> dict[str, Any]:
+        """Bind a document to a template (the "same kind of document" key) and audit the change."""
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT * FROM documents WHERE document_id = ? AND workspace_id = ?",
+                (document_id, workspace_id),
+            ).fetchone()
+            if row is None:
+                raise HostNotFound("document not found")
+            previous = row["template_id"] if "template_id" in row.keys() else None
+            conn.execute(
+                "UPDATE documents SET template_id = ?, template_name = ? WHERE document_id = ?",
+                (template_id, template_name, document_id),
+            )
+            self._audit(
+                conn,
+                request_id,
+                "document_template_bound",
+                actor,
+                {
+                    "document_id": document_id,
+                    "template_id": template_id,
+                    "template_name": template_name,
+                    "previous_template_id": previous,
+                },
+            )
+        return self.get_document(document_id) or {}
+
+    def document_template(self, document_id: str) -> dict[str, Any] | None:
+        row = self.get_document(document_id)
+        if row is None:
+            return None
+        return {
+            "document_id": row["document_id"],
+            "template_id": row.get("template_id"),
+            "template_name": row.get("template_name"),
+        }
 
     def find_draft_by_document(self, document_id: str) -> dict[str, Any] | None:
         return self.one("SELECT * FROM document_drafts WHERE document_id = ?", (document_id,))
@@ -950,6 +1131,18 @@ class HostStore:
         return lock
 
     # --- audit / outbox / idempotency ----------------------------------------------------------
+    def record_audit(
+        self,
+        *,
+        event_type: str,
+        actor: str,
+        payload: dict[str, Any],
+        request_id: str = "",
+    ) -> None:
+        """Public audit entry for services that are not inside a store transaction."""
+        with self.transaction() as conn:
+            self._audit(conn, request_id, event_type, actor, payload)
+
     def _audit(
         self,
         conn: sqlite3.Connection,
@@ -988,6 +1181,170 @@ class HostStore:
 
     def list_outbox(self) -> list[dict[str, Any]]:
         return self.all("SELECT * FROM outbox_events ORDER BY created_at ASC")
+
+    def pending_outbox(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Events the automation worker has not consumed yet (approval events drive auto-dispatch)."""
+        return self.all(
+            "SELECT * FROM outbox_events WHERE delivered_at IS NULL ORDER BY created_at ASC LIMIT ?",
+            (limit,),
+        )
+
+    def pending_approval_events(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Only the final-approval events, so other outbox consumers keep their own events."""
+        return self.all(
+            "SELECT * FROM outbox_events WHERE delivered_at IS NULL "
+            "AND event_type = 'approval.second.approve' ORDER BY created_at ASC LIMIT ?",
+            (limit,),
+        )
+
+    def mark_outbox_delivered(self, event_ids: list[str]) -> None:
+        if not event_ids:
+            return
+        placeholders = ",".join("?" for _ in event_ids)
+        with self.transaction() as conn:
+            conn.execute(
+                f"UPDATE outbox_events SET delivered_at = ? WHERE id IN ({placeholders})",
+                (now_iso(), *event_ids),
+            )
+
+    # --- automation jobs ----------------------------------------------------------------------
+    def find_automation_job(
+        self, workspace_id: str, idempotency_key: str
+    ) -> dict[str, Any] | None:
+        return self.one(
+            "SELECT * FROM automation_jobs WHERE workspace_id = ? AND idempotency_key = ?",
+            (workspace_id, idempotency_key),
+        )
+
+    def automation_job(self, job_id: str) -> dict[str, Any] | None:
+        return self.one("SELECT * FROM automation_jobs WHERE job_id = ?", (job_id,))
+
+    def create_automation_job(self, **fields: Any) -> dict[str, Any]:
+        """Insert once per `(workspace, idempotency_key)`; a replay returns the existing row."""
+        existing = self.find_automation_job(fields["workspace_id"], fields["idempotency_key"])
+        if existing is not None:
+            return existing
+        columns = (
+            "job_id",
+            "workspace_id",
+            "rule_id",
+            "document_id",
+            "submission_id",
+            "template_id",
+            "connector_id",
+            "status",
+            "mode",
+            "required",
+            "idempotency_key",
+            "attempts",
+            "next_attempt_at",
+            "request_json",
+            "error_code",
+            "created_at",
+            "updated_at",
+        )
+        values = {name: fields.get(name) for name in columns}
+        values["attempts"] = int(values.get("attempts") or 0)
+        values["required"] = 1 if values.get("required") is None else int(bool(values["required"]))
+        values["created_at"] = values.get("created_at") or now_iso()
+        values["updated_at"] = values.get("updated_at") or values["created_at"]
+        with self.transaction() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO automation_jobs ("
+                + ",".join(columns)
+                + ") VALUES ("
+                + ",".join("?" for _ in columns)
+                + ")",
+                tuple(values[name] for name in columns),
+            )
+        row = self.find_automation_job(fields["workspace_id"], fields["idempotency_key"])
+        assert row is not None
+        if row["job_id"] != fields["job_id"]:
+            return row
+        self.append_automation_job_event(
+            row["job_id"], None, str(row["status"]), {"mode": row["mode"]}
+        )
+        return row
+
+    def update_automation_job(self, job_id: str, **fields: Any) -> dict[str, Any]:
+        allowed = {
+            "status",
+            "mode",
+            "attempts",
+            "next_attempt_at",
+            "request_json",
+            "response_excerpt",
+            "error_code",
+            "receipt_id",
+        }
+        unknown = set(fields) - allowed
+        if unknown:
+            raise ValueError(f"unknown automation job fields: {sorted(unknown)}")
+        fields["updated_at"] = now_iso()
+        assignments = ",".join(f"{name} = ?" for name in fields)
+        with self.transaction() as conn:
+            conn.execute(
+                f"UPDATE automation_jobs SET {assignments} WHERE job_id = ?",
+                (*fields.values(), job_id),
+            )
+        row = self.automation_job(job_id)
+        assert row is not None
+        return row
+
+    def append_automation_job_event(
+        self,
+        job_id: str,
+        from_status: str | None,
+        to_status: str,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                "INSERT INTO automation_job_events (event_id, job_id, from_status, to_status, "
+                "detail_json, created_at) VALUES (?,?,?,?,?,?)",
+                (
+                    new_id("jev"),
+                    job_id,
+                    from_status,
+                    to_status,
+                    json.dumps(detail or {}, ensure_ascii=False),
+                    now_iso(),
+                ),
+            )
+
+    def automation_jobs(
+        self,
+        workspace_id: str,
+        *,
+        document_id: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM automation_jobs WHERE workspace_id = ?"
+        params: list[Any] = [workspace_id]
+        if document_id:
+            sql += " AND document_id = ?"
+            params.append(document_id)
+        if status:
+            sql += " AND status = ?"
+            params.append(status)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        return self.all(sql, tuple(params))
+
+    def due_automation_jobs(self, now: str, limit: int = 20) -> list[dict[str, Any]]:
+        return self.all(
+            "SELECT * FROM automation_jobs WHERE status = 'queued' "
+            "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
+            "ORDER BY created_at ASC LIMIT ?",
+            (now, limit),
+        )
+
+    def automation_job_events(self, job_id: str) -> list[dict[str, Any]]:
+        return self.all(
+            "SELECT * FROM automation_job_events WHERE job_id = ? ORDER BY created_at ASC",
+            (job_id,),
+        )
 
     def get_idempotency(
         self, principal: str, method: str, path: str, key: str

@@ -8,7 +8,7 @@ import pytest
 
 from app.documents.bootstrap import build_host_services
 from app.documents.errors import HostError, LockConflict, RevisionConflict
-from app.documents.store import HostStore
+from app.documents.store import SCHEMA_VERSION, HostStore
 
 
 def _store(tmp_path) -> HostStore:
@@ -42,7 +42,7 @@ def test_schema_tables_and_version(tmp_path):
         "automation_dependencies",
         "automation_reviews",
     } <= tables
-    assert store.schema_version() == 8
+    assert store.schema_version() == SCHEMA_VERSION
     for table in ("documents", "document_drafts", "automation_proposals"):
         columns = {row["name"] for row in store.all(f"PRAGMA table_info({table})")}
         assert "department_id" in columns
@@ -55,6 +55,9 @@ def test_schema_tables_and_version(tmp_path):
         "approval_requests",
         "approval_steps",
     } <= tables
+    assert {"automation_rules", "automation_jobs", "automation_job_events"} <= tables
+    job_columns = {row["name"] for row in store.all("PRAGMA table_info(automation_jobs)")}
+    assert "required" in job_columns
 
     newer = sqlite3.connect(tmp_path / "host.db")
     newer.execute("UPDATE schema_meta SET value = '99' WHERE key = 'schema_version'")
@@ -78,7 +81,7 @@ def test_schema_v4_migration_is_idempotent_and_keeps_old_data(tmp_path):
     store._conn.close()
 
     reopened = HostStore(tmp_path / "host.db")
-    assert reopened.schema_version() == 8
+    assert reopened.schema_version() == SCHEMA_VERSION
     assert {"document_submissions", "approval_requests", "approval_steps"} <= {
         row["name"] for row in reopened.all("SELECT name FROM sqlite_master WHERE type = 'table'")
     }

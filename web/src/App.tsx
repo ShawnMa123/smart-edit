@@ -2,7 +2,18 @@ import { Fragment, useEffect, useMemo, useReducer, useRef, useState } from 'reac
 
 import { ApiError } from './api/errors';
 import { createRun, createRunWithFiles, triggerStage } from './api/client';
-import { acquireLock, createDocument, getDocument, getDraft, releaseLock, saveDraft, type DraftView, type LockView } from './api/documents';
+import {
+  acquireLock,
+  createDocument,
+  getDocument,
+  getDraft,
+  listDocuments,
+  releaseLock,
+  saveDraft,
+  type DocumentSummary,
+  type DraftView,
+  type LockView,
+} from './api/documents';
 import type { AssistantSelection } from './api/assistantTypes';
 import type { ImportedDocument } from './api/types';
 import { auditReducer, initialAuditState } from './auditMachine';
@@ -58,10 +69,10 @@ import { ApprovalPanel } from './components/ApprovalPanel';
 import { loadApprovalCounts } from './domain/approvalCounts';
 import { ApprovalStatusBanner } from './components/ApprovalStatusBanner';
 import { SubmitVersionDialog } from './components/SubmitVersionDialog';
-import { ToastProvider } from './components/ToastProvider';
+import { ToastProvider, useToast } from './components/ToastProvider';
 import type { SubmissionSummary } from './api/approvalTypes';
 
-const DOCUMENT_ID = 'demo-document';
+const DEFAULT_DOCUMENT_ID = 'demo-document';
 /** Applicant status refresh (`approval-ui-polish` D4); terminal statuses stop the document poll. */
 const POLL_INTERVAL_MS = 10_000;
 type PaneId = 'versions' | 'editor' | 'assistant';
@@ -110,11 +121,16 @@ export function App({ authStatus, authProfile, autoProbe }: AppProps = {}) {
 
 function AppContent() {
   const auth = useAuth();
+  const toast = useToast();
   const workspaceId = auth.workspaceId;
   const authenticatedOrgId =
     auth.status === 'authenticated' ? auth.profile?.active_org?.org_id ?? null : null;
   const authPermissions = auth.profile?.permissions ?? [];
   const authPermissionsKey = authPermissions.join(',');
+  // Automation is a Bank Operations back office. Demo/unavailable auth has no server profile to gate
+  // on, so it keeps the tab; an authenticated session needs `automation.view`.
+  const canUseAutomation =
+    auth.status !== 'authenticated' || authPermissions.includes('automation.view');
   const inviteMatch = window.location.pathname.match(/^\/invites\/([^/]+)$/);
   const inviteToken = inviteMatch ? decodeURIComponent(inviteMatch[1]) : null;
   useEffect(() => {
@@ -125,10 +141,19 @@ function AppContent() {
   const narrow = useNarrowViewport();
   const [pane, setPane] = useState<PaneId>('editor');
   const [activeModule, setActiveModule] = useState<WorkspaceModule | null>(null);
+  /**
+   * The open document. The editor is not pinned to the demo document anymore: an applicant can keep
+   * several documents, and the Approvals tab can open any of them.
+   */
+  const [activeDocumentId, setActiveDocumentId] = useState(DEFAULT_DOCUMENT_ID);
+  /** Forces a reload even when the target document is already open (Open must always respond). */
+  const [documentReloadToken, setDocumentReloadToken] = useState(0);
+  const [documentList, setDocumentList] = useState<DocumentSummary[]>([]);
+  const announceOpenRef = useRef(false);
   const [moduleMenuOpen, setModuleMenuOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [comparePair, setComparePair] = useState<[string, string] | null>(null);
-  const [activity, setActivity] = useState<ActivityEntry[]>(() => activityStore.list(DOCUMENT_ID));
+  const [activity, setActivity] = useState<ActivityEntry[]>(() => activityStore.list(activeDocumentId));
   const [activityAvailable, setActivityAvailable] = useState(() => activityStore.available());
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
   const [demoPersistence, setDemoPersistence] = useState(() => demoStore.available());
@@ -138,7 +163,7 @@ function AppContent() {
   const text = useMemo(() => richToPlainText(richDoc), [richDoc]);
   const [dirty, setDirty] = useState(false);
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
-  const [versions, setVersions] = useState<VersionEntry[]>(() => versionStore.list(DOCUMENT_ID));
+  const [versions, setVersions] = useState<VersionEntry[]>(() => versionStore.list(activeDocumentId));
   const [currentDigest, setCurrentDigest] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [audit, dispatch] = useReducer(auditReducer, initialAuditState);
@@ -170,19 +195,50 @@ function AppContent() {
   const userEditedRef = useRef(false);
   const saveTimer = useRef<number | null>(null);
   const aliveRef = useRef(true);
+  /**
+   * The document load must re-run when the authenticated user/organisation changes: the workspace
+   * mounts before `/auth/me` answers, so a single mount-time load would 401 on the login screen and
+   * leave an empty editor after signing in (and an empty autosave could then wipe the server draft).
+   */
+  const loadedAuthKeyRef = useRef<string>('');
+  const authLoadKey =
+    auth.status === 'loading' || auth.status === 'unauthenticated'
+      ? null
+      : `${auth.profile?.user.user_id ?? 'anonymous'}:${auth.workspaceId}:${activeDocumentId}:${documentReloadToken}`;
 
   // First load: the server draft is authoritative. If none exists, seed one from the editor.
   useEffect(() => {
+    if (authLoadKey === null) return; // wait until /auth/me has answered
     aliveRef.current = true;
+    if (loadedAuthKeyRef.current !== authLoadKey) {
+      loadedAuthKeyRef.current = authLoadKey;
+      // A different document/account/org starts from the server draft, never from the previous
+      // session's editor state.
+      userEditedRef.current = false;
+      draftRef.current = null;
+      lockRef.current = null;
+      setDraft(null);
+      setLockHeld(false);
+      setLockNotice(null);
+      const blank = plainTextToDocument('');
+      richDocRef.current = blank;
+      setRichDoc(blank);
+      setDirty(false);
+      setSaveState('local');
+      setConflict(null);
+      setKnowledgeSelection(null);
+      setVersions(versionStore.list(activeDocumentId));
+      setActivity(activityStore.list(activeDocumentId));
+    }
     const load = async () => {
       try {
         let view: DraftView;
         try {
-          view = await getDocument(DOCUMENT_ID);
+          view = await getDocument(activeDocumentId);
         } catch (error) {
           if (error instanceof ApiError && error.status === 404) {
             view = await createDocument({
-              document_id: DOCUMENT_ID,
+              document_id: activeDocumentId,
               title: 'Demand Guarantee',
               content: plainTextToDocument(''),
             });
@@ -213,6 +269,10 @@ function AppContent() {
           richDocRef.current = view.content;
           setDirty(false);
           setSaveState('local');
+          if (announceOpenRef.current) {
+            announceOpenRef.current = false;
+            toast.success(`Opened “${view.title ?? 'document'}”`);
+          }
           return;
         }
         draftRef.current = view;
@@ -229,6 +289,10 @@ function AppContent() {
           // against the revision we just loaded instead.
           scheduleSave(richDocRef.current);
         }
+        if (announceOpenRef.current) {
+          announceOpenRef.current = false;
+          toast.success(`Opened “${view.title ?? 'document'}”`);
+        }
       } catch {
         if (aliveRef.current) setSaveState('local');
       }
@@ -240,7 +304,24 @@ function AppContent() {
     };
     // The editor starts empty; a later local edit schedules its own save.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoadKey]);
+
+  // Header switcher: every document the caller may open, refreshed after create/open.
+  useEffect(() => {
+    if (auth.status !== 'authenticated') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const items = await listDocuments();
+        if (!cancelled) setDocumentList(items);
+      } catch {
+        if (!cancelled) setDocumentList([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.status, auth.profile?.user.user_id, activeDocumentId, documentReloadToken]);
 
   const applySaveResult = (next: DraftView) => {
     draftRef.current = next;
@@ -262,7 +343,7 @@ function AppContent() {
     setSaveState('conflict');
     try {
       globalThis.localStorage?.setItem(
-        `smart-edit:recovery:${DOCUMENT_ID}`,
+        `smart-edit:recovery:${activeDocumentId}`,
         JSON.stringify({
           text: nextText,
           rich: nextDoc,
@@ -421,7 +502,7 @@ function AppContent() {
       });
     };
     const refreshSubmission = () => {
-      void getDocument(DOCUMENT_ID)
+      void getDocument(activeDocumentId)
         .then((fresh) => {
           if (!alive || !aliveRef.current) return;
           draftRef.current = fresh;
@@ -451,7 +532,7 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authPermissionsKey, authenticatedOrgId]);
 
-  const refreshVersions = () => setVersions(versionStore.list(DOCUMENT_ID));
+  const refreshVersions = () => setVersions(versionStore.list(activeDocumentId));
 
   // `legal-document-risk-scan`: a finding's anchor is a top-level block index, so "jump to clause"
   // only has to focus the editor and let it place the caret in that block.
@@ -464,14 +545,21 @@ function AppContent() {
   };
 
   const recordActivity = (input: ActivityInput) => {
-    activityStore.record(DOCUMENT_ID, input);
-    setActivity(activityStore.list(DOCUMENT_ID));
+    activityStore.record(activeDocumentId, input);
+    setActivity(activityStore.list(activeDocumentId));
     setActivityAvailable(activityStore.available());
   };
 
   /** Every edit arrives as a document; the projected text is derived, never typed twice. */
   const handleDocumentChange = (next: RichDocument) => {
     if (next === richDoc) return;
+    const nextText = richToPlainText(next);
+    const serverText = draftRef.current?.text ?? '';
+    if (!userEditedRef.current && nextText.trim() === '' && serverText.trim() !== '') {
+      // The editor can emit its empty initial document before the server draft is applied. Treating
+      // that as an edit used to autosave an empty body over a non-empty draft.
+      return;
+    }
     userEditedRef.current = true;
     richDocRef.current = next;
     setRichDoc(next);
@@ -482,7 +570,7 @@ function AppContent() {
 
   const handleCapture = async () => {
     const snapshot = await createSnapshot(text, currentVersionId);
-    const version = versionStore.capture(DOCUMENT_ID, {
+    const version = versionStore.capture(activeDocumentId, {
       digest: snapshot.digest,
       text,
       rich: richDoc,
@@ -499,10 +587,10 @@ function AppContent() {
   };
 
   const handleRestore = (id: string) => {
-    const restored = versionStore.restore(DOCUMENT_ID, id);
+    const restored = versionStore.restore(activeDocumentId, id);
     if (restored === null) return;
     // Older entries have no rich document: they come back as paragraphs of the same text.
-    const next = versionStore.restoreRich(DOCUMENT_ID, id) ?? plainTextToDocument(restored);
+    const next = versionStore.restoreRich(activeDocumentId, id) ?? plainTextToDocument(restored);
     userEditedRef.current = true;
     richDocRef.current = next;
     setRichDoc(next);
@@ -518,7 +606,7 @@ function AppContent() {
   };
 
   const handleClear = () => {
-    versionStore.clear(DOCUMENT_ID);
+    versionStore.clear(activeDocumentId);
     setVersions([]);
     setCurrentVersionId(null);
   };
@@ -645,7 +733,7 @@ function AppContent() {
   const handleStopWaiting = () => dispatch({ type: 'reset' });
 
   const facts = {
-    documentId: draft?.document_id ?? DOCUMENT_ID,
+    documentId: draft?.document_id ?? activeDocumentId,
     title: draft?.title ?? 'Untitled document',
     versions: versions.length,
     characters: text.length,
@@ -713,8 +801,9 @@ function AppContent() {
         templateId={templateId}
         onTemplateChange={setTemplateId}
         now={now}
+        canUseAutomation={canUseAutomation}
         knowledge={{
-          documentId: DOCUMENT_ID,
+          documentId: activeDocumentId,
           workspaceId,
           digest: currentDigest,
           text,
@@ -736,7 +825,7 @@ function AppContent() {
           onVariableHandled: () => setPendingVariable(null),
         }}
         legal={{
-          documentId: DOCUMENT_ID,
+          documentId: activeDocumentId,
           workspaceId,
           revision: facts.draftRevision,
           contentSha: draft?.content_sha256 ?? null,
@@ -767,8 +856,8 @@ function AppContent() {
       if (demoMode) {
         handleDemoMarkAllRead();
       } else {
-        activityStore.markAllRead(DOCUMENT_ID);
-        setActivity(activityStore.list(DOCUMENT_ID));
+        activityStore.markAllRead(activeDocumentId);
+        setActivity(activityStore.list(activeDocumentId));
         setActivityAvailable(activityStore.available());
       }
     }
@@ -777,13 +866,13 @@ function AppContent() {
   const closeModule = () => setActiveModule(null);
 
   const handleMarkAllRead = () => {
-    activityStore.markAllRead(DOCUMENT_ID);
-    setActivity(activityStore.list(DOCUMENT_ID));
+    activityStore.markAllRead(activeDocumentId);
+    setActivity(activityStore.list(activeDocumentId));
     setActivityAvailable(activityStore.available());
   };
 
   const handleClearActivity = () => {
-    activityStore.clear(DOCUMENT_ID);
+    activityStore.clear(activeDocumentId);
     setActivity([]);
     setActivityAvailable(activityStore.available());
   };
@@ -952,7 +1041,13 @@ function AppContent() {
       setLockHeld(true);
       setLockNotice(null);
       setSaveState('saving');
-      scheduleSave(richDocRef.current);
+      // Only persist pending local edits: acquiring a lock on a freshly loaded draft must not
+      // rewrite it with an editor that has not received the server content yet.
+      if (userEditedRef.current) {
+        scheduleSave(richDocRef.current);
+      } else {
+        setSaveState('saved');
+      }
     } catch {
       setLockNotice('Could not acquire the edit lock. Content remains local.');
     }
@@ -978,7 +1073,7 @@ function AppContent() {
     setLockHeld(false);
     setLockNotice(`Submitted for approval (${submission.status}).`);
     try {
-      const fresh = await getDocument(DOCUMENT_ID);
+      const fresh = await getDocument(activeDocumentId);
       draftRef.current = fresh;
       setDraft(fresh);
       setRichDoc(fresh.content);
@@ -992,13 +1087,48 @@ function AppContent() {
 
   const handleRailOpen = (target: WorkspaceNavTarget) => {
     if (target === 'document') {
+      // Modules render as a dialog over the workspace: switching the pane behind it is not enough.
+      setActiveModule(null);
       setPane('editor');
     } else if (target === 'versions') {
+      setActiveModule(null);
       setPane('versions');
     } else {
       openModule(target);
     }
   };
+
+  /** Open one of the workspace's documents in the editor (Approvals -> Open document). */
+  const openDocumentById = (documentId: string) => {
+    setActiveModule(null);
+    setPane('editor');
+    setActiveDocumentId(documentId);
+    // Always force a fresh load: opening the already-active document must still respond visibly.
+    announceOpenRef.current = true;
+    setDocumentReloadToken((token) => token + 1);
+  };
+
+  /** Create a fresh draft so the applicant can keep submitting after one document is under review. */
+  const handleNewDocument = async () => {
+    try {
+      const created = await createDocument({
+        title: 'Untitled document',
+        content: plainTextToDocument(''),
+      });
+      setActiveModule(null);
+      setActiveDocumentId(created.document_id);
+      setPane('editor');
+      setLockNotice(null);
+    } catch (error) {
+      setLockNotice(
+        error instanceof ApiError ? error.message : 'The document could not be created.',
+      );
+    }
+  };
+
+  const canCreateDocument = auth.profile
+    ? auth.profile.permissions.includes('document.create')
+    : true;
 
   const isUnavailableModule = (module: WorkspaceModule): module is UnavailableModule =>
     (module === 'people' && !authenticatedOrgId) ||
@@ -1046,8 +1176,11 @@ function AppContent() {
       return (
         <ApprovalPanel
           orgId={authenticatedOrgId}
-          documentId={DOCUMENT_ID}
+          documentId={activeDocumentId}
+          activeDocumentId={activeDocumentId}
           permissions={auth.profile?.permissions ?? []}
+          onOpenDocument={openDocumentById}
+          onNewDocument={() => void handleNewDocument()}
         />
       );
     }
@@ -1196,6 +1329,11 @@ function AppContent() {
               <DocumentActions
                 onImport={(files) => void handleImport(files)}
                 onComments={() => openModule('comments')}
+                onNewDocument={() => void handleNewDocument()}
+                canCreateDocument={canCreateDocument}
+                documents={documentList}
+                activeDocumentId={activeDocumentId}
+                onOpenDocument={openDocumentById}
                 onUnavailableAction={(action) => {
                   if (action.id === 'export') {
                     recordActivity({

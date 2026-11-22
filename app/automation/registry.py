@@ -59,8 +59,10 @@ from app.automation.registry_schemas import (
     SpecOperationView,
     SpecParseResult,
     SuggestionView,
+    DocumentTemplateView,
     TemplateApplyRequest,
     TemplateApplyResult,
+    TemplateBindRequest,
     TemplateCreate,
     TemplateDuplicate,
     TemplateUpdate,
@@ -80,6 +82,8 @@ MAX_TEXT_CHARS = 200_000
 MAX_RESPONSE_EXCERPT = 2000
 DEFAULT_ALLOWED_ENV = "SMART_EDIT_AUTOMATION_ALLOWED_HOSTS"
 ALLOW_HTTP_ENV = "SMART_EDIT_AUTOMATION_ALLOW_HTTP"
+# Roles that act on the whole organisation; everyone else is restricted to their own department.
+ORG_SCOPE_ROLES = frozenset({"bank_ops", "org_admin"})
 
 
 @functools.lru_cache(maxsize=64)
@@ -402,6 +406,41 @@ class AutomationRegistry:
             raise HostError(403, "workspace_required", "the principal has no active workspace")
         return workspace
 
+    @staticmethod
+    def _scope_department(principal: Principal) -> str | None:
+        """`None` = organisation-wide (fake demo, org-scoped roles); else the only writable department."""
+        if principal.auth_kind == "fake":
+            return None
+        if principal.auth_kind == "api_key":
+            return principal.department_id
+        if ORG_SCOPE_ROLES & set(principal.roles):
+            return None
+        return principal.department_id
+
+    @classmethod
+    def _can_view_department(cls, principal: Principal, department_id: str | None) -> bool:
+        scope = cls._scope_department(principal)
+        return scope is None or department_id in (None, scope)
+
+    @classmethod
+    def _can_write_department(cls, principal: Principal, department_id: str | None) -> bool:
+        scope = cls._scope_department(principal)
+        return scope is None or department_id == scope
+
+    @classmethod
+    def _department_for_create(cls, principal: Principal, requested: str | None) -> str | None:
+        """Department-scoped roles cannot create organisation-wide rows or rows in another department."""
+        scope = cls._scope_department(principal)
+        if scope is None:
+            return requested
+        if requested not in (None, scope):
+            raise HostError(
+                403,
+                "department_scope_denied",
+                "a department administrator can only configure its own department",
+            )
+        return scope
+
     def _llm_available(self) -> bool:
         return self.approved and callable(getattr(self.gateway, "compose_json", None))
 
@@ -425,27 +464,44 @@ class AutomationRegistry:
             created_by=row["created_by"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            department_id=row.get("department_id"),
         )
 
     def list_templates(self, principal: Principal) -> list[TemplateView]:
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         rows = self.store.all(
             "SELECT * FROM automation_templates WHERE workspace_id = ? ORDER BY created_at DESC",
             (self._workspace(principal),),
         )
-        return [self._view(row) for row in rows]
+        return [
+            self._view(row)
+            for row in rows
+            if self._can_view_department(principal, row.get("department_id"))
+        ]
 
     def _template_row(self, principal: Principal, template_id: str) -> dict[str, Any]:
         row = self.store.one(
             "SELECT * FROM automation_templates WHERE template_id = ? AND workspace_id = ?",
             (template_id, self._workspace(principal)),
         )
-        if row is None:
+        if row is None or not self._can_view_department(principal, row.get("department_id")):
             raise HostNotFound("automation template not found")
         return row
 
+    def _template_for_write(
+        self, principal: Principal, template_id: str
+    ) -> dict[str, Any]:
+        row = self._template_row(principal, template_id)
+        if not self._can_write_department(principal, row.get("department_id")):
+            raise HostError(
+                403,
+                "department_scope_denied",
+                "a department administrator cannot change an organisation-level template",
+            )
+        return row
+
     def get_template(self, principal: Principal, template_id: str) -> TemplateView:
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         return self._view(self._template_row(principal, template_id))
 
     def _next_version(self, workspace: str, name: str) -> str:
@@ -465,7 +521,7 @@ class AutomationRegistry:
         return f"{base}.{patch}"
 
     def create_template(self, principal: Principal, request: TemplateCreate) -> TemplateView:
-        self._require(principal, "apply")
+        self._require(principal, "automation_configure")
         workspace = self._workspace(principal)
         text = request.text.strip()
         if not text:
@@ -476,13 +532,14 @@ class AutomationRegistry:
             )
         version = self._next_version(workspace, request.name.strip())
         template_id = new_id("tpl")
+        department_id = self._department_for_create(principal, request.department_id)
         stamp = now_iso()
         with self.store.transaction() as conn:
             conn.execute(
                 "INSERT INTO automation_templates (template_id, workspace_id, name, version, "
                 "source_kind, source_note, text, content_json, variables_json, variables_source, "
-                "document_id, created_by, created_at, updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "document_id, created_by, created_at, updated_at, department_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     template_id,
                     workspace,
@@ -498,6 +555,7 @@ class AutomationRegistry:
                     principal.user_id,
                     stamp,
                     stamp,
+                    department_id,
                 ),
             )
         return self.get_template(principal, template_id)
@@ -597,7 +655,7 @@ class AutomationRegistry:
         self, principal: Principal, template_id: str, *, use_llm: bool = True
     ) -> SuggestionView:
         """Deterministic candidates + optional Doubao pass. Never persists; the user confirms."""
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         row = self._template_row(principal, template_id)
         base = detect_variables(row["text"])
         warnings: list[str] = []
@@ -630,8 +688,8 @@ class AutomationRegistry:
         self, principal: Principal, template_id: str, update: TemplateVariablesUpdate
     ) -> TemplateView:
         """Persist the confirmed set. Suggestions are never saved without this call."""
-        self._require(principal, "apply")
-        row = self._template_row(principal, template_id)
+        self._require(principal, "automation_configure")
+        row = self._template_for_write(principal, template_id)
         keys = [item.key for item in update.variables]
         if len(set(keys)) != len(keys):
             raise HostError(400, "duplicate_variable_key", "variable keys must be unique")
@@ -649,9 +707,9 @@ class AutomationRegistry:
         self, principal: Principal, template_id: str, update: TemplateUpdate
     ) -> TemplateView:
         """Rename one stored version. History keeps the name it was dispatched under."""
-        self._require(principal, "apply")
+        self._require(principal, "automation_configure")
         workspace = self._workspace(principal)
-        row = self._template_row(principal, template_id)
+        row = self._template_for_write(principal, template_id)
         name = update.name.strip()
         if not name:
             raise HostError(400, "invalid_name", "the template name cannot be empty")
@@ -673,9 +731,9 @@ class AutomationRegistry:
         self, principal: Principal, template_id: str, request: TemplateDuplicate
     ) -> TemplateView:
         """Copy a template (text + confirmed variables) under a new name."""
-        self._require(principal, "apply")
+        self._require(principal, "automation_configure")
         workspace = self._workspace(principal)
-        row = self._template_row(principal, template_id)
+        row = self._template_for_write(principal, template_id)
         name = (request.name or f"{row['name']} (copy)").strip()[:120] or "Untitled template"
         version = self._next_version(workspace, name)
         new_template_id = new_id("tpl")
@@ -707,8 +765,8 @@ class AutomationRegistry:
 
     def delete_template(self, principal: Principal, template_id: str) -> None:
         """Hard delete one template version. Dispatch receipts keep their own snapshot."""
-        self._require(principal, "apply")
-        self._template_row(principal, template_id)
+        self._require(principal, "automation_configure")
+        self._template_for_write(principal, template_id)
         with self.store.transaction() as conn:
             conn.execute("DELETE FROM automation_templates WHERE template_id = ?", (template_id,))
 
@@ -726,10 +784,10 @@ class AutomationRegistry:
         self, principal: Principal, template_id: str, request: TemplateApplyRequest
     ) -> TemplateApplyResult:
         """Render the template into a NEW document — the other direction of the automation."""
-        self._require(principal, "apply")
+        self._require(principal, "automation_configure")
         if self.documents is None:
             raise HostError(409, "document_host_unavailable", "this server cannot create documents")
-        row = self._template_row(principal, template_id)
+        row = self._template_for_write(principal, template_id)
         template = self._view(row)
         values = {key: str(value) for key, value in request.values.items()}
         rendered, filled = self._render_template(row["text"], template.variables, values)
@@ -740,6 +798,15 @@ class AutomationRegistry:
         created = self.documents.create_document(
             principal, DocumentCreate(title=title, text=rendered), new_id("reqauto")
         )
+        # The new document is born bound to this exact template version: automatic rules match on
+        # `template_name`, and the dispatch uses the document's own `template_id` (design D3).
+        self.store.bind_document_template(
+            document_id=str(created.get("document_id")),
+            workspace_id=self._workspace(principal),
+            template_id=template.template_id,
+            template_name=template.name,
+            actor=principal.user_id,
+        )
         return TemplateApplyResult(
             document_id=str(created.get("document_id")),
             draft_id=created.get("draft_id"),
@@ -747,6 +814,46 @@ class AutomationRegistry:
             text_chars=len(rendered),
             filled=filled,
             missing=missing,
+        )
+
+    def bind_document_template(
+        self,
+        principal: Principal,
+        document_id: str,
+        request: TemplateBindRequest,
+        *,
+        request_id: str = "",
+    ) -> DocumentTemplateView:
+        """Bind an existing document to a template (history/import documents need this)."""
+        self._require(principal, "automation_configure")
+        template = self._view(self._template_row(principal, request.template_id))
+        bound = self.store.bind_document_template(
+            document_id=document_id,
+            workspace_id=self._workspace(principal),
+            template_id=template.template_id,
+            template_name=template.name,
+            actor=principal.user_id,
+            request_id=request_id,
+        )
+        return DocumentTemplateView(
+            document_id=str(bound["document_id"]),
+            template_id=bound.get("template_id"),
+            template_name=bound.get("template_name"),
+        )
+
+    def document_template(self, principal: Principal, document_id: str) -> DocumentTemplateView:
+        """What template (if any) a document is bound to; 404 when it is not in this workspace."""
+        self._require(principal, "automation_view")
+        document = self.store.get_document(document_id)
+        if document is None or document.get("workspace_id") != self._workspace(principal):
+            raise HostNotFound("document not found")
+        if not self._can_view_department(principal, document.get("department_id")):
+            raise HostNotFound("document not found")
+        bound = self.store.document_template(document_id) or {"document_id": document_id}
+        return DocumentTemplateView(
+            document_id=str(bound["document_id"]),
+            template_id=bound.get("template_id"),
+            template_name=bound.get("template_name"),
         )
 
     @staticmethod
@@ -778,10 +885,10 @@ class AutomationRegistry:
         self, principal: Principal, template_id: str, request: TemplateWriteBackRequest
     ) -> TemplateWriteBackResult:
         """Apply the values to the current draft under the caller's lock and revision."""
-        self._require(principal, "read")
+        self._require(principal, "automation_configure")
         if self.documents is None:
             raise HostError(409, "document_host_unavailable", "this server cannot edit drafts")
-        template = self._view(self._template_row(principal, template_id))
+        template = self._view(self._template_for_write(principal, template_id))
         current = self.documents.view(principal, request.document_id, request.draft_id)
         values = {key: str(value) for key, value in request.values.items()}
         applied: set[str] = set()
@@ -840,7 +947,7 @@ class AutomationRegistry:
 
     def parse_contract(self, principal: Principal, document: dict[str, Any]) -> SpecParseResult:
         """Parse an OpenAPI document with the same code the registry uses (no connector needed)."""
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         encoded = json.dumps(document, ensure_ascii=False)
         if len(encoded.encode("utf-8")) > MAX_SPEC_BYTES:
             raise HostError(
@@ -858,7 +965,7 @@ class AutomationRegistry:
 
     def build_contract_body(self, principal: Principal, request: SpecBuildRequest) -> SpecBuildResult:
         """Assemble a request body for a spec + mapping, without persisting anything."""
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         parsed = self.parse_contract(principal, request.spec)
         operation = next((item for item in parsed.operations if item.id == request.operation), None)
         if operation is None:
@@ -908,11 +1015,37 @@ class AutomationRegistry:
                 return match.group(1).strip(), match.group(0).strip()
         return None, None
 
+    def prepare_values(self, principal: Principal, template_id: str, text: str) -> dict[str, str]:
+        """Bind confirmed variables from a frozen submission text — never reads the live draft."""
+        self._require(principal, "automation_view")
+        template = self._view(self._template_row(principal, template_id))
+        values: dict[str, str] = {}
+        for variable in template.variables:
+            value, _quote = self._value_in_text(variable, text)
+            if value:
+                values[variable.key] = value
+        return values
+
+    def _prepare_for_request(
+        self, principal: Principal, request: DispatchRequest, text: str | None = None
+    ) -> PreparedPayload:
+        """A dispatch preview/job may carry a frozen snapshot instead of a live draft id."""
+        source = text if text is not None else request.text
+        return self.prepare(
+            principal,
+            request.template_id,
+            PrepareRequest(
+                document_id=None if source is not None else request.document_id,
+                text=source if source is not None else (None if request.document_id else ""),
+                connector_id=request.connector_id,
+            ),
+        )
+
     def prepare(
         self, principal: Principal, template_id: str, request: PrepareRequest
     ) -> PreparedPayload:
         """Bind confirmed variables to a draft. Missing values are reported, not guessed."""
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         row = self._template_row(principal, template_id)
         template = self._view(row)
         if request.document_id:
@@ -980,7 +1113,7 @@ class AutomationRegistry:
 
     def mapping(self, principal: Principal, template_id: str, connector_id: str) -> MappingView:
         """Read the pair mapping (configured=False → the panel should use suggestions)."""
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         self._template_row(principal, template_id)  # 404 when the template is gone
         stored = self._pair_mapping(self._workspace(principal), template_id, connector_id)
         return MappingView(
@@ -1098,10 +1231,11 @@ class AutomationRegistry:
             spec_error=spec_error,
             schema_kind=schema_kind,  # type: ignore[arg-type]
             fields=[FieldDefinition(**item) for item in hand_fields] if hand_fields else [],
+            department_id=row.get("department_id"),
         )
 
     def list_connectors(self, principal: Principal) -> list[ConnectorView]:
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         rows = self.store.all(
             "SELECT * FROM automation_connectors WHERE workspace_id = ? AND disabled_at IS NULL "
             # Oldest first: the first registered system stays the panel's default target, so adding a
@@ -1109,7 +1243,38 @@ class AutomationRegistry:
             "ORDER BY created_at ASC, connector_id ASC",
             (self._workspace(principal),),
         )
-        return [self._connector_view(row) for row in rows]
+        return [
+            self._connector_view(row)
+            for row in rows
+            if self._can_view_department(principal, row.get("department_id"))
+        ]
+
+    def _connector_row_for_write(
+        self, principal: Principal, connector_id: str, *, include_disabled: bool = False
+    ) -> dict[str, Any]:
+        sql = "SELECT * FROM automation_connectors WHERE connector_id = ? AND workspace_id = ?"
+        if not include_disabled:
+            sql += " AND disabled_at IS NULL"
+        row = self.store.one(sql, (connector_id, self._workspace(principal)))
+        if row is None or not self._can_view_department(principal, row.get("department_id")):
+            raise HostNotFound("automation connector not found")
+        if not self._can_write_department(principal, row.get("department_id")):
+            raise HostError(
+                403,
+                "department_scope_denied",
+                "a department administrator cannot change an organisation-level connector",
+            )
+        return row
+
+    def _connector_row_for_view(self, principal: Principal, connector_id: str) -> dict[str, Any]:
+        row = self.store.one(
+            "SELECT * FROM automation_connectors WHERE connector_id = ? AND workspace_id = ? "
+            "AND disabled_at IS NULL",
+            (connector_id, self._workspace(principal)),
+        )
+        if row is None or not self._can_view_department(principal, row.get("department_id")):
+            raise HostNotFound("automation connector not found")
+        return row
 
     @staticmethod
     def _validate_transport(
@@ -1243,14 +1408,9 @@ class AutomationRegistry:
         With `template_id`, the mapping belongs to that (template, connector) pair — one connector can
         therefore serve several templates without their mappings overwriting each other.
         """
-        self._require(principal, "apply")
+        self._require(principal, "automation_configure")
         workspace = self._workspace(principal)
-        row = self.store.one(
-            "SELECT * FROM automation_connectors WHERE connector_id = ? AND workspace_id = ?",
-            (connector_id, workspace),
-        )
-        if row is None:
-            raise HostNotFound("automation connector not found")
+        row = self._connector_row_for_write(principal, connector_id)
         spec, _ = _spec_of(row)
         operation = spec.operation(row.get("operation")) if spec else None
         if operation is None and _fields_of(row):
@@ -1266,7 +1426,7 @@ class AutomationRegistry:
         if unknown:
             raise HostError(400, "unknown_field_path", f"not in {operation.id}: {', '.join(unknown[:5])}")
         if update.template_id:
-            self._template_row(principal, update.template_id)  # 404 when the template is gone
+            self._template_for_write(principal, update.template_id)  # 404 when the template is gone
             with self.store.transaction() as conn:
                 conn.execute(
                     "INSERT INTO automation_mappings (template_id, connector_id, workspace_id, "
@@ -1295,7 +1455,7 @@ class AutomationRegistry:
         return self._connector_view(refreshed)
 
     def create_connector(self, principal: Principal, request: ConnectorCreate) -> ConnectorView:
-        self._require(principal, "apply")
+        self._require(principal, "automation_configure")
         workspace = self._workspace(principal)
         self._validate_transport(
             base_url=request.base_url,
@@ -1308,14 +1468,16 @@ class AutomationRegistry:
             request, path
         )
         connector_id = new_id("con")
+        department_id = self._department_for_create(principal, request.department_id)
         stamp = now_iso()
         with self.store.transaction() as conn:
             conn.execute(
                 "INSERT INTO automation_connectors (connector_id, workspace_id, name, base_url, "
                 "method, path, auth_kind, auth_header, secret_env, timeout_seconds, "
                 "extra_headers_json, spec_json, fields_json, operation, body_map_json, "
-                "body_map_configured, created_by, created_at, updated_at, disabled_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "body_map_configured, created_by, created_at, updated_at, disabled_at, "
+                "department_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     connector_id,
                     workspace,
@@ -1337,6 +1499,7 @@ class AutomationRegistry:
                     stamp,
                     stamp,
                     None,
+                    department_id,
                 ),
             )
         row = self.store.one(
@@ -1350,14 +1513,8 @@ class AutomationRegistry:
     ) -> ConnectorView:
         """Change an existing target in place. Replacing the spec (or its operation) resets the mapping,
         because the old field paths belong to the old contract."""
-        self._require(principal, "apply")
-        row = self.store.one(
-            "SELECT * FROM automation_connectors WHERE connector_id = ? AND workspace_id = ? "
-            "AND disabled_at IS NULL",
-            (connector_id, self._workspace(principal)),
-        )
-        if row is None:
-            raise HostNotFound("automation connector not found")
+        self._require(principal, "automation_configure")
+        row = self._connector_row_for_write(principal, connector_id)
 
         base_url = (patch.base_url or row["base_url"]).strip().rstrip("/")
         auth_kind = patch.auth_kind or row["auth_kind"]
@@ -1435,14 +1592,8 @@ class AutomationRegistry:
 
     def disable_connector(self, principal: Principal, connector_id: str) -> ConnectorView:
         """Soft delete: the row and its receipts stay for audit; dispatch can no longer use it."""
-        self._require(principal, "apply")
-        row = self.store.one(
-            "SELECT * FROM automation_connectors WHERE connector_id = ? AND workspace_id = ? "
-            "AND disabled_at IS NULL",
-            (connector_id, self._workspace(principal)),
-        )
-        if row is None:
-            raise HostNotFound("automation connector not found")
+        self._require(principal, "automation_configure")
+        row = self._connector_row_for_write(principal, connector_id)
         stamp = now_iso()
         with self.store.transaction() as conn:
             conn.execute(
@@ -1455,7 +1606,7 @@ class AutomationRegistry:
 
     def connector_spec(self, principal: Principal, connector_id: str) -> ConnectorSpecView:
         """The stored OpenAPI document, so the editor can re-load it without a round trip to disk."""
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         row = self.store.one(
             "SELECT * FROM automation_connectors WHERE connector_id = ? AND workspace_id = ?",
             (connector_id, self._workspace(principal)),
@@ -1518,6 +1669,10 @@ class AutomationRegistry:
             response_excerpt=row.get("response_json"),
             error_code=row.get("error_code"),
             created_at=row["created_at"],
+            job_id=row.get("job_id"),
+            rule_id=row.get("rule_id"),
+            trigger=row.get("trigger"),
+            submission_id=row.get("submission_id"),
         )
 
     def _record(
@@ -1536,14 +1691,17 @@ class AutomationRegistry:
         error_code: str | None,
         idempotency_key: str | None,
         actor: str,
+        meta: dict[str, Any] | None = None,
     ) -> DispatchReceipt:
         stamp = now_iso()
+        meta = meta or {}
         with self.store.transaction() as conn:
             conn.execute(
                 "INSERT INTO automation_dispatches (dispatch_id, workspace_id, template_id, "
                 "connector_id, document_id, status, status_code, latency_ms, request_json, "
-                "response_json, error_code, idempotency_key, created_by, created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "response_json, error_code, idempotency_key, created_by, created_at, "
+                "job_id, rule_id, trigger, submission_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     dispatch_id,
                     workspace,
@@ -1559,6 +1717,10 @@ class AutomationRegistry:
                     idempotency_key,
                     actor,
                     stamp,
+                    meta.get("job_id"),
+                    meta.get("rule_id"),
+                    meta.get("trigger"),
+                    meta.get("submission_id"),
                 ),
             )
         row = self.store.one(
@@ -1569,25 +1731,11 @@ class AutomationRegistry:
 
     def preview(self, principal: Principal, request: DispatchRequest) -> DispatchPreview:
         """Resolve URL / headers / body for a dispatch **without** calling out or recording anything."""
-        self._require(principal, "read")
+        self._require(principal, "automation_view")
         workspace = self._workspace(principal)
-        connector_row = self.store.one(
-            "SELECT * FROM automation_connectors WHERE connector_id = ? AND workspace_id = ? "
-            "AND disabled_at IS NULL",
-            (request.connector_id, workspace),
-        )
-        if connector_row is None:
-            raise HostNotFound("automation connector not found")
+        connector_row = self._connector_row_for_view(principal, request.connector_id)
         connector = self._connector_view(connector_row)
-        prepared = self.prepare(
-            principal,
-            request.template_id,
-            PrepareRequest(
-                document_id=request.document_id,
-                text=None if request.document_id else "",
-                connector_id=request.connector_id,
-            ),
-        )
+        prepared = self._prepare_for_request(principal, request)
         values = {key: item.value for key, item in prepared.values.items() if item.value}
         values.update({key: str(value) for key, value in request.values.items()})
 
@@ -1623,10 +1771,26 @@ class AutomationRegistry:
             refusal=refusal,
         )
 
-    def dispatch(self, principal: Principal, request: DispatchRequest) -> DispatchReceipt:
+    def dispatch(
+        self,
+        principal: Principal,
+        request: DispatchRequest,
+        *,
+        job_id: str | None = None,
+        rule_id: str | None = None,
+        trigger: str | None = None,
+        submission_id: str | None = None,
+        text: str | None = None,
+    ) -> DispatchReceipt:
         """One outbound HTTP call to an allow-listed connector, recorded before and after."""
-        self._require(principal, "apply")
+        self._require(principal, "automation_dispatch")
         workspace = self._workspace(principal)
+        receipt_meta = {
+            "job_id": job_id,
+            "rule_id": rule_id,
+            "trigger": trigger,
+            "submission_id": submission_id,
+        }
         if request.idempotency_key:
             existing = self.store.one(
                 "SELECT * FROM automation_dispatches WHERE workspace_id = ? AND idempotency_key = ?",
@@ -1634,23 +1798,9 @@ class AutomationRegistry:
             )
             if existing is not None:
                 return self._receipt(existing)
-        connector_row = self.store.one(
-            "SELECT * FROM automation_connectors WHERE connector_id = ? AND workspace_id = ? "
-            "AND disabled_at IS NULL",
-            (request.connector_id, workspace),
-        )
-        if connector_row is None:
-            raise HostNotFound("automation connector not found")
+        connector_row = self._connector_row_for_view(principal, request.connector_id)
         connector = self._connector_view(connector_row)
-        prepared = self.prepare(
-            principal,
-            request.template_id,
-            PrepareRequest(
-                document_id=request.document_id,
-                text=None if request.document_id else "",
-                connector_id=request.connector_id,
-            ),
-        )
+        prepared = self._prepare_for_request(principal, request, text)
         values = {key: item.value for key, item in prepared.values.items() if item.value}
         values.update({key: str(value) for key, value in request.values.items()})
         dispatch_id = new_id("dsp")
@@ -1699,7 +1849,7 @@ class AutomationRegistry:
         payload["sent_body"] = copy.deepcopy(request_json)
 
         if body_issues:
-            receipt = self._record(
+            receipt = self._record(meta=receipt_meta, 
                 dispatch_id=dispatch_id,
                 workspace=workspace,
                 template_id=request.template_id,
@@ -1726,7 +1876,7 @@ class AutomationRegistry:
             )
 
         if refusal is not None:
-            receipt = self._record(
+            receipt = self._record(meta=receipt_meta, 
                 dispatch_id=dispatch_id,
                 workspace=workspace,
                 template_id=request.template_id,
@@ -1760,7 +1910,7 @@ class AutomationRegistry:
                 timeout=connector.timeout_seconds,
             )
         except httpx.TimeoutException:
-            return self._record(
+            return self._record(meta=receipt_meta, 
                 dispatch_id=dispatch_id,
                 workspace=workspace,
                 template_id=request.template_id,
@@ -1776,7 +1926,7 @@ class AutomationRegistry:
                 actor=principal.user_id,
             )
         except httpx.HTTPError as exc:
-            return self._record(
+            return self._record(meta=receipt_meta, 
                 dispatch_id=dispatch_id,
                 workspace=workspace,
                 template_id=request.template_id,
@@ -1792,7 +1942,7 @@ class AutomationRegistry:
                 actor=principal.user_id,
             )
         ok = 200 <= response.status_code < 300
-        return self._record(
+        return self._record(meta=receipt_meta, 
             dispatch_id=dispatch_id,
             workspace=workspace,
             template_id=request.template_id,
@@ -1809,7 +1959,7 @@ class AutomationRegistry:
         )
 
     def list_dispatches(self, principal: Principal, *, limit: int = 50) -> list[DispatchReceipt]:
-        self._require(principal, "read")
+        self._require(principal, "automation_audit")
         rows = self.store.all(
             "SELECT * FROM automation_dispatches WHERE workspace_id = ? "
             "ORDER BY created_at DESC LIMIT ?",

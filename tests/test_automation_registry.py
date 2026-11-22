@@ -17,6 +17,7 @@ from app.automation.registry_schemas import (
     PrepareRequest,
     SpecBuildRequest,
     TemplateApplyRequest,
+    TemplateBindRequest,
     TemplateCreate,
     TemplateDuplicate,
     TemplateUpdate,
@@ -25,6 +26,7 @@ from app.automation.registry_schemas import (
     TemplateVariablesUpdate,
 )
 from app.documents.errors import HostError
+from app.documents.schemas import DocumentCreate
 from app.documents.store import HostStore
 from app.shared.ports import Principal
 
@@ -54,7 +56,21 @@ Governing Rules: URDG 758
 
 
 def _principal(**overrides) -> Principal:
-    values = {"user_id": "usr_demo", "workspace_id": "ws_demo"}
+    values = {
+        "user_id": "usr_demo",
+        "workspace_id": "ws_demo",
+        "capabilities": (
+            "read",
+            "edit",
+            "use_ai",
+            "confirm_fields",
+            "apply",
+            "automation_view",
+            "automation_configure",
+            "automation_dispatch",
+            "automation_audit",
+        ),
+    }
     values.update(overrides)
     return Principal(**values)
 
@@ -854,6 +870,70 @@ def test_apply_template_creates_a_filled_document(tmp_path):
     assert "Amount: USD 250,000.00" in document["text"]
     assert "{{" not in document["text"]
 
+    # A document created from a template is born bound to that exact version (design D3).
+    binding = registry.document_template(principal, result.document_id)
+    assert binding.template_id == template.template_id
+    assert binding.template_name == "Trade application"
+
+
+def test_bind_document_template_is_audited_and_department_scoped(tmp_path):
+    from app.automation.registry import AutomationRegistry
+    from app.documents.bootstrap import build_host_services
+
+    host = build_host_services(db_path=tmp_path / "host.db", mode="local")
+    registry = AutomationRegistry(host.store, documents=host.documents)
+    org_admin = _principal()
+    dept_template = registry.create_template(
+        org_admin,
+        TemplateCreate(name="Dept A guarantee", text="Amount: {{amount}}", department_id="dept_a"),
+    )
+    document = host.documents.create_document(
+        org_admin, DocumentCreate(title="History", text="Amount: 1"), "req_1"
+    )
+
+    bound = registry.bind_document_template(
+        org_admin,
+        document["document_id"],
+        TemplateBindRequest(template_id=dept_template.template_id),
+    )
+    assert bound.template_name == "Dept A guarantee"
+    audit = host.store.all(
+        "SELECT * FROM host_audit WHERE event_type = 'document_template_bound'"
+    )
+    assert audit and audit[0]["actor"] == "usr_demo"
+
+    dept_admin = _principal(
+        roles=("dept_admin",),
+        auth_kind="user",
+        department_id="dept_b",
+        capabilities=("read", "automation_view", "automation_configure"),
+    )
+    # Another department's template is not even visible.
+    with pytest.raises(HostError) as hidden:
+        registry.bind_document_template(
+            dept_admin,
+            document["document_id"],
+            TemplateBindRequest(template_id=dept_template.template_id),
+        )
+    assert hidden.value.status == 404
+
+    # A department admin cannot rewrite an organisation-level template.
+    org_template = registry.create_template(
+        org_admin, TemplateCreate(name="Org guarantee", text="Amount: {{amount}}")
+    )
+    with pytest.raises(HostError) as denied:
+        registry.rename_template(
+            dept_admin, org_template.template_id, TemplateUpdate(name="Hijacked")
+        )
+    assert denied.value.status == 403
+    assert denied.value.code == "department_scope_denied"
+
+    # Creating without an explicit department stays inside the caller's department.
+    own = registry.create_template(
+        dept_admin, TemplateCreate(name="Dept B guarantee", text="Amount: {{amount}}")
+    )
+    assert own.department_id == "dept_b"
+
 
 def test_apply_template_reports_required_fields_without_a_value(tmp_path):
     from app.automation.registry import AutomationRegistry
@@ -1306,11 +1386,77 @@ def test_spec_helpers_reject_unusable_documents(registry):
     assert missing.value.code == "operation_not_found"
 
 
-def test_write_paths_require_the_apply_capability(registry):
-    reader = _principal(capabilities=("read",))
+def test_write_paths_require_the_configure_capability(registry):
+    reader = _principal(capabilities=("read", "automation_view"))
 
     with pytest.raises(HostError) as error:
         registry.create_template(reader, TemplateCreate(name="x", text="Amount: 1"))
+
+    assert error.value.status == 403
+    assert error.value.code == "capability_denied"
+
+    with pytest.raises(HostError) as dispatch_denied:
+        registry.dispatch(
+            reader, DispatchRequest(template_id="tpl_x", connector_id="con_x")
+        )
+    assert dispatch_denied.value.status == 403
+
+    with pytest.raises(HostError) as audit_denied:
+        registry.list_dispatches(reader)
+    assert audit_denied.value.status == 403
+
+
+def test_schema_v8_migrates_template_binding_and_department_columns(tmp_path):
+    import sqlite3
+
+    from app.documents.store import SCHEMA_VERSION
+
+    db_path = tmp_path / "host.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        "CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+        "INSERT INTO schema_meta VALUES ('schema_version','8');"
+        "CREATE TABLE documents (document_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL,"
+        " owner_user_id TEXT NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL,"
+        " department_id TEXT);"
+        "INSERT INTO documents VALUES ('doc_1','ws','usr','T','2026-01-01',NULL);"
+        "CREATE TABLE automation_templates (template_id TEXT PRIMARY KEY,"
+        " workspace_id TEXT NOT NULL, name TEXT NOT NULL, version TEXT NOT NULL,"
+        " source_kind TEXT NOT NULL, source_note TEXT, text TEXT NOT NULL, content_json TEXT,"
+        " variables_json TEXT NOT NULL DEFAULT '[]', variables_source TEXT, document_id TEXT,"
+        " created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,"
+        " UNIQUE (workspace_id, name, version));"
+        "CREATE TABLE automation_connectors (connector_id TEXT PRIMARY KEY,"
+        " workspace_id TEXT NOT NULL, name TEXT NOT NULL, base_url TEXT NOT NULL,"
+        " method TEXT NOT NULL DEFAULT 'POST', path TEXT NOT NULL,"
+        " auth_kind TEXT NOT NULL DEFAULT 'none', auth_header TEXT, secret_env TEXT,"
+        " timeout_seconds INTEGER NOT NULL DEFAULT 10,"
+        " extra_headers_json TEXT NOT NULL DEFAULT '{}', spec_json TEXT, operation TEXT,"
+        " body_map_json TEXT NOT NULL DEFAULT '{}',"
+        " body_map_configured INTEGER NOT NULL DEFAULT 0, fields_json TEXT,"
+        " created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,"
+        " disabled_at TEXT);"
+    )
+    conn.commit()
+    conn.close()
+
+    store = HostStore(db_path)
+
+    assert store.schema_version() == SCHEMA_VERSION
+    document_columns = {row["name"] for row in store.all("PRAGMA table_info(documents)")}
+    assert {"template_id", "template_name"} <= document_columns
+    for table in ("automation_templates", "automation_connectors"):
+        columns = {row["name"] for row in store.all(f"PRAGMA table_info({table})")}
+        assert "department_id" in columns
+    # Old rows stay readable and unbound.
+    assert store.get_document("doc_1")["template_id"] is None
+
+
+def test_view_is_required_for_reads(registry):
+    nobody = _principal(capabilities=("read",))
+
+    with pytest.raises(HostError) as error:
+        registry.list_templates(nobody)
 
     assert error.value.status == 403
     assert error.value.code == "capability_denied"

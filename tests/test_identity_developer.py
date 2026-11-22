@@ -82,6 +82,40 @@ def test_api_key_scopes_and_creator_permissions_are_intersected(api, identity_se
     assert api.get(f"/developer/organizations/{org_id}/keys").status_code == 403
 
 
+def test_legacy_automation_api_key_scopes_only_read_and_send(api, identity_services):  # noqa: F811
+    owner = register(api)
+    org_id = owner["active_org"]["org_id"]
+    created = api.post(
+        f"/developer/organizations/{org_id}/keys",
+        json={"name": "Legacy automation key", "scopes": ["automation.use", "automation.apply"]},
+        headers=CSRF,
+    )
+    assert created.status_code == 201, created.text
+
+    api.cookies.clear()
+    headers = {"Authorization": f"Bearer {created.json()['key_token']}"}
+
+    assert api.get("/automation/templates", headers=headers).status_code == 200
+    # The legacy scopes keep working for sending (a missing connector is 404, not 403).
+    assert (
+        api.post(
+            "/automation/dispatches",
+            json={"template_id": "tpl_missing", "connector_id": "con_missing"},
+            headers=headers,
+        ).status_code
+        != 403
+    )
+    # But they never grant configuration.
+    assert (
+        api.post(
+            "/automation/templates",
+            json={"name": "x", "text": "Amount: 1", "source_kind": "imported"},
+            headers=headers,
+        ).status_code
+        == 403
+    )
+
+
 def test_usage_aggregates_by_day_key_and_status(api, identity_services):  # noqa: F811
     owner = register(api)
     org_id = owner["active_org"]["org_id"]

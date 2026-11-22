@@ -24,6 +24,17 @@ _CAPABILITY_PERMISSIONS = {
     "apply": perm.AUTOMATION_APPLY,
     "use_ai": perm.ASSISTANT_USE,
     "confirm_fields": perm.DOCUMENT_EDIT,
+    # Automation back office: separate view / configure / dispatch / audit from the legacy `apply`.
+    "automation_view": perm.AUTOMATION_VIEW,
+    "automation_configure": perm.AUTOMATION_CONFIGURE,
+    "automation_dispatch": perm.AUTOMATION_DISPATCH,
+    "automation_audit": perm.AUTOMATION_AUDIT,
+}
+
+# API keys issued before the fine-grained split keep working, but only for reading and sending.
+_LEGACY_SCOPE_ALIASES = {
+    perm.AUTOMATION_USE: perm.AUTOMATION_VIEW,
+    perm.AUTOMATION_APPLY: perm.AUTOMATION_DISPATCH,
 }
 
 
@@ -57,7 +68,17 @@ class PrincipalAdapter:
         user = (request.headers.get("x-demo-user") or "user_demo_01").strip() or "user_demo_01"
         raw = request.headers.get("x-demo-capabilities")
         if raw is None:
-            capabilities = ("read", "use_ai", "confirm_fields", "edit", "apply")
+            capabilities = (
+                "read",
+                "use_ai",
+                "confirm_fields",
+                "edit",
+                "apply",
+                "automation_view",
+                "automation_configure",
+                "automation_dispatch",
+                "automation_audit",
+            )
         else:
             capabilities = tuple(part.strip() for part in raw.split(",") if part.strip())
         return Principal(
@@ -90,6 +111,11 @@ class PrincipalAdapter:
             creator_id, row["org_id"], row.get("department_id")
         )
         scopes = set(row.get("scopes_json") or [])
+        # Backward compatibility: keys issued before the fine-grained split only carry
+        # `automation.use` / `automation.apply`; they map to read + send, never to configure.
+        for legacy, current in _LEGACY_SCOPE_ALIASES.items():
+            if legacy in scopes:
+                scopes.add(current)
         effective = scopes & creator_permissions
         version = self.store.authorization_version(row["org_id"]) or 0
         self.store.touch_api_key(row["key_id"])

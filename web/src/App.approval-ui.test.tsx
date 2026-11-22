@@ -13,6 +13,7 @@ import {
   createDocument,
   getDocument,
   getDraft,
+  listDocuments,
   releaseLock,
   saveDraft,
 } from './api/documents';
@@ -24,6 +25,7 @@ vi.mock('./api/documents', () => ({
   releaseLock: vi.fn(),
   saveDraft: vi.fn(),
   getDraft: vi.fn(),
+  listDocuments: vi.fn().mockResolvedValue([]),
 }));
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -109,6 +111,7 @@ beforeEach(() => {
   vi.mocked(releaseLock).mockReset().mockResolvedValue(lock);
   vi.mocked(saveDraft).mockReset().mockResolvedValue(view());
   vi.mocked(getDraft).mockReset().mockResolvedValue(view());
+  vi.mocked(listDocuments).mockReset().mockResolvedValue([]);
 });
 
 afterEach(() => {

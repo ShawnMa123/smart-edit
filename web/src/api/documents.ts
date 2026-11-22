@@ -128,6 +128,21 @@ export async function createDocument(
   return (await request<DraftView>('', json(input), options)).data;
 }
 
+export interface DocumentSummary {
+  document_id: string;
+  title: string;
+  revision: number;
+  draft_id: string | null;
+  submission_status: SubmissionSummary['status'] | 'draft';
+  updated_at: string | null;
+  owner_user_id: string;
+  department_id: string | null;
+}
+
+export async function listDocuments(options: HostOptions = {}): Promise<DocumentSummary[]> {
+  return (await request<DocumentSummary[]>('', { method: 'GET' }, options)).data;
+}
+
 export async function getDocument(documentId: string, options: HostOptions = {}): Promise<DraftView> {
   return (await request<DraftView>(`/${encodeURIComponent(documentId)}`, { method: 'GET' }, options))
     .data;

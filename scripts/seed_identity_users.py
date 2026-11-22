@@ -200,6 +200,24 @@ def reset_demo_document(host: HostStore, owner_id: str) -> None:
                 (draft_id,),
             )
             conn.execute("DELETE FROM automation_proposals WHERE draft_id = ?", (draft_id,))
+        # Drop the document's approval history too: a recreated draft must start as `Draft`, not
+        # inherit the previous run's pending/approved submission (which would make it read-only).
+        conn.execute(
+            "DELETE FROM approval_steps WHERE request_id IN "
+            "(SELECT request_id FROM approval_requests WHERE document_id = ?)",
+            (DOCUMENT_ID,),
+        )
+        conn.execute("DELETE FROM approval_requests WHERE document_id = ?", (DOCUMENT_ID,))
+        conn.execute("DELETE FROM document_submissions WHERE document_id = ?", (DOCUMENT_ID,))
+        # A reset document must not inherit the previous approval's automatic-dispatch history:
+        # otherwise the Runs panel would show jobs/receipts for a submission that no longer exists.
+        conn.execute(
+            "DELETE FROM automation_job_events WHERE job_id IN "
+            "(SELECT job_id FROM automation_jobs WHERE document_id = ?)",
+            (DOCUMENT_ID,),
+        )
+        conn.execute("DELETE FROM automation_jobs WHERE document_id = ?", (DOCUMENT_ID,))
+        conn.execute("DELETE FROM automation_dispatches WHERE document_id = ?", (DOCUMENT_ID,))
         conn.execute("DELETE FROM document_drafts WHERE document_id = ?", (DOCUMENT_ID,))
         conn.execute("DELETE FROM documents WHERE document_id = ?", (DOCUMENT_ID,))
     host.create_document(
@@ -209,6 +227,8 @@ def reset_demo_document(host: HostStore, owner_id: str) -> None:
         text=SAMPLE_TEXT,
         document_id=DOCUMENT_ID,
     )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reset", action="store_true", help="truncate identity tables first")

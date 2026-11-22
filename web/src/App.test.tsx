@@ -66,6 +66,13 @@ describe('wide viewport', () => {
 
     await userEvent.click(within(rail).getByRole('button', { name: 'Approval' }));
     expect(screen.getByRole('dialog', { name: /Approval workflow/ })).toBeTruthy();
+    // Switching back to the document closes the module dialog (the rail must not only change the
+    // pane behind it).
+    await userEvent.click(within(rail).getByRole('button', { name: 'Document' }));
+    expect(screen.queryByRole('dialog', { name: /Approval workflow/ })).toBeNull();
+
+    await userEvent.click(within(rail).getByRole('button', { name: 'Approval' }));
+    expect(screen.getByRole('dialog', { name: /Approval workflow/ })).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
 
     const topbar = document.querySelector('.topbar') as HTMLElement;

@@ -39,6 +39,8 @@ class TemplateCreate(Strict):
     source_kind: TemplateSourceKind = "imported"
     source_note: str | None = Field(default=None, max_length=200)
     document_id: str | None = Field(default=None, max_length=128)
+    # NULL = organisation-level; `dept_admin` can only create/read its own department's rows.
+    department_id: str | None = Field(default=None, max_length=128)
 
 
 class TemplateVariablesUpdate(Strict):
@@ -69,6 +71,18 @@ class TemplateApplyResult(Strict):
     text_chars: int
     filled: dict[str, str] = Field(default_factory=dict)
     missing: list[str] = Field(default_factory=list)
+
+
+class TemplateBindRequest(Strict):
+    """Bind an existing document to a template (the `template_name` key automatic rules match)."""
+
+    template_id: str = Field(min_length=1, max_length=128)
+
+
+class DocumentTemplateView(Strict):
+    document_id: str
+    template_id: str | None = None
+    template_name: str | None = None
 
 
 class TemplateWriteBackRequest(Strict):
@@ -104,6 +118,7 @@ class TemplateView(Strict):
     created_by: str
     created_at: str
     updated_at: str
+    department_id: str | None = None
 
 
 class SuggestionView(Strict):
@@ -238,6 +253,8 @@ class ConnectorCreate(Strict):
     body_map: dict[str, str] = Field(default_factory=dict)
     # Downstreams without an OpenAPI document: hand-written request fields (mutually exclusive).
     fields: list[FieldDefinition] | None = Field(default=None, max_length=40)
+    # NULL = organisation-level; `dept_admin` can only create/read its own department's rows.
+    department_id: str | None = Field(default=None, max_length=128)
 
 
 class MappingUpdate(Strict):
@@ -306,6 +323,7 @@ class ConnectorView(Strict):
     body_map: dict[str, str] = Field(default_factory=dict)
     spec_warnings: list[str] = Field(default_factory=list)
     spec_error: str | None = None
+    department_id: str | None = None
     # "openapi" (attached document) · "fields" (hand-written) · "flat" (no contract)
     schema_kind: Literal["openapi", "fields", "flat"] = "flat"
     fields: list[FieldDefinition] = Field(default_factory=list)
@@ -315,6 +333,8 @@ class DispatchRequest(Strict):
     template_id: str = Field(min_length=1, max_length=128)
     connector_id: str = Field(min_length=1, max_length=128)
     document_id: str | None = Field(default=None, max_length=128)
+    # Automatic jobs pass the approved submission snapshot instead of a live draft.
+    text: str | None = Field(default=None, max_length=200_000)
     values: dict[str, str] = Field(default_factory=dict)
     idempotency_key: str | None = Field(default=None, max_length=120)
 
@@ -331,6 +351,11 @@ class DispatchReceipt(Strict):
     response_excerpt: str | None = None
     error_code: str | None = None
     created_at: str
+    # Automatic-dispatch linkage (empty for a manual send).
+    job_id: str | None = None
+    rule_id: str | None = None
+    trigger: str | None = None
+    submission_id: str | None = None
 
 
 class DispatchPage(Strict):

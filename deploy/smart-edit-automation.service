@@ -1,0 +1,26 @@
+# systemd unit for the smart-edit automation worker.
+# Installed as /etc/systemd/system/smart-edit-automation.service by deploy/remote-setup.sh.
+#
+# One instance on purpose: the host store is a single SQLite writer, and jobs are claimed with
+# `automation_jobs.status = queued`. More workers would race on the same rows.
+# `SMART_EDIT_AUTOMATION_WORKER=0` disables the loop; `SMART_EDIT_AUTOMATION_AUTO_SEND=0` keeps the
+# worker running but downgrades every `auto_send` rule to shadow (kill switch).
+[Unit]
+Description=smart-edit automation worker (final approval → downstream)
+After=network-online.target smart-edit.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/smart-edit
+EnvironmentFile=/opt/smart-edit/.env
+Environment=SMART_EDIT_AUTOMATION_WORKER=1
+ExecStart=/opt/smart-edit/.venv/bin/python -m app.automation.worker --interval 5
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

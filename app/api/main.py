@@ -200,6 +200,17 @@ def create_app(
     )
     app.state.legal = _build_legal_service(host, assistant_services, store=app.state.store)
     app.state.automation_registry = _build_automation_registry(host, assistant_services)
+    from app.automation.rules import AutomationRuleService
+
+    app.state.automation_rules = AutomationRuleService(host.store, app.state.automation_registry)
+    from app.automation.jobs import AutomationJobService
+
+    app.state.automation_jobs = AutomationJobService(
+        host.store,
+        app.state.automation_registry,
+        activity=identity.activity,
+        authorizer=document_access,
+    )
     app.include_router(auth_router)
     app.include_router(organization_router)
     app.include_router(activity_router)

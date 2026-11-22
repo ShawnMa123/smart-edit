@@ -69,6 +69,14 @@ def create_document(request: Request, response: Response, payload: DocumentCreat
     return view
 
 
+@router.get("")
+def list_documents(request: Request, response: Response) -> list[dict]:
+    """Workspace documents the caller may open (draft + latest submission status)."""
+    service = _service(request)
+    response.headers["Cache-Control"] = "no-store"
+    return service.list_documents(service.principal(request))
+
+
 @router.get("/{document_id}")
 def read_document(document_id: str, request: Request, response: Response) -> dict:
     service = _service(request)

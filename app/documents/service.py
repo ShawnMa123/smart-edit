@@ -8,6 +8,7 @@ from typing import Any
 from app.documents.errors import HostError, HostNotFound
 from app.documents.schemas import DocumentCreate, DraftSave, Heartbeat, LockCreate
 from app.documents.store import HostStore
+from app.identity.errors import IdentityError
 from app.shared.ports import IdsPort, Principal
 
 
@@ -156,6 +157,32 @@ class DocumentService:
         if not draft:
             raise HostNotFound("draft not found")
         return self._draft_view(draft, document)
+
+    def list_documents(self, principal: Principal, *, limit: int = 100) -> list[dict[str, Any]]:
+        """Documents the principal may open, newest first (multi-document entry point)."""
+        rows = self.store.list_documents(principal.workspace_id or "", limit=limit)
+        visible: list[dict[str, Any]] = []
+        for row in rows:
+            if self.authorizer is not None:
+                try:
+                    self.authorizer.authorize(principal, "document.read", row)
+                except IdentityError:
+                    continue
+            elif row["owner_user_id"] != principal.user_id:
+                continue
+            visible.append(
+                {
+                    "document_id": row["document_id"],
+                    "title": row["title"],
+                    "revision": int(row.get("revision") or 0),
+                    "draft_id": row.get("draft_id"),
+                    "submission_status": row.get("submission_status") or "draft",
+                    "updated_at": row.get("draft_updated_at") or row.get("created_at"),
+                    "owner_user_id": row["owner_user_id"],
+                    "department_id": row.get("department_id"),
+                }
+            )
+        return visible
 
     # --- commands ------------------------------------------------------------------------------
     def create_document(

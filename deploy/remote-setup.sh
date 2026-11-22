@@ -46,9 +46,14 @@ chmod 755 "${APP_DIR}/data" "${APP_DIR}/runs"
 
 log "4/7 systemd 服务 smart-edit（127.0.0.1:8000）"
 install -m 644 "${APP_DIR}/deploy/smart-edit.service" /etc/systemd/system/smart-edit.service
+install -m 644 "${APP_DIR}/deploy/smart-edit-automation.service" /etc/systemd/system/smart-edit-automation.service
 systemctl daemon-reload
 systemctl enable smart-edit >/dev/null 2>&1 || true
 systemctl restart smart-edit
+if [ "${SMART_EDIT_ENABLE_AUTOMATION_WORKER:-0}" = "1" ]; then
+  systemctl enable smart-edit-automation >/dev/null 2>&1 || true
+  systemctl restart smart-edit-automation
+fi
 
 ok=0
 for _ in $(seq 1 60); do

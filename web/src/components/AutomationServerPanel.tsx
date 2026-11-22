@@ -18,6 +18,7 @@ import {
   type Connector,
   type DispatchPreview,
   type DispatchReceipt,
+  type DocumentTemplateBinding,
   type PreparedPayload,
   type RegistryClient,
   type ServerTemplate,
@@ -105,6 +106,9 @@ export function AutomationServerPanel({
   const [wizard, setWizard] = useState(false);
   const [wizardSection, setWizardSection] = useState(1);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  // Template binding decides "same kind of document" for automatic rules.
+  const [binding, setBinding] = useState<DocumentTemplateBinding | null>(null);
+  const [bindTemplateId, setBindTemplateId] = useState('');
   // The editable mapping now lives in "3 · Downstream": review only shows the result.
   const [mappingOpen, setMappingOpen] = useState(false);
   // Connector/template pair whose stored mapping finished seeding, so Review can build the body.
@@ -232,6 +236,28 @@ export function AutomationServerPanel({
       setError(failure instanceof ApiError ? explainError(failure.code) : String(failure));
     });
   }, [refresh]);
+
+  useEffect(() => {
+    if (!documentId) {
+      setBinding(null);
+      setBindTemplateId('');
+      return;
+    }
+    let alive = true;
+    client
+      .getDocumentTemplate(documentId)
+      .then((next) => {
+        if (!alive) return;
+        setBinding(next);
+        setBindTemplateId(next.template_id ?? '');
+      })
+      .catch(() => {
+        if (alive) setBinding(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [documentId, client]);
 
   const connectorsRef = useRef(connectors);
   connectorsRef.current = connectors;
@@ -416,6 +442,16 @@ export function AutomationServerPanel({
     setPrepared(null);
     setSelectedId(null);
     await run(refresh);
+  };
+
+  const bindDocument = async () => {
+    if (!documentId || !bindTemplateId) return;
+    const bound = await run(
+      () => client.bindDocumentTemplate(documentId, bindTemplateId),
+      'Document type bound to the selected template.',
+    );
+    if (!bound) return;
+    setBinding(bound);
   };
 
   const saveTemplate = async () => {
@@ -832,6 +868,37 @@ export function AutomationServerPanel({
                 Delete
               </button>
             )}
+          </div>
+        ) : null}
+        {documentId ? (
+          <div className="row tiny" data-testid="document-template-binding">
+            <span className="tiny muted">Document type:</span>
+            <strong className="tiny" data-testid="document-template-name">
+              {binding?.template_name ?? 'not bound'}
+            </strong>
+            <select
+              aria-label="Document template"
+              value={bindTemplateId}
+              onChange={(event) => setBindTemplateId(event.target.value)}
+            >
+              <option value="">(choose a template)</option>
+              {templates.map((item) => (
+                <option key={item.template_id} value={item.template_id}>
+                  {item.name} v{item.version}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void bindDocument()}
+              disabled={busy || !bindTemplateId}
+              data-testid="bind-document-template"
+            >
+              Bind
+            </button>
+            <span className={`tag tag--${binding?.template_name ? 'muted' : 'warn'}`}>
+              {binding?.template_name ? 'bound' : 'not bound'}
+            </span>
           </div>
         ) : null}
         {templates.length === 0 ? (

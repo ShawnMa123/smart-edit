@@ -666,12 +666,18 @@ describe('AutomationWorkbench', () => {
     expect(screen.getByTestId('missing-required').textContent).toContain('reported as missing');
   });
 
-  it('moves between the two areas with the keyboard', async () => {
+  it('moves between the four areas with the keyboard', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
 
     const automate = screen.getByRole('tab', { name: 'Automate' });
     automate.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Rules' }).getAttribute('aria-selected')).toBe('true');
+
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Runs' }).getAttribute('aria-selected')).toBe('true');
+
     await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'Sandbox' }).getAttribute('aria-selected')).toBe('true');
 

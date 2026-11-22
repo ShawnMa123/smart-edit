@@ -99,16 +99,26 @@ export interface AssistantPanelProps extends AuditPanelProps {
   knowledge: KnowledgePanelBinding;
   automation: AutomationPanelBinding;
   legal: LegalPanelProps;
+  /** `false` when the signed-in role has no `automation.view` (Bank Operations / org admin only). */
+  canUseAutomation?: boolean;
 }
 
 /**
  * Right pane: the prototype's four tabs. Audit, knowledge, fixture-backed automation and the
  * legal advice surface are all wired; the assistant never approves or submits.
  */
-export function AssistantPanel({ knowledge, automation, legal, ...auditProps }: AssistantPanelProps) {
+export function AssistantPanel({
+  knowledge,
+  automation,
+  legal,
+  canUseAutomation = true,
+  ...auditProps
+}: AssistantPanelProps) {
   const [activeTab, setActiveTab] = useState<string>('audit');
   const [busyTabs, setBusyTabs] = useState<Record<string, boolean>>({});
-  const active = TABS.find((tab) => tab.id === activeTab) ?? TABS[0];
+  // Automation is a bank-ops back office: hide the tab instead of surfacing a guaranteed 403.
+  const tabs = canUseAutomation ? TABS : TABS.filter((tab) => tab.id !== 'automation');
+  const active = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
   const markBusy = (id: string) => (value: boolean) =>
     setBusyTabs((prev) => (prev[id] === value ? prev : { ...prev, [id]: value }));
   const isBusy = (id: string): boolean =>
@@ -122,7 +132,7 @@ export function AssistantPanel({ knowledge, automation, legal, ...auditProps }: 
       </div>
 
       <div className="assistant-tabs" role="tablist" aria-label="Assistant capabilities">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -151,7 +161,7 @@ export function AssistantPanel({ knowledge, automation, legal, ...auditProps }: 
         ) : active.id === 'knowledge' ? (
           <KnowledgePanel {...knowledge} onBusyChange={markBusy('knowledge')} />
         ) : active.id === 'automation' ? (
-          <AutomationPanel {...automation} />
+          <AutomationPanel {...automation} canUseAutomation={canUseAutomation} />
         ) : active.id === 'legal' ? (
           <LegalPanel {...legal} onBusyChange={markBusy('legal')} />
         ) : null}

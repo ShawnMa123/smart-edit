@@ -168,7 +168,7 @@ const isAbortError = (error: unknown): boolean =>
   error !== null &&
   (error as { name?: string }).name === 'AbortError';
 
-async function request<T>(
+export async function request<T>(
   path: string,
   init: RequestInit,
   { fetchImpl, timeoutMs = REGISTRY_TIMEOUT_MS }: RegistryOptions = {},
@@ -523,6 +523,35 @@ export function saveMapping(
   );
 }
 
+export interface DocumentTemplateBinding {
+  document_id: string;
+  template_id: string | null;
+  template_name: string | null;
+}
+
+export function getDocumentTemplate(
+  documentId: string,
+  options: RegistryOptions = {},
+): Promise<DocumentTemplateBinding> {
+  return request(`/documents/${encodeURIComponent(documentId)}/template`, { method: 'GET' }, options);
+}
+
+export function bindDocumentTemplate(
+  documentId: string,
+  templateId: string,
+  options: RegistryOptions = {},
+): Promise<DocumentTemplateBinding> {
+  return request(
+    `/documents/${encodeURIComponent(documentId)}/template`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ template_id: templateId }),
+    },
+    options,
+  );
+}
+
 export function listDispatches(
   limit = 20,
   options: RegistryOptions = {},
@@ -591,6 +620,8 @@ export interface RegistryClient {
   buildSpecBody: typeof buildSpecBody;
   readMapping: typeof readMapping;
   saveMapping: typeof saveMapping;
+  getDocumentTemplate: typeof getDocumentTemplate;
+  bindDocumentTemplate: typeof bindDocumentTemplate;
   previewDispatch: typeof previewDispatch;
   listDispatches: typeof listDispatches;
   dispatch: typeof dispatch;
@@ -616,6 +647,8 @@ export const registryClient: RegistryClient = {
   buildSpecBody,
   readMapping,
   saveMapping,
+  getDocumentTemplate,
+  bindDocumentTemplate,
   previewDispatch,
   listDispatches,
   dispatch,

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -241,5 +241,177 @@ describe('ApprovalPanel', () => {
       />,
     );
     expect(await screen.findByText('No submissions yet.')).toBeTruthy();
+  });
+
+  it('offers document entry points for a submitted document', async () => {
+    const openDocument = vi.fn();
+    const spy = vi.fn(async (url: string) => {
+      const path = String(url);
+      if (path.includes('/submissions')) return response(200, [summary]);
+      if (path.includes('/approvals/apr_1')) return response(200, detail);
+      if (path.includes('/approvals')) return response(200, [summary]);
+      if (path.includes('/documents/doc_1')) {
+        return response(200, {
+          document_id: 'doc_1',
+          draft_id: 'draft_1',
+          title: 'Guarantee application',
+          revision: 3,
+          etag: 'draft-3',
+          content: {},
+          text: 'Amount: USD 250,000.00',
+          content_sha256: 'a'.repeat(64),
+          variables: {},
+          variables_version: 1,
+          updated_at: null,
+          submission_status: 'pending_first',
+          submission: summary,
+        });
+      }
+      return response(200, []);
+    }) as unknown as typeof fetch;
+
+    render(
+      <ToastProvider>
+        <ApprovalPanel
+          orgId="org_1"
+          documentId="doc_1"
+          permissions={['approval.first']}
+          fetchImpl={spy}
+          onOpenDocument={openDocument}
+        />
+      </ToastProvider>,
+    );
+
+    const header = await screen.findByTestId('approval-document');
+    expect(header.textContent).toContain('Guarantee application');
+    expect(header.textContent).toContain('Pending first approval');
+    expect(header.textContent).toContain('revision 3');
+
+    await userEvent.click(screen.getByTestId('open-document'));
+    expect(openDocument).toHaveBeenCalledWith('doc_1');
+
+    await userEvent.click(screen.getByTestId('open-document-sub_1'));
+    expect(openDocument).toHaveBeenCalledTimes(2);
+
+    await userEvent.click(screen.getByTestId('view-submitted-version'));
+    expect((await screen.findByLabelText('Submitted snapshot text')).textContent).toContain(
+      'Amount: USD 250,000.00',
+    );
+    await userEvent.click(screen.getByTestId('open-document-detail'));
+    expect(openDocument).toHaveBeenCalledWith('doc_1');
+  });
+
+  it('marks a not-yet-submitted document as the working draft', async () => {
+    const openDocument = vi.fn();
+    const spy = vi.fn(async (url: string) => {
+      if (String(url).includes('/submissions')) return response(200, []);
+      if (String(url).includes('/documents/doc_1')) {
+        return response(200, {
+          document_id: 'doc_1',
+          draft_id: 'draft_1',
+          title: 'Guarantee application',
+          revision: 5,
+          etag: 'draft-5',
+          content: {},
+          text: 'Draft body',
+          content_sha256: 'b'.repeat(64),
+          variables: {},
+          variables_version: 1,
+          updated_at: null,
+          submission_status: 'draft',
+          submission: null,
+        });
+      }
+      return response(200, []);
+    }) as unknown as typeof fetch;
+
+    render(
+      <ApprovalPanel
+        orgId="org_1"
+        documentId="doc_1"
+        permissions={['approval.submit']}
+        fetchImpl={spy}
+        onOpenDocument={openDocument}
+      />,
+    );
+
+    expect((await screen.findByTestId('approval-document')).textContent).toContain('Draft');
+    expect(screen.getByTestId('document-not-submitted').textContent).toContain('working draft');
+    expect(screen.queryByTestId('view-submitted-version')).toBeNull();
+    await userEvent.click(screen.getByTestId('open-document'));
+    expect(openDocument).toHaveBeenCalledWith('doc_1');
+  });
+
+  it('lists documents and offers Open / New document entry points', async () => {
+    const openDocument = vi.fn();
+    const newDocument = vi.fn();
+    const spy = vi.fn(async (url: string) => {
+      const path = String(url);
+      if (path.includes('/submissions')) return response(200, []);
+      if (path.endsWith('/documents')) {
+        return response(200, [
+          {
+            document_id: 'doc_1',
+            title: 'Guarantee application',
+            revision: 3,
+            draft_id: 'draft_1',
+            submission_status: 'pending_first',
+            updated_at: '2026-11-22T00:00:00Z',
+            owner_user_id: 'usr_applicant',
+            department_id: null,
+          },
+          {
+            document_id: 'doc_2',
+            title: 'Commercial invoice',
+            revision: 1,
+            draft_id: 'draft_2',
+            submission_status: 'draft',
+            updated_at: null,
+            owner_user_id: 'usr_applicant',
+            department_id: null,
+          },
+        ]);
+      }
+      if (path.includes('/documents/doc_1')) {
+        return response(200, {
+          document_id: 'doc_1',
+          draft_id: 'draft_1',
+          title: 'Guarantee application',
+          revision: 3,
+          etag: 'draft-3',
+          content: {},
+          text: 'Amount: USD 250,000.00',
+          content_sha256: 'a'.repeat(64),
+          variables: {},
+          variables_version: 1,
+          updated_at: null,
+          submission_status: 'draft',
+          submission: null,
+        });
+      }
+      return response(200, []);
+    }) as unknown as typeof fetch;
+
+    render(
+      <ApprovalPanel
+        orgId="org_1"
+        documentId="doc_1"
+        permissions={['approval.submit']}
+        fetchImpl={spy}
+        onOpenDocument={openDocument}
+        onNewDocument={newDocument}
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Documents' }));
+    const documentsPanel = await screen.findByTestId('approval-documents');
+    expect(within(documentsPanel).getByText('Commercial invoice')).toBeTruthy();
+    expect(within(documentsPanel).getByText('Guarantee application')).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId('open-doc-doc_2'));
+    expect(openDocument).toHaveBeenCalledWith('doc_2');
+
+    await userEvent.click(screen.getByTestId('new-document'));
+    expect(newDocument).toHaveBeenCalledTimes(1);
   });
 });

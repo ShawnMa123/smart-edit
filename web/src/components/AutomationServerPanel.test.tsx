@@ -144,6 +144,16 @@ function client(overrides: Partial<RegistryClient> = {}): RegistryClient {
     }),
     readMapping: vi.fn().mockResolvedValue({ template_id: "tpl_1", connector_id: "con_1", body_map: {}, configured: false }),
     saveMapping: vi.fn().mockResolvedValue(connector),
+    getDocumentTemplate: vi.fn().mockResolvedValue({
+      document_id: "demo-document",
+      template_id: null,
+      template_name: null,
+    }),
+    bindDocumentTemplate: vi.fn().mockResolvedValue({
+      document_id: "demo-document",
+      template_id: "tpl_1",
+      template_name: "Demand guarantee",
+    }),
     listDispatches: vi.fn().mockResolvedValue({ items: [] }),
     previewDispatch: vi.fn().mockResolvedValue({
       url: 'https://erp.example.com/hooks/smart-edit',
@@ -433,6 +443,41 @@ describe('AutomationServerPanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
     await waitFor(() => expect(duplicateTemplate).toHaveBeenCalled());
+  });
+
+  it('binds the current document to a template as its document type', async () => {
+    const bindDocumentTemplate = vi.fn().mockResolvedValue({
+      document_id: 'demo-document',
+      template_id: 'tpl_1',
+      template_name: 'Demand guarantee',
+    });
+    const fake = client({
+      listTemplates: vi
+        .fn()
+        .mockResolvedValue({ items: [template({ variables: [amountVariable] })] }),
+      getDocumentTemplate: vi.fn().mockResolvedValue({
+        document_id: 'demo-document',
+        template_id: 'tpl_old',
+        template_name: 'Old kind',
+      }),
+      bindDocumentTemplate,
+    });
+    render(<AutomationServerPanel documentId="demo-document" text="draft" client={fake} />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('document-template-name').textContent).toContain('Old kind'),
+    );
+    await userEvent.selectOptions(screen.getByLabelText('Document template'), 'tpl_1');
+    await userEvent.click(screen.getByTestId('bind-document-template'));
+
+    await waitFor(() =>
+      expect(bindDocumentTemplate).toHaveBeenCalledWith('demo-document', 'tpl_1'),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('document-template-name').textContent).toContain(
+        'Demand guarantee',
+      ),
+    );
   });
 
   it('derives the template name from the draft and warns about a new version', async () => {

@@ -49,6 +49,30 @@ def test_role_catalog_grants_are_additive_and_no_deny_exists():
     assert not any(key.startswith("deny") for key in perm.ROLE_CATALOG)
 
 
+def test_automation_permissions_follow_the_bank_operations_boundary():
+    bank_ops = set(perm.role_permissions(perm.ROLE_BANK_OPS))
+    assert {
+        perm.AUTOMATION_VIEW,
+        perm.AUTOMATION_CONFIGURE,
+        perm.AUTOMATION_DISPATCH,
+        perm.AUTOMATION_AUDIT,
+    } <= bank_ops
+
+    dept_admin = set(perm.role_permissions(perm.ROLE_DEPT_ADMIN))
+    assert perm.AUTOMATION_CONFIGURE in dept_admin
+    assert perm.AUTOMATION_DISPATCH in dept_admin
+
+    for role in (perm.ROLE_APPLICANT, perm.ROLE_MEMBER):
+        permissions = set(perm.role_permissions(role))
+        assert not any(item.startswith("automation.") for item in permissions)
+
+    compliance = set(perm.role_permissions(perm.ROLE_COMPLIANCE))
+    assert perm.AUTOMATION_VIEW in compliance
+    assert perm.AUTOMATION_AUDIT in compliance
+    assert perm.AUTOMATION_CONFIGURE not in compliance
+    assert perm.AUTOMATION_DISPATCH not in compliance
+
+
 class _Store:
     def __init__(self, permissions: dict[tuple[str, str | None], set[str]]) -> None:
         self.permissions_map = permissions
@@ -95,6 +119,65 @@ def test_api_key_scope_is_bounded_to_its_department():
     with pytest.raises(Forbidden):
         # `department_ancestors("finance")` does not contain `contracts`.
         service.authorize(principal, "document.read", ResourceScope("org", "finance", "ws"))
+
+
+def test_legacy_api_key_scopes_map_to_view_and_dispatch_only():
+    from types import SimpleNamespace
+
+    from app.identity.principal import PrincipalAdapter, _LEGACY_SCOPE_ALIASES
+
+    assert _LEGACY_SCOPE_ALIASES == {
+        perm.AUTOMATION_USE: perm.AUTOMATION_VIEW,
+        perm.AUTOMATION_APPLY: perm.AUTOMATION_DISPATCH,
+    }
+
+    class _KeyStore:
+        def get_api_key_by_hash(self, _digest):
+            return {
+                "key_id": "key_1",
+                "created_by": "usr_bank_ops",
+                "org_id": "org_1",
+                "department_id": None,
+                "scopes_json": [perm.AUTOMATION_USE, perm.AUTOMATION_APPLY],
+                "revoked_at": None,
+                "expires_at": None,
+            }
+
+        def get_user(self, user_id):
+            return {"user_id": user_id, "status": "active"}
+
+        def has_active_membership(self, org_id, user_id):
+            return True
+
+        def get_organization(self, org_id):
+            return {"org_id": org_id, "workspace_id": "ws_1"}
+
+        def permissions_for(self, user_id, org_id, department_id=None):
+            return {perm.DOCUMENT_READ, perm.AUTOMATION_VIEW, perm.AUTOMATION_DISPATCH}
+
+        def authorization_version(self, org_id):
+            return 3
+
+        def touch_api_key(self, key_id):
+            return None
+
+    adapter = PrincipalAdapter(
+        AuthSettings.from_env(
+            {
+                "SMART_EDIT_AUTH_MODE": "pg",
+                "SMART_EDIT_DATABASE_URL": "postgresql://user:pass@localhost/db",
+            }
+        ),
+        _KeyStore(),
+    )
+    resolved = adapter._api_key(SimpleNamespace(state=SimpleNamespace()), "sk_live_example")
+
+    assert perm.AUTOMATION_VIEW in resolved.permissions
+    assert perm.AUTOMATION_DISPATCH in resolved.permissions
+    assert perm.AUTOMATION_CONFIGURE not in resolved.permissions
+    assert resolved.has("automation_view")
+    assert resolved.has("automation_dispatch")
+    assert not resolved.has("automation_configure")
 
 
 class _EvidenceAuthorizer:

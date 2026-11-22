@@ -47,6 +47,8 @@ import type { RichDocument } from '../rich/richDocument';
 import { projectDocument } from '../rich/projection';
 import { richToPlainText } from '../rich/plainText';
 import { AutomationServerPanel } from './AutomationServerPanel';
+import { AutomationRulesPanel } from './AutomationRulesPanel';
+import { AutomationRunsPanel } from './AutomationRunsPanel';
 import {
   collectVariables,
   replaceSelectionWithVariable,
@@ -55,12 +57,14 @@ import {
   type VariableDefinition,
 } from '../rich/variableOperations';
 
-type Area = 'server' | 'sandbox';
+type Area = 'server' | 'sandbox' | 'rules' | 'runs';
 type SandboxArea = 'template' | 'variables' | 'mapping';
 type MappingSource = 'fixture' | 'openapi';
 
 const AREAS: Array<[Area, string]> = [
   ['server', 'Automate'],
+  ['rules', 'Rules'],
+  ['runs', 'Runs'],
   ['sandbox', 'Sandbox'],
 ];
 
@@ -1667,6 +1671,18 @@ export function AutomationWorkbench({
             documentId={draft?.document_id ?? null}
             text={richToPlainText(document)}
           />
+        </div>
+      ) : null}
+
+      {area === 'rules' ? (
+        <div role="tabpanel" id="automation-panel-rules" aria-labelledby="automation-tab-rules">
+          <AutomationRulesPanel documentId={draft?.document_id ?? null} />
+        </div>
+      ) : null}
+
+      {area === 'runs' ? (
+        <div role="tabpanel" id="automation-panel-runs" aria-labelledby="automation-tab-runs">
+          <AutomationRunsPanel documentId={draft?.document_id ?? null} />
         </div>
       ) : null}
 

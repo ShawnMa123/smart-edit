@@ -376,6 +376,21 @@ The Automation tab has two areas:
 | **Automate** (default) | The real path: server templates, Doubao variable suggestions, contract-shaped body, a review card, `Preview request`, and dispatch with a receipt. |
 | **Sandbox** | A browser-local playground (`localStorage`, no external calls except the two stateless helpers below): local templates, variable marking/filling, and a payload preview. It cannot send — that is what `Automate` is for. |
 
+**Who sees `Automate`:** it is a Bank Operations back office, not an applicant feature.
+
+| Role | Module entry | Configure templates / connectors / mappings | Manual `Send` / replay | Receipts & runs |
+|---|---|---|---|---|
+| `bank_ops` (organisation) | ✅ | ✅ | ✅ | ✅ |
+| `org_admin` (organisation) | ✅ | ✅ | ✅ | ✅ |
+| `dept_admin` (own department) | ✅ | ✅ own-department rows only | ✅ | ✅ |
+| `compliance` | ✅ read-only | ❌ 403 | ❌ 403 | ✅ |
+| `applicant` / `member` | ❌ hidden | ❌ 403 | ❌ 403 | ❌ 403 |
+
+Permissions are `automation.view` / `automation.configure` / `automation.dispatch` / `automation.audit`;
+the API enforces them on every `/automation/*` call, so hiding a tab is convenience, not the boundary.
+API keys issued before this split still work with their old `automation.use` / `automation.apply`
+scopes, but those now map to **read + send only** — never to configuration.
+
 The sandbox preview does **not** re-implement the contract rules: it calls `POST /automation/spec/parse`
 (operations + fields) and `POST /automation/spec/build` (request body), so the browser and dispatch share
 one OpenAPI subset and one body builder.
@@ -454,6 +469,66 @@ Rules that hold by construction:
   legacy flat `{template, values}` payload is still sent, so older connectors keep working.
 - Idempotent: the same `idempotency_key` returns the original receipt without a second call.
 - Permissions: reads need `read`, writes and dispatch need `apply`.
+
+### Automatic dispatch: final approval → downstream (`automation-bank-ops-auto-dispatch`)
+
+Bank Ops configures the delivery once instead of clicking `Send` for every document:
+
+| Step | Where | What is stored |
+|---|---|---|
+| Bind the document to a template | `Automation → Automate → Template` (apply) or `POST /automation/documents/{id}/template` | `template_id` (exact version) + `template_name` (business kind) |
+| Create a rule | `Automation → Rules` / `POST /automation/rules` | template kind → connector, trigger `final_approval`, mode, `required`/optional, priority |
+| Observe in shadow | `Rules → Dry-run on this document` / `POST /automation/rules/{id}/dry-run` | nothing: no HTTP call, no receipt |
+| Raise the tier | `Rules → tier selector` / `POST /automation/rules/{id}/mode` | `shadow → needs_review → auto_send`, audited with the before/after tier |
+| Watch the runs | `Automation → Runs` / `GET /automation/jobs` | one job per rule × submission × downstream plus its status timeline |
+
+- The worker consumes `approval.second.approve`; the approval transaction itself only writes rows. The
+  request body is built from the **approved submission snapshot**, never from a draft edited afterwards.
+- New rules are `shadow`: they record what would be sent and write no receipt. `needs_review` waits in
+  the Runs panel (Release); `auto_send` sends. The global kill switch degrades `auto_send` to `shadow`.
+- One document can hit several rules → one job per downstream. Two rules pointing at the same connector
+  send once and the rule list shows `duplicate_connector`.
+- Delivery state is derived from the jobs of the newest submission: `sent` = every **required**
+  downstream accepted the request; an optional failure remains a warning, a required failure is
+  `needs_attention`; while one downstream is still waiting the document is `partial`. Shadow-only runs
+  are `shadowed`; documents with no rule/binding are `not_configured` with `skipped: no_rule` /
+  `skipped: no_binding`.
+- 5xx/timeout retry with backoff (1m / 5m / 30m, 3 attempts); 4xx, allow-list refusals, missing secrets
+  and `missing_required_body` go straight to `needs_attention`. Every transition is a job event; the
+  receipt carries `job_id` / `rule_id` / `submission_id` and `requested_by: system:automation`.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /automation/rules` · `POST /automation/rules` · `PUT /automation/rules/{id}` · `DELETE /automation/rules/{id}` | Rule CRUD (department-scoped) |
+| `POST /automation/rules/{id}/mode` · `POST /automation/rules/{id}/dry-run` | Explicit tier change (audited) · preview only |
+| `GET /automation/jobs` · `GET /automation/jobs/{id}` | Runs list (filter by `document_id` / `status`) · job + timeline |
+| `POST /automation/jobs/{id}/release` · `/retry` · `/cancel` | `needs_review` → send · failed/cancelled → queued · stop a pending job |
+| `GET /automation/documents/{id}/delivery` | Document delivery status, one row per downstream, skip reason |
+| `GET /automation/settings` | Whether the global auto-send kill switch is on |
+| `GET /documents` | Workspace documents with draft revision + latest submission status (the **Documents** tab / Open entry) |
+| `POST /documents` | Create a new document (the header **New document** action; an applicant can submit several) |
+
+Run the worker by hand:
+
+```bash
+SMART_EDIT_HOST_DB=runs/host.db .venv/bin/python -m app.automation.worker --once  # one batch
+SMART_EDIT_HOST_DB=runs/host.db .venv/bin/python -m app.automation.worker         # loop
+```
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SMART_EDIT_AUTOMATION_WORKER` | `1` | `0`: the process exits before consuming anything (the unit stays installed) |
+| `SMART_EDIT_AUTOMATION_AUTO_SEND` | `1` | kill switch: `0` makes every `auto_send` rule behave like `shadow` |
+
+Deployment is the single-instance `deploy/smart-edit-automation.service` unit (SQLite has one writer);
+`deploy/README.md` has the install commands and the `SMART_EDIT_AUTOMATION_WORKER=0` default. Rollback:
+turn the kill switch off, then stop the worker — rules stay `shadow`, no new outbound call happens, and
+the new tables/columns remain readable. Verification:
+`pytest tests/test_automation_auto_dispatch_e2e.py tests/test_automation_jobs.py tests/test_automation_worker.py`
+(the first spins a real echo downstream and drills shadow → upgrade → two downstreams `sent`).
+
+A page-by-page walkthrough with demo accounts, the sample document and the failure drills lives in
+[`DEMO_auto_dispatch.md`](DEMO_auto_dispatch.md).
 
 Importing a downstream contract: `Automation → Automate → 3 · Downstream → Add connector`
 takes an OpenAPI 3.x **JSON** document either pasted or chosen with **Import OpenAPI spec file**

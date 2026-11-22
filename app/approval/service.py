@@ -190,7 +190,10 @@ class ApprovalService:
             raise HostError(exc.status, exc.code, exc.message, exc.detail) from exc
         rows = self.store.list_submissions(document_id)
         own = [row for row in rows if row["submitted_by"] == principal.user_id]
-        if not own and not (
+        # An applicant with no submissions yet still owns the "My submissions" view: an empty list is
+        # correct, not a 403 (a 403 here used to hide the whole Approval panel, Documents tab too).
+        can_submit = self._can(principal, perm.APPROVAL_SUBMIT, document)
+        if not own and not can_submit and not (
             self._can(principal, perm.APPROVAL_FIRST, document)
             or self._can(principal, perm.APPROVAL_SECOND, document)
         ):
