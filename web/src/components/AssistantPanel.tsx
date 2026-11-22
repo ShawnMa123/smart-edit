@@ -47,8 +47,8 @@ const TABS: Tab[] = [
     label: 'Automation',
     shortLabel: 'Automation',
     status: 'fixture-only',
-    statusLabel: 'Fixture only',
-    statusTone: 'tag--warn',
+    statusLabel: 'Server',
+    statusTone: 'tag--ok',
   },
   {
     id: 'legal',

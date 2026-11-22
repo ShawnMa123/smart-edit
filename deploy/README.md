@@ -122,6 +122,20 @@ systemctl reload nginx               # 改完 /etc/nginx/sites-available/smart-e
 | `SMART_EDIT_LEGAL_MAX_EVIDENCE` | `5` | 每条条款最多交给模型的证据条数 |
 | `SMART_EDIT_LEGAL_DB` | `runs/legal.db` | run/report 的 SQLite 路径 |
 
+### 自动化下游（`automation-template-registry`）
+
+| 变量 | 线上值/默认 | 作用 |
+|---|---|---|
+| `SMART_EDIT_AUTOMATION_ALLOWED_HOSTS` | `127.0.0.1`（演示） | dispatch 允许的主机，逗号分隔；**空 = 全部拒绝** |
+| `SMART_EDIT_AUTOMATION_ALLOW_HTTP` | `1`（仅演示） | 允许 http:// 到白名单主机；生产删掉，只留 https |
+| `DEMO_DOWNSTREAM_TOKEN` | `demo-token-123` | 演示连接器 `Local echo (demo)` 的密钥（连接器只存变量名） |
+
+- 回显服务：`scripts/echo_downstream.py`（只绑 127.0.0.1:18080；只回报"有没有带 key"，不回显密钥）。
+  演示前确认它在跑：`curl -s http://127.0.0.1:18080/health`。
+- 生产改成真实下游时：把 `ALLOWED_HOSTS` 换成下游域名、删掉 `ALLOW_HTTP`、给连接器填真实
+  `secret_env`（环境变量名），仓库里不出现密钥。
+- 回执在 `data/host.db` 的 `automation_dispatches`；被拒绝的调用也会留一条 `status=refused`。
+
 排障口径：
 
 - **每个条款都是 `composer_unavailable`**：`SMART_EDIT_ASSISTANT_MODEL/API_KEY` 没配，或

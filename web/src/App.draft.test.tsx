@@ -219,7 +219,9 @@ describe('autosave', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    fireEvent.click(screen.getByRole('tab', { name: /Automation · fixture only/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Automation · server/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Sandbox' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Templates' }));
     fireEvent.click(screen.getByRole('button', { name: 'Conflict template · v1' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to editor' }));
 

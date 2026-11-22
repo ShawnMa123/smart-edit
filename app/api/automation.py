@@ -8,6 +8,36 @@ from typing import Any, Callable
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 
 from app.automation.run_schemas import AutomationResult, AutomationRun, RunCancel, RunCreate, RunPage
+from app.automation.registry_schemas import (
+    ConnectorCreate,
+    ConnectorPage,
+    ConnectorSpecView,
+    ConnectorUpdate,
+    ConnectorView,
+    DispatchPage,
+    DispatchPreview,
+    DispatchReceipt,
+    DispatchRequest,
+    MappingUpdate,
+    MappingView,
+    PreparedPayload,
+    PrepareRequest,
+    SpecBuildRequest,
+    SpecBuildResult,
+    SpecParseRequest,
+    SpecParseResult,
+    SuggestionView,
+    TemplateApplyRequest,
+    TemplateApplyResult,
+    TemplateCreate,
+    TemplateDuplicate,
+    TemplatePage,
+    TemplateUpdate,
+    TemplateVariablesUpdate,
+    TemplateView,
+    TemplateWriteBackRequest,
+    TemplateWriteBackResult,
+)
 from app.automation.schemas import (
     ApplyRequest,
     ProposalDecision,
@@ -26,6 +56,22 @@ def _service(request: Request) -> AutomationService:
 
 def _runs(request: Request):
     return request.app.state.host.runs
+
+
+def _registry(request: Request):
+    registry = getattr(request.app.state, "automation_registry", None)
+    if registry is None:
+        raise HostError(
+            409, "automation_registry_unavailable", "this server has no automation registry"
+        )
+    return registry
+
+
+def _principal(request: Request):
+    principal = getattr(request.state, "principal", None)
+    if principal is None:
+        raise HostError(401, "auth_required", "the request has no resolved principal")
+    return principal
 
 
 def _request_id(request: Request) -> str:
@@ -210,6 +256,157 @@ def get_application(receipt_id: str, request: Request, response: Response) -> di
     receipt = service.get_receipt(service.principal(request), receipt_id)
     response.headers["Cache-Control"] = "no-store"
     return receipt
+
+
+# ── server-side template registry (templates → confirmed variables → dispatch) ────────────────
+@router.get("/templates", response_model=TemplatePage)
+def list_templates(request: Request) -> TemplatePage:
+    return TemplatePage(items=_registry(request).list_templates(_principal(request)))
+
+
+@router.post("/templates", status_code=201, response_model=TemplateView)
+def create_template(payload: TemplateCreate, request: Request) -> TemplateView:
+    return _registry(request).create_template(_principal(request), payload)
+
+
+@router.get("/templates/{template_id}", response_model=TemplateView)
+def get_template(template_id: str, request: Request) -> TemplateView:
+    return _registry(request).get_template(_principal(request), template_id)
+
+
+@router.post("/templates/{template_id}/variables/suggest", response_model=SuggestionView)
+def suggest_template_variables(
+    template_id: str, request: Request, use_llm: bool = True
+) -> SuggestionView:
+    """Deterministic + optional Doubao suggestions. Never persists; the user confirms."""
+    return _registry(request).suggest_variables(
+        _principal(request), template_id, use_llm=use_llm
+    )
+
+
+@router.put("/templates/{template_id}/variables", response_model=TemplateView)
+def save_template_variables(
+    template_id: str, payload: TemplateVariablesUpdate, request: Request
+) -> TemplateView:
+    return _registry(request).save_variables(_principal(request), template_id, payload)
+
+
+@router.post("/templates/{template_id}/prepare", response_model=PreparedPayload)
+def prepare_template_payload(
+    template_id: str, payload: PrepareRequest, request: Request
+) -> PreparedPayload:
+    """Bind confirmed variables to a draft; missing values are reported, never guessed."""
+    return _registry(request).prepare(_principal(request), template_id, payload)
+
+
+@router.put("/templates/{template_id}", response_model=TemplateView)
+def rename_template(template_id: str, payload: TemplateUpdate, request: Request) -> TemplateView:
+    """Rename a stored version (history keeps the name it was dispatched under)."""
+    return _registry(request).rename_template(_principal(request), template_id, payload)
+
+
+@router.post("/templates/{template_id}/duplicate", status_code=201, response_model=TemplateView)
+def duplicate_template(
+    template_id: str, payload: TemplateDuplicate, request: Request
+) -> TemplateView:
+    """Copy the text and the confirmed variables under a new name."""
+    return _registry(request).duplicate_template(_principal(request), template_id, payload)
+
+
+@router.delete("/templates/{template_id}", status_code=204)
+def delete_template(template_id: str, request: Request) -> Response:
+    """Remove one template version; dispatch receipts keep their own snapshot."""
+    _registry(request).delete_template(_principal(request), template_id)
+    return Response(status_code=204)
+
+
+@router.post("/templates/{template_id}/apply", status_code=201, response_model=TemplateApplyResult)
+def apply_template(
+    template_id: str, payload: TemplateApplyRequest, request: Request
+) -> TemplateApplyResult:
+    """Render the template into a NEW document, filling the confirmed variables."""
+    return _registry(request).apply_template(_principal(request), template_id, payload)
+
+
+@router.post("/templates/{template_id}/write-back", response_model=TemplateWriteBackResult)
+def write_back_template(
+    template_id: str, payload: TemplateWriteBackRequest, request: Request
+) -> TemplateWriteBackResult:
+    """Write the values into the CURRENT draft under the caller's lock and expected revision."""
+    return _registry(request).write_back(_principal(request), template_id, payload)
+
+
+@router.post("/spec/parse", response_model=SpecParseResult)
+def parse_spec_document(payload: SpecParseRequest, request: Request) -> SpecParseResult:
+    """Parse an OpenAPI document with the same code the registry uses (sandbox preview)."""
+    return _registry(request).parse_contract(_principal(request), payload.spec)
+
+
+@router.post("/spec/build", response_model=SpecBuildResult)
+def build_spec_body(payload: SpecBuildRequest, request: Request) -> SpecBuildResult:
+    """Assemble a request body for a spec + mapping without persisting anything."""
+    return _registry(request).build_contract_body(_principal(request), payload)
+
+
+@router.get("/connectors", response_model=ConnectorPage)
+def list_connectors(request: Request) -> ConnectorPage:
+    return ConnectorPage(items=_registry(request).list_connectors(_principal(request)))
+
+
+@router.post("/connectors", status_code=201, response_model=ConnectorView)
+def create_connector(payload: ConnectorCreate, request: Request) -> ConnectorView:
+    return _registry(request).create_connector(_principal(request), payload)
+
+
+@router.put("/connectors/{connector_id}", response_model=ConnectorView)
+def update_connector(
+    connector_id: str, payload: ConnectorUpdate, request: Request
+) -> ConnectorView:
+    """Edit a target in place; replacing the spec resets the field mapping (new contract)."""
+    return _registry(request).update_connector(_principal(request), connector_id, payload)
+
+
+@router.get("/connectors/{connector_id}/spec", response_model=ConnectorSpecView)
+def read_connector_spec(connector_id: str, request: Request) -> ConnectorSpecView:
+    """The stored OpenAPI document (fetched on demand; list responses stay small)."""
+    return _registry(request).connector_spec(_principal(request), connector_id)
+
+
+@router.delete("/connectors/{connector_id}", response_model=ConnectorView)
+def disable_connector(connector_id: str, request: Request) -> ConnectorView:
+    """Soft delete: receipts stay for audit, dispatch can no longer target it."""
+    return _registry(request).disable_connector(_principal(request), connector_id)
+
+
+@router.get("/mappings", response_model=MappingView)
+def read_mapping(template_id: str, connector_id: str, request: Request) -> MappingView:
+    """The stored (template, connector) mapping; `configured=false` means the panel should suggest."""
+    return _registry(request).mapping(_principal(request), template_id, connector_id)
+
+
+@router.put("/connectors/{connector_id}/mapping", response_model=ConnectorView)
+def set_connector_mapping(
+    connector_id: str, payload: MappingUpdate, request: Request
+) -> ConnectorView:
+    """Bind the downstream's request-body fields to template variables (persisted per connector)."""
+    return _registry(request).set_mapping(_principal(request), connector_id, payload)
+
+
+@router.get("/dispatches", response_model=DispatchPage)
+def list_dispatches(request: Request, limit: int = 50) -> DispatchPage:
+    return DispatchPage(items=_registry(request).list_dispatches(_principal(request), limit=limit))
+
+
+@router.post("/dispatches/preview", response_model=DispatchPreview)
+def preview_dispatch(payload: DispatchRequest, request: Request) -> DispatchPreview:
+    """What the call would look like: URL, masked headers, body and issues — no HTTP, no receipt."""
+    return _registry(request).preview(_principal(request), payload)
+
+
+@router.post("/dispatches", status_code=201, response_model=DispatchReceipt)
+def dispatch(payload: DispatchRequest, request: Request) -> DispatchReceipt:
+    """Perform the outbound call (allow-listed hosts only) and record the receipt."""
+    return _registry(request).dispatch(_principal(request), payload)
 
 
 __all__ = ["router"]

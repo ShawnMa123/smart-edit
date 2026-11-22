@@ -222,7 +222,9 @@ describe('automation template apply (8.3)', () => {
     setViewport(false);
     render(<App />);
 
-    await userEvent.click(screen.getByRole('tab', { name: /Automation · fixture only/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Automation · server/ }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Sandbox' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Templates' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Shell template · v1' }));
     await userEvent.click(screen.getByRole('button', { name: 'Apply to editor' }));
 

@@ -367,6 +367,118 @@ zero hits, uncovered jurisdiction, service down — the answer says so with the 
 internal corpus answered. The transparency is deliberate: the reader must be able to tell "we did not
 look" from "we looked and rejected it".
 
+### Server-side automation registry (`automation-template-registry`)
+
+The Automation tab has two areas:
+
+| Area | What it is |
+|---|---|
+| **Automate** (default) | The real path: server templates, Doubao variable suggestions, contract-shaped body, a review card, `Preview request`, and dispatch with a receipt. |
+| **Sandbox** | A browser-local playground (`localStorage`, no external calls except the two stateless helpers below): local templates, variable marking/filling, and a payload preview. It cannot send — that is what `Automate` is for. |
+
+The sandbox preview does **not** re-implement the contract rules: it calls `POST /automation/spec/parse`
+(operations + fields) and `POST /automation/spec/build` (request body), so the browser and dispatch share
+one OpenAPI subset and one body builder.
+
+| Endpoint | What it does |
+|---|---|
+| `POST /automation/templates` | Save the current draft / imported text as a server template (same name → patch version) |
+| `PUT /automation/templates/{id}` | Rename one stored version (a `(name, version)` clash is refused) |
+| `POST /automation/templates/{id}/duplicate` | Copy text + confirmed variables under a new name |
+| `DELETE /automation/templates/{id}` | Remove one version; dispatch receipts keep their own snapshot |
+| `POST /automation/templates/{id}/apply` | Render the template into a **new document** (`{{label}}` / `[[label]]` / `Label:` lines) |
+| `POST /automation/templates/{id}/write-back` | Write the values into the **current draft** under the editor's lock + expected revision |
+| `GET /automation/templates` · `GET /automation/templates/{id}` | List / read (workspace-scoped) |
+| `POST /automation/templates/{id}/variables/suggest?use_llm=false` | Deterministic candidates + optional Doubao; never persists |
+| `PUT /automation/templates/{id}/variables` | Persist the **confirmed** set (the only write a suggestion can lead to) |
+| `POST /automation/templates/{id}/prepare` | Bind `label: value` from a draft; missing required values are reported |
+| `POST /automation/connectors` · `GET /automation/connectors` | Register a downstream (secret is an env var **name**); may carry an OpenAPI 3.x JSON spec + operation |
+| `PUT /automation/connectors/{id}` | Edit a target in place; replacing the spec (or its operation) resets the field mapping |
+| `GET /automation/connectors/{id}/spec` | Read the stored OpenAPI document for the editor (list responses stay small) |
+| `DELETE /automation/connectors/{id}` | Soft delete: receipts stay for audit, dispatch refuses the target |
+| `PUT /automation/connectors/{id}/mapping` | Bind the operation's request-body fields (dotted paths) to template variables; `template_id` stores it **per (template, connector)** |
+| `GET /automation/mappings?template_id=&connector_id=` | Read that pair mapping (`configured=false` → the panel suggests by label) |
+| `POST /automation/spec/parse` | Parse an OpenAPI document with the registry's own rules (stateless; used by the sandbox) |
+| `POST /automation/spec/build` | Assemble a request body from a spec + mapping (stateless preview; nothing persisted) |
+| `POST /automation/dispatches/preview` | Resolve URL / masked headers / body for a dispatch — no HTTP call, no receipt |
+| `POST /automation/dispatches` · `GET /automation/dispatches` | One real HTTP call + receipt (status/latency/response excerpt) |
+
+Rules that hold by construction:
+
+- A suggestion is not a save: `suggest` is read-only, and every suggested variable carries a
+  `quote` that must be locatable in the template (otherwise `quote=None` + `quote_not_found:<label>`).
+- Deterministic first, model second: placeholders (`{{x}}`), blanks (`____`) and `Label: value` lines
+  work without a model; if Doubao is unavailable the endpoint degrades with `llm_unavailable`, never 500.
+- One field per fact: a model variable that renames what the regex already read (`applicant_name` vs
+  `applicant`, or a second label on the same `Amount:` line) is folded into that field, so the panel
+  never asks you to confirm the same value twice.
+- Binding never guesses: `prepare` only matches labels (`applicant_name` ↔ `Applicant:`) and reports
+  `missing_required` instead of inventing a value.
+- Dispatch is allow-listed: hosts must be in `SMART_EDIT_AUTOMATION_ALLOWED_HOSTS` (empty = deny all),
+  https only unless `SMART_EDIT_AUTOMATION_ALLOW_HTTP=1`. Secrets come from the env var named in
+  `secret_env` — never stored, never echoed. Refusals are recorded with `status=refused`
+  (`host_not_allowed` 403 / `tls_required` 403 / `secret_missing` 409).
+- Connectors list oldest-first, so registering another system never silently re-points the panel's
+  default send target.
+- Mappings belong to a **(template, connector) pair**: one ERP endpoint can serve a guarantee template
+  and an invoice template with different field names, and saving one never overwrites the other.
+  A connector-wide mapping from before pair mappings (no `template_id`) is still honoured as a fallback.
+- The panel is guided: a `Step n/m` card names the one control to use next (`Show me` scrolls to it),
+  shows the checklist and the chosen `Target`, pre-fills the spec mapping from the confirmed variables,
+  and explains why `Send` is disabled (`Send is blocked: beneficiary.name still needs a value`).
+- Four sections, one card for the risky part: `1 Template` → `2 Fields` → `3 Downstream` (choose or add
+  a connector, with its `Field mapping` behind a disclosure) → `4 Review & send`, which is a **read-only
+  review** (mapping + values + request body) plus exactly two actions: `Preview request` and `Send`.
+  The values are filled from the draft automatically, so "check → preview → send" never straddles the
+  connector picker and never needs a "fill" click.
+- Targets are editable and retireable: `Edit connector` changes name/host/path/auth **in place**
+  (`Load saved spec` re-opens the stored document), and `Disable connector` soft-deletes it — the
+  receipts stay for audit while dispatch refuses the target.
+- Templates have a lifecycle too: `Rename` / `Duplicate` / `Delete` act on the selected version.
+  Rendering a template into a **new draft** (`POST /automation/templates/{id}/apply`) and writing the
+  reviewed values into the **current** draft (`POST …/write-back`, lock + `expected_revision`, a stale
+  revision answers `412 stale_draft`) stay available over the API, but the panel itself is review-only.
+- Two conveniences: `Step-by-step` shows one section at a time (Back/Next, guide stays authoritative),
+  and the template name defaults to the draft's first line with a "saving adds a new version" hint.
+- `Preview request` replaces the old mock send: it returns the exact URL, header names (values masked as
+  `***`), body and body issues with **no** HTTP call and **no** receipt, so a demo works without a partner.
+- The receipt is informational: status, status code, latency, dispatch id and the response excerpt.
+  Each receipt still records `target` (url/method/schema kind) and `sent_body` for audit, and the
+  collapsed history list filters by `succeeded / failed / refused`.
+- The request body follows the downstream's own contract: attach its OpenAPI 3.x JSON and pick an
+  operation, **or** write the fields by hand (`amount: number *`) when the partner publishes no spec —
+  both paths share one mapper, validator and body builder (`schema_kind` is `openapi` / `fields` / `flat`). `prepare`/`dispatch` then build `{...}` with dotted paths (`beneficiary.name`), convert
+  numbers (a currency-prefixed `USD 750,000.00` becomes `750000.0`), omit unmapped optional fields and
+  refuse `missing_required_body` (409) instead of sending a body the spec forbids. `oneOf`/`anyOf`,
+  arrays, external refs and cycles are reported as unsupported, never guessed. Without a spec the
+  legacy flat `{template, values}` payload is still sent, so older connectors keep working.
+- Idempotent: the same `idempotency_key` returns the original receipt without a second call.
+- Permissions: reads need `read`, writes and dispatch need `apply`.
+
+Importing a downstream contract: `Automation → Automate → 3 · Downstream → Add connector`
+takes an OpenAPI 3.x **JSON** document either pasted or chosen with **Import OpenAPI spec file**
+(`/openapi.json`, Spring's `/v3/api-docs`, Swagger Editor "Download JSON", an API-gateway export).
+Swagger 2.0 / YAML are rejected with an explicit message. The same thing over the API:
+
+```bash
+curl -X POST http://localhost:8000/automation/connectors \
+  -H 'Content-Type: application/json' -H 'X-Requested-With: smart-edit' \
+  -b cookies.txt \
+  -d '{"name":"Trade intake","base_url":"http://127.0.0.1:18080",
+       "spec":'"$(cat fixtures/automation/openapi_sample.json)"',
+       "operation":"POST /trade/applications"}'
+```
+
+Try it locally without a downstream system:
+
+```bash
+.venv/bin/python scripts/echo_downstream.py --port 18080     # POST /hooks/smart-edit echoes JSON
+export SMART_EDIT_AUTOMATION_ALLOWED_HOSTS=127.0.0.1
+export SMART_EDIT_AUTOMATION_ALLOW_HTTP=1
+# then: Automation → Automate → save template → Find variables with AI → confirm
+#       → connector http://127.0.0.1:18080 → review the body → Send
+```
+
 ### Web fallback and knowledge presets (`knowledge-simple-ask`)
 
 | Variable | Default | Effect |

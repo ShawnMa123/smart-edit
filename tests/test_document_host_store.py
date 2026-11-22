@@ -42,10 +42,14 @@ def test_schema_tables_and_version(tmp_path):
         "automation_dependencies",
         "automation_reviews",
     } <= tables
-    assert store.schema_version() == 4
+    assert store.schema_version() == 8
     for table in ("documents", "document_drafts", "automation_proposals"):
         columns = {row["name"] for row in store.all(f"PRAGMA table_info({table})")}
         assert "department_id" in columns
+    connector_columns = {
+        row["name"] for row in store.all("PRAGMA table_info(automation_connectors)")
+    }
+    assert {"spec_json", "operation", "body_map_json"} <= connector_columns
     assert {
         "document_submissions",
         "approval_requests",
@@ -74,7 +78,7 @@ def test_schema_v4_migration_is_idempotent_and_keeps_old_data(tmp_path):
     store._conn.close()
 
     reopened = HostStore(tmp_path / "host.db")
-    assert reopened.schema_version() == 4
+    assert reopened.schema_version() == 8
     assert {"document_submissions", "approval_requests", "approval_steps"} <= {
         row["name"] for row in reopened.all("SELECT name FROM sqlite_master WHERE type = 'table'")
     }

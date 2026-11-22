@@ -34,6 +34,168 @@ const draft: DraftView = {
   updated_at: null,
 };
 
+const openSandbox = async (
+  user: { click: (element: HTMLElement) => Promise<void> },
+  area: 'Templates' | 'Variables & fill' | 'Payload preview',
+) => {
+  await user.click(screen.getByRole('tab', { name: 'Sandbox' }));
+  await user.click(screen.getByRole('tab', { name: area }));
+};
+
+/**
+ * Test double for the two stateless contract endpoints (`/automation/spec/parse`, `/spec/build`).
+ *
+ * The sandbox delegates parsing and body assembly to the server; these helpers answer the same shapes
+ * for the fixture used below, so the UI tests exercise the real component without a browser backend.
+ */
+const CONTRACT_SPECS: Record<string, Array<Record<string, unknown>>> = {
+  'POST /trade/applications': [
+    { path: 'application_type', type: 'string', required: true, enum: ['guarantee', 'standby_dc'], unsupported: null },
+    { path: 'amount', type: 'number', required: true, enum: [], unsupported: null },
+    { path: 'expiry_date', type: 'string', required: false, enum: [], unsupported: null },
+    { path: 'beneficiary.name', type: 'string', required: true, enum: [], unsupported: null },
+    { path: 'beneficiary.country', type: 'string', required: false, enum: ['CN', 'SG'], unsupported: null },
+    { path: 'references', type: 'array', required: false, enum: [], unsupported: 'array' },
+    {
+      path: 'structured.next.back',
+      type: 'unknown',
+      required: false,
+      enum: [],
+      unsupported: 'circular schema',
+    },
+  ],
+  'POST /trade/preview': [
+    { path: 'amount', type: 'number', required: true, enum: [], unsupported: null },
+    { path: 'note', type: 'string', required: false, enum: [], unsupported: null },
+  ],
+  'POST /minimal': [
+    { path: 'amount', type: 'number', required: true, enum: [], unsupported: null },
+  ],
+  'GET /trade/{id}': [],
+  'POST /trade/empty': [],
+};
+
+const jsonAnswer = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+const parseAnswer = (spec: Record<string, unknown>): Response => {
+  if (spec.swagger) {
+    return jsonAnswer(
+      {
+        error: {
+          code: 'invalid_spec',
+          message: 'Swagger 2.0 is not supported. Provide an OpenAPI 3.x JSON document.',
+        },
+      },
+      400,
+    );
+  }
+  const paths = (spec.paths ?? {}) as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(paths, '/minimal')) {
+    // The "edit the system" test swaps in its own tiny document.
+    return jsonAnswer({
+      title: (spec.info as { title?: string }).title ?? 'Untitled API',
+      version: (spec.info as { version?: string }).version ?? 'unknown',
+      operations: [
+        {
+          id: 'POST /minimal',
+          method: 'POST',
+          path: '/minimal',
+          available: true,
+          fields: CONTRACT_SPECS['POST /minimal'],
+          warnings: [],
+        },
+      ],
+    });
+  }
+  const operations = Object.entries(CONTRACT_SPECS).map(([id, fields]) => ({
+    id,
+    method: id.split(' ')[0],
+    path: id.split(' ').slice(1).join(' '),
+    available: fields.some(
+      (field) => !field.unsupported && ['string', 'number', 'integer', 'boolean'].includes(String(field.type)),
+    ),
+    fields,
+    warnings: [],
+  }));
+  return jsonAnswer({ title: 'Trade Intake API', version: '1.4.0', operations });
+};
+
+const buildAnswer = (
+  operation: string,
+  mapping: Record<string, string>,
+  values: Record<string, string>,
+): Response => {
+  const fields = CONTRACT_SPECS[operation] ?? [];
+  const body: Record<string, unknown> = {};
+  const issues: Array<{ path: string; reason: string; message: string }> = [];
+  const missing: string[] = [];
+  const invalid: string[] = [];
+  for (const field of fields) {
+    const path = String(field.path);
+    if (field.unsupported) continue;
+    const key = mapping[path];
+    const raw = key ? (values[key] ?? '').trim() : '';
+    if (!raw) {
+      if (field.required) {
+        issues.push({ path, reason: 'missing', message: 'Required field is empty.' });
+        missing.push(path);
+      }
+      continue;
+    }
+    const enumValues = (field.enum as string[]) ?? [];
+    if (enumValues.length && !enumValues.includes(raw)) {
+      issues.push({ path, reason: 'invalid', message: 'Value must be one of the enum.' });
+      invalid.push(path);
+      continue;
+    }
+    const converted = field.type === 'number' ? Number(raw) : raw;
+    if (field.type === 'number' && !Number.isFinite(converted as number)) {
+      issues.push({ path, reason: 'invalid', message: 'Value cannot be converted.' });
+      invalid.push(path);
+      continue;
+    }
+    const segments = path.split('.');
+    let cursor = body;
+    for (const segment of segments.slice(0, -1)) {
+      cursor[segment] = (cursor[segment] as Record<string, unknown>) ?? {};
+      cursor = cursor[segment] as Record<string, unknown>;
+    }
+    cursor[segments[segments.length - 1]] = converted;
+  }
+  return jsonAnswer({
+    operation,
+    body,
+    mapping,
+    issues,
+    missing,
+    invalid,
+    ready: issues.length === 0,
+  });
+};
+
+vi.stubGlobal(
+  'fetch',
+  vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const payload = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+    if (url.includes('/automation/spec/parse')) {
+      return parseAnswer((payload.spec ?? {}) as Record<string, unknown>);
+    }
+    if (url.includes('/automation/spec/build')) {
+      return buildAnswer(
+        String(payload.operation ?? ''),
+        (payload.mapping ?? {}) as Record<string, string>,
+        (payload.values ?? {}) as Record<string, string>,
+      );
+    }
+    throw new Error(`unexpected fetch in this test: ${url}`);
+  }),
+);
+
 const paragraph = (text: string): RichDocument['content'][number] => ({
   type: 'paragraph',
   content: [{ type: 'text', text }],
@@ -112,21 +274,30 @@ beforeEach(() => {
     downstreamStore: createDownstreamSystemStore(memoryStorage()),
     onChange: vi.fn(),
     onVariableHandled: vi.fn(),
+    // These tests exercise the browser-local sandbox; `Automate` has its own suite.
+    initialArea: 'sandbox' as const,
   };
 });
 
 describe('AutomationWorkbench', () => {
-  it('shows the three areas and the fixture-backed boundary', () => {
-    render(<AutomationPanel {...props} />);
+  it('opens on Automate and keeps the sandbox behind one tab', async () => {
+    const user = userEvent.setup();
+    render(<AutomationPanel {...props} initialArea="server" />);
 
-    expect(screen.getByRole('tab', { name: 'Template' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Variables & Fill' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Downstream Mapping' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Automate' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Sandbox' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Payload preview' })).toBeNull();
 
     const boundary = screen.getByTestId('automation-boundary').textContent ?? '';
-    expect(boundary).toContain('Fixture-backed workbench');
-    expect(boundary).toContain('Not implemented');
-    expect(boundary).toContain('payload delivery');
+    expect(boundary).toContain('Automate');
+    expect(boundary).toContain('Sandbox');
+    expect(boundary).toContain('Still not implemented');
+
+    await user.click(screen.getByRole('tab', { name: 'Sandbox' }));
+    expect(screen.getByTestId('sandbox-bar')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Templates' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Variables & fill' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Payload preview' })).toBeTruthy();
 
     const context = screen.getByTestId('workbench-context').textContent ?? '';
     expect(context).toContain('Draft rev 3');
@@ -134,13 +305,13 @@ describe('AutomationWorkbench', () => {
     expect(context).toContain('0 variable(s)');
   });
 
-  it('keeps mock state when switching areas', async () => {
+  it('keeps sandbox state when switching areas', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
 
     await user.click(screen.getByRole('button', { name: 'Save as template' }));
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
-    await user.click(screen.getByRole('tab', { name: 'Template' }));
+    await openSandbox(user, 'Payload preview');
+    await openSandbox(user, 'Templates');
 
     expect(screen.getByTestId('template-item')).toBeTruthy();
   });
@@ -193,14 +364,14 @@ describe('AutomationWorkbench', () => {
     await user.click(screen.getByRole('button', { name: 'Save as template' }));
     expect(screen.getByTestId('template-item')).toBeTruthy();
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     expect(
       (screen.getByRole('button', { name: 'Mark selection as variable' }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);
     expect(screen.getByTestId('variable-list').textContent).toContain('No variables yet');
 
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     expect(
       (screen.getByRole('button', { name: 'Match document' }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -210,7 +381,7 @@ describe('AutomationWorkbench', () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
 
     expect(
       (screen.getByRole('button', { name: 'Mark selection as variable' }) as HTMLButtonElement)
@@ -236,7 +407,7 @@ describe('AutomationWorkbench', () => {
       />,
     );
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     await user.click(screen.getByRole('button', { name: 'Mark selection as variable' }));
 
     const dialog = screen.getByTestId('variable-dialog');
@@ -306,7 +477,7 @@ describe('AutomationWorkbench', () => {
     );
     render(<AutomationPanel {...props} document={document} onChange={onChange} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     await user.click(screen.getByRole('button', { name: /amount · amount/ }));
 
     const detail = screen.getByTestId('variable-detail');
@@ -333,7 +504,7 @@ describe('AutomationWorkbench', () => {
     const document = doc(paragraph('This demand guarantee expires on 2027-01-01.'));
     render(<AutomationPanel {...props} document={document} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.click(screen.getByRole('button', { name: 'Match document' }));
 
     const fields = screen.getByTestId('mapping-fields');
@@ -362,7 +533,7 @@ describe('AutomationWorkbench', () => {
     const document = doc(paragraph('This may be a guarantee or a standby facility.'));
     render(<AutomationPanel {...props} document={document} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.click(screen.getByRole('button', { name: 'Match document' }));
 
     expect(screen.getByTestId('mapping-fields').textContent).toContain('status: ambiguous');
@@ -382,7 +553,7 @@ describe('AutomationWorkbench', () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} document={doc(paragraph('No relevant wording here.'))} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.click(screen.getByRole('button', { name: 'Match document' }));
 
     expect(screen.getByTestId('mapping-fields').textContent).toContain('status: missing');
@@ -401,7 +572,7 @@ describe('AutomationWorkbench', () => {
       />,
     );
 
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(
       screen.getByLabelText('Downstream template'),
       'api_template_letter_of_credit',
@@ -428,7 +599,7 @@ describe('AutomationWorkbench', () => {
       />,
     );
 
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.click(screen.getByRole('button', { name: 'Match document' }));
 
     expect(screen.getByTestId('mapping-fields').textContent).toContain('Expiry date');
@@ -451,7 +622,7 @@ describe('AutomationWorkbench', () => {
       />,
     );
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
 
     expect(screen.getByTestId('fallback-variables').textContent).toContain('rich editor');
     expect(
@@ -473,7 +644,7 @@ describe('AutomationWorkbench', () => {
       />,
     );
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     await user.click(screen.getByRole('button', { name: 'Mark selection as variable' }));
     const dialog = screen.getByTestId('variable-dialog');
     await user.click(within(dialog).getByRole('checkbox'));
@@ -495,20 +666,17 @@ describe('AutomationWorkbench', () => {
     expect(screen.getByTestId('missing-required').textContent).toContain('reported as missing');
   });
 
-  it('moves between areas with the keyboard', async () => {
+  it('moves between the two areas with the keyboard', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Template' }));
+    const automate = screen.getByRole('tab', { name: 'Automate' });
+    automate.focus();
     await user.keyboard('{ArrowRight}');
-    expect(
-      screen.getByRole('tab', { name: 'Variables & Fill' }).getAttribute('aria-selected'),
-    ).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Sandbox' }).getAttribute('aria-selected')).toBe('true');
 
-    await user.keyboard('{End}');
-    expect(screen.getByRole('tab', { name: 'Downstream Mapping' }).getAttribute('aria-selected')).toBe(
-      'true',
-    );
+    await user.keyboard('{Home}');
+    expect(screen.getByRole('tab', { name: 'Automate' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tabpanel')).toBeTruthy();
   });
 
@@ -810,7 +978,7 @@ describe('AutomationWorkbench', () => {
     await user.click(screen.getByRole('button', { name: 'Replace document' }));
 
     rerender(<AutomationPanel {...props} onApplyTemplate={onApplyTemplate} />);
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
 
     expect(screen.getByTestId('missing-required').textContent).toContain('amount');
   });
@@ -821,7 +989,7 @@ describe('AutomationWorkbench', () => {
     const captured = seedTemplate(doc(paragraph('Old snapshot')));
     render(<AutomationPanel {...props} onApplyTemplate={onApplyTemplate} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     await user.click(screen.getByRole('button', { name: 'Save to template' }));
 
     expect(screen.getByText(/previous snapshot will be replaced/)).toBeTruthy();
@@ -837,7 +1005,7 @@ describe('AutomationWorkbench', () => {
     expect(updated?.rich).toEqual(props.document);
     expect(screen.getByTestId('workbench-status').textContent).toContain('Updated');
 
-    await user.click(screen.getByRole('tab', { name: 'Template' }));
+    await openSandbox(user, 'Templates');
     expect(screen.getByTestId('template-item').textContent).toContain('v2');
     await user.click(screen.getByRole('button', { name: 'Apply to editor' }));
     await user.click(screen.getByRole('button', { name: 'Replace document' }));
@@ -851,7 +1019,7 @@ describe('AutomationWorkbench', () => {
     const captured = seedTemplate(doc(paragraph('Old snapshot')));
     render(<AutomationPanel {...props} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     await user.click(screen.getByRole('button', { name: 'Save to template' }));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -862,7 +1030,7 @@ describe('AutomationWorkbench', () => {
   it('explains when there is no template or no content to save', async () => {
     const user = userEvent.setup();
     const first = render(<AutomationPanel {...props} />);
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     expect(
       (screen.getByRole('button', { name: 'Save to template' }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -873,7 +1041,7 @@ describe('AutomationWorkbench', () => {
 
     seedTemplate(doc(paragraph('Seed')));
     render(<AutomationPanel {...props} document={doc()} />);
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     expect(
       (screen.getByRole('button', { name: 'Save to template' }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -904,7 +1072,7 @@ describe('AutomationWorkbench', () => {
     } as Storage);
     render(<AutomationPanel {...props} templateStore={blocked} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Variables & Fill' }));
+    await openSandbox(user, 'Variables & fill');
     await user.click(screen.getByRole('button', { name: 'Save to template' }));
     await user.click(screen.getByRole('button', { name: 'Update template' }));
 
@@ -913,7 +1081,7 @@ describe('AutomationWorkbench', () => {
     expect(createTemplateStore(backing).list()[0].version).toBe('v1');
   });
 
-  it('parses the selected system spec, maps variables, downloads and mock sends', async () => {
+  it('parses the selected system spec, maps variables and downloads the payload', async () => {
     const user = userEvent.setup();
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     Object.defineProperty(URL, 'createObjectURL', {
@@ -921,8 +1089,6 @@ describe('AutomationWorkbench', () => {
       configurable: true,
     });
     Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
     const contractDocument = doc({
       type: 'paragraph',
       content: [
@@ -936,7 +1102,7 @@ describe('AutomationWorkbench', () => {
     });
     render(<AutomationPanel {...props} document={contractDocument} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await waitFor(() => expect(screen.getByTestId('openapi-title')).toBeTruthy());
 
@@ -958,31 +1124,16 @@ describe('AutomationWorkbench', () => {
     expect(URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(click).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('workbench-status').textContent).toContain('Downloaded');
-
-    await user.click(screen.getByRole('button', { name: 'Send (mock)' }));
-    const success = screen.getByTestId('mock-receipt');
-    expect(success.getAttribute('data-status')).toBe('200');
-    expect(success.textContent).toContain('mock_success');
-    expect(success.textContent).toContain('Simulated — no network request');
-    expect(success.textContent).toContain('https://sandbox.trade.example/api/trade/applications');
-
-    await user.click(screen.getByLabelText('Simulate failure'));
-    await user.click(screen.getByRole('button', { name: 'Send (mock)' }));
-    const failure = screen.getByTestId('mock-receipt');
-    expect(failure.getAttribute('data-status')).toBe('500');
-    expect(failure.textContent).toContain('MOCK_DOWNSTREAM_ERROR');
-    expect(failure.textContent).toContain('Simulated');
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
+    // The sandbox never dispatches: real sends live in Automate (allow-listed, receipt recorded).
+    expect(screen.getByTestId('send-unavailable').textContent).toContain('Automate');
     click.mockRestore();
   });
 
-  it('keeps download and mock send disabled while required OpenAPI fields are missing', async () => {
+  it('keeps the download disabled while required OpenAPI fields are missing', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await waitFor(() => expect(screen.getByTestId('openapi-title')).toBeTruthy());
 
@@ -992,16 +1143,13 @@ describe('AutomationWorkbench', () => {
     expect(
       (screen.getByRole('button', { name: 'Download JSON' }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    expect(
-      (screen.getByRole('button', { name: 'Send (mock)' }) as HTMLButtonElement).disabled,
-    ).toBe(true);
     expect(screen.getByTestId('send-unavailable')).toBeTruthy();
   });
 
   it('rejects an invalid OpenAPI spec when saving a system', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await user.click(screen.getByRole('button', { name: 'Manage systems' }));
     await user.click(screen.getByRole('button', { name: 'New system' }));
@@ -1021,7 +1169,7 @@ describe('AutomationWorkbench', () => {
   it('creates a system from an uploaded spec and switches operations', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await user.click(screen.getByRole('button', { name: 'Manage systems' }));
     await user.click(screen.getByRole('button', { name: 'New system' }));
@@ -1061,7 +1209,7 @@ describe('AutomationWorkbench', () => {
   it('edits and deletes downstream systems with confirmation', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await user.click(screen.getByRole('button', { name: 'Manage systems' }));
 
@@ -1101,7 +1249,7 @@ describe('AutomationWorkbench', () => {
     const first = render(
       <AutomationPanel {...props} downstreamStore={createDownstreamSystemStore(storage)} />,
     );
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await user.click(screen.getByRole('button', { name: 'Manage systems' }));
     await user.click(screen.getByRole('button', { name: 'New system' }));
@@ -1119,7 +1267,7 @@ describe('AutomationWorkbench', () => {
     render(
       <AutomationPanel {...props} downstreamStore={createDownstreamSystemStore(storage)} />,
     );
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await waitFor(() =>
       expect(
@@ -1135,7 +1283,7 @@ describe('AutomationWorkbench', () => {
     const store = createDownstreamSystemStore(memoryStorage());
     for (const system of store.list()) store.remove(system.id);
     render(<AutomationPanel {...props} downstreamStore={store} />);
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
 
     expect(screen.getByTestId('no-system').textContent).toContain('create or select one first');
@@ -1154,7 +1302,7 @@ describe('AutomationWorkbench', () => {
       },
     } as Storage);
     render(<AutomationPanel {...props} downstreamStore={blocked} />);
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await user.click(screen.getByRole('button', { name: 'Manage systems' }));
     await user.click(screen.getByRole('button', { name: 'New system' }));
@@ -1173,7 +1321,7 @@ describe('AutomationWorkbench', () => {
   it('reloads the bound spec when the selected system is edited', async () => {
     const user = userEvent.setup();
     render(<AutomationPanel {...props} />);
-    await user.click(screen.getByRole('tab', { name: 'Downstream Mapping' }));
+    await openSandbox(user, 'Payload preview');
     await user.selectOptions(screen.getByLabelText('Downstream source'), 'openapi');
     await user.click(screen.getByRole('button', { name: 'Manage systems' }));
 

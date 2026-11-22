@@ -19,7 +19,7 @@ from typing import Any, Iterator
 from app.documents.errors import HostError, HostNotFound, LockConflict, RevisionConflict
 from app.documents.projection import plain_text_document, project_document, sha256_text
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 8
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -118,6 +118,35 @@ CREATE TABLE IF NOT EXISTS automation_reviews (
   verdict TEXT NOT NULL, validator_version TEXT NOT NULL, issues_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
   FOREIGN KEY (proposal_id) REFERENCES automation_proposals(proposal_id));
+CREATE TABLE IF NOT EXISTS automation_templates (
+  template_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL,
+  version TEXT NOT NULL, source_kind TEXT NOT NULL, source_note TEXT,
+  text TEXT NOT NULL, content_json TEXT, variables_json TEXT NOT NULL DEFAULT '[]',
+  variables_source TEXT, document_id TEXT, created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE (workspace_id, name, version));
+CREATE TABLE IF NOT EXISTS automation_connectors (
+  connector_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL,
+  base_url TEXT NOT NULL, method TEXT NOT NULL DEFAULT 'POST', path TEXT NOT NULL,
+  auth_kind TEXT NOT NULL DEFAULT 'none', auth_header TEXT, secret_env TEXT,
+  timeout_seconds INTEGER NOT NULL DEFAULT 10, extra_headers_json TEXT NOT NULL DEFAULT '{}',
+  spec_json TEXT, operation TEXT, body_map_json TEXT NOT NULL DEFAULT '{}',
+  body_map_configured INTEGER NOT NULL DEFAULT 0, fields_json TEXT,
+  created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, disabled_at TEXT);
+CREATE TABLE IF NOT EXISTS automation_dispatches (
+  dispatch_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, template_id TEXT,
+  connector_id TEXT NOT NULL, document_id TEXT, status TEXT NOT NULL, status_code INTEGER,
+  latency_ms INTEGER, request_json TEXT NOT NULL, response_json TEXT, error_code TEXT,
+  idempotency_key TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS automation_templates_ws ON automation_templates(workspace_id, created_at);
+CREATE INDEX IF NOT EXISTS automation_connectors_ws ON automation_connectors(workspace_id, created_at);
+CREATE TABLE IF NOT EXISTS automation_mappings (
+  template_id TEXT NOT NULL, connector_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+  body_map_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL,
+  PRIMARY KEY (template_id, connector_id));
+CREATE INDEX IF NOT EXISTS automation_dispatches_ws ON automation_dispatches(workspace_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS automation_dispatches_idem
+  ON automation_dispatches(workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 """
 
 
@@ -195,6 +224,53 @@ class HostStore:
                     }
                     if "department_id" not in columns:
                         conn.execute(f"ALTER TABLE {table} ADD COLUMN department_id TEXT")
+            if found < 5:
+                # OpenAPI-driven dispatch (automation-template-registry D6): the connector carries the
+                # downstream's own schema, the chosen operation and the field -> variable mapping.
+                columns = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(automation_connectors)").fetchall()
+                }
+                for name, ddl in (
+                    ("spec_json", "ALTER TABLE automation_connectors ADD COLUMN spec_json TEXT"),
+                    ("operation", "ALTER TABLE automation_connectors ADD COLUMN operation TEXT"),
+                    (
+                        "body_map_json",
+                        "ALTER TABLE automation_connectors ADD COLUMN body_map_json "
+                        "TEXT NOT NULL DEFAULT '{}'",
+                    ),
+                ):
+                    if name not in columns:
+                        conn.execute(ddl)
+            if found < 6:
+                # "Never configured" (auto-suggest) must be distinguishable from "configured as empty"
+                # (the user cleared every field), so the mapping carries its own flag.
+                columns = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(automation_connectors)").fetchall()
+                }
+                if "body_map_configured" not in columns:
+                    conn.execute(
+                        "ALTER TABLE automation_connectors ADD COLUMN body_map_configured "
+                        "INTEGER NOT NULL DEFAULT 0"
+                    )
+            if found < 7:
+                # Hand-written request fields for downstreams that publish no OpenAPI document.
+                columns = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(automation_connectors)").fetchall()
+                }
+                if "fields_json" not in columns:
+                    conn.execute("ALTER TABLE automation_connectors ADD COLUMN fields_json TEXT")
+            if found < 8:
+                # Field mappings become per (template, connector): one connector can serve several
+                # templates without their mappings overwriting each other.
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS automation_mappings ("
+                    " template_id TEXT NOT NULL, connector_id TEXT NOT NULL,"
+                    " workspace_id TEXT NOT NULL, body_map_json TEXT NOT NULL DEFAULT '{}',"
+                    " updated_at TEXT NOT NULL, PRIMARY KEY (template_id, connector_id))"
+                )
             conn.execute(
                 "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
                 (str(SCHEMA_VERSION),),

@@ -75,6 +75,22 @@ const MESSAGES: Record<string, string> = {
   SESSION_MISSING: 'The conversation this run belongs to no longer exists.',
   HELP_SOURCE_UNAVAILABLE:
     'The help guide is not loaded in this demo database. Restart with a fresh fixture database or re-import the help source; this is not a statement that no knowledge exists.',
+  // Server-side automation: dispatch refusals. Nothing left the server, and the receipt records why.
+  host_not_allowed:
+    'That downstream host is not on the server allow-list, so nothing was sent. An operator adds hosts to SMART_EDIT_AUTOMATION_ALLOWED_HOSTS.',
+  tls_required:
+    'Plain http is blocked for downstream calls, so nothing was sent. Use an https endpoint, or enable http for a local demo.',
+  secret_missing:
+    'The connector names an environment variable that is empty on the server, so nothing was sent. Set the token and retry.',
+  invalid_target:
+    'The connector address is not usable (missing host or path), so nothing was sent. Edit the connector and retry.',
+  // Document write-back (automation → draft): the editor's own error codes.
+  stale_draft:
+    'The draft changed after this panel read it, so nothing was written back. Reload the draft and run it again.',
+  lock_conflict:
+    'Someone else holds the editing lock, so the draft was not changed. Take the lock and retry.',
+  lock_missing:
+    'The editing lock expired, so the draft was not changed. Click into the editor to re-acquire it.',
 };
 
 export function explainError(code: string): string {

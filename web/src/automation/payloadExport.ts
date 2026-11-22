@@ -2,7 +2,7 @@
  * Downloading a request JSON file (design D19 / task 10.4). Never sends anything.
  */
 
-import type { ContractOperation } from './openapi';
+import type { ContractOperation } from './specContract';
 
 type OperationRef = Pick<ContractOperation, 'operationId' | 'method' | 'path'>;
 

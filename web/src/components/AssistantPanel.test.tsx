@@ -32,12 +32,12 @@ const renderPanel = () =>
   );
 
 describe('AssistantPanel', () => {
-  it('offers audit, knowledge, fixture-only automation and legal tabs', () => {
+  it('offers audit, knowledge, server automation and legal tabs', () => {
     renderPanel();
 
     expect(screen.getByRole('tab', { name: 'Rule audit' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Knowledge Q&A' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Automation · fixture only/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Automation · server/ })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Legal advice' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: /Legal advice · not implemented/ })).toBeNull();
   });
@@ -45,9 +45,9 @@ describe('AssistantPanel', () => {
   it('shows short visible labels with the build status as a separate tag', () => {
     renderPanel();
 
-    const automation = screen.getByRole('tab', { name: /Automation · fixture only/ });
+    const automation = screen.getByRole('tab', { name: /Automation · server/ });
     expect(automation.textContent).toContain('Automation');
-    expect(automation.textContent).toContain('Fixture only');
+    expect(automation.textContent).toContain('Server');
     // The visible label is short: no dotted status suffix inside the label itself.
     expect(automation.textContent).not.toContain('·');
     expect(automation.querySelector('.tab-status')?.getAttribute('aria-hidden')).toBe('true');
@@ -97,20 +97,19 @@ describe('AssistantPanel', () => {
 
     expect(screen.getByLabelText('Knowledge question')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Ask' })).toBeTruthy();
-    expect(screen.getByText(/Fixture-backed/i)).toBeTruthy();
+    expect(screen.getByText(/Fixture-backed: answers use synthetic demo sources/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Run spec audit/i })).toBeNull();
   });
 
-  it('renders the fixture-only automation workbench, not a generic placeholder', async () => {
+  it('renders the automation workbench with Automate first, not a generic placeholder', async () => {
     renderPanel();
 
-    await userEvent.click(screen.getByRole('tab', { name: /Automation · fixture only/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Automation · server/ }));
 
-    expect(screen.getByRole('tab', { name: 'Template' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Variables & Fill' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Downstream Mapping' })).toBeTruthy();
-    expect(screen.getByTestId('automation-boundary').textContent).toContain('Fixture-backed');
-    expect(screen.getByTestId('automation-boundary').textContent).toContain('Not implemented');
+    expect(screen.getByRole('tab', { name: 'Automate' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Sandbox' })).toBeTruthy();
+    expect(screen.getByTestId('automation-boundary').textContent).toContain('Automate');
+    expect(screen.getByTestId('automation-boundary').textContent).toContain('Still not implemented');
     expect(screen.queryByText(/Automation is not implemented in this build/i)).toBeNull();
   });
 

@@ -247,6 +247,189 @@ retrieval: statute ok（hits 5）· local 参与 · limitations 说明"仅覆盖
 
 ---
 
+### 3.8 自动化：模板 → AI 变量 → 下游 API（2 分钟，可选）
+
+**环境已备好**（`Template (server)` / `Downstream` 下拉里直接选，不用先建）：
+
+| 名称 | 用途 |
+|---|---|
+| `Demo (from draft)` | 由演示草稿生成的模板，6 个已确认变量 |
+| `Export contract (prose)` | 中文散文模板，专门用来展示"豆包读出变量" |
+| `Local echo (demo)` | `http://127.0.0.1:18080/hooks/smart-edit`，真实回显 |
+| `Refusal demo` | `https://example.com`，演示"不在白名单就不发" |
+
+**面板的四个区块（按顺序做，或跟着顶部引导走）**：
+
+| 区块 | 做什么 |
+|---|---|
+| `1 · Template (server)` | 选/存模板 |
+| `2 · Fields` | `Find variables with AI` → `Confirm N variables` |
+| `3 · Downstream` | 选连接器；没有就 `Add connector`（可导入 OpenAPI spec） |
+| `4 · Review & send` | 只读复核（映射 + 取值 + 请求体预览） + `Preview request` + `Send` + 回执 |
+
+**面板顶部有一条"下一步"引导**：`Step 3/6 · Choose the downstream system` + `Show me` 按钮 +
+进度点（`✓ Template ✓ Fields ● Downstream ○ Mapping ○ Review ○ Send`），下面一行 `Target: <连接器> · <host> · <operation>`。
+新加连接器后，面板会自动选中它、映射按变量预填，引导条直接跳到下一步 —— 不需要自己琢磨顺序。
+
+**管理已有模板**（`1 · Template (server)`）：选中模板后可用 `Rename`（改名，冲突会拒绝）、
+`Duplicate`（连同已确认变量复制一份）、`Delete`（删除该版本，历史回执保留自己的快照）。
+
+**回执只读**：发送后回执卡只展示 `status · 200 · 15 ms · dispatch_id` 与响应摘录；
+要再发一次就再点 `Send`。`Recent dispatches` 默认折叠，展开后可按
+`All / Succeeded / Failed / Refused` 过滤。
+
+**映射按（模板 × 连接器）保存**：同一个 `Trade intake (spec demo)` 连接器配 `Trade application (spec demo)`
+和 `Demo (from draft)` 两个模板，各自一套字段映射，互不覆盖（`GET /automation/mappings?template_id=&connector_id=`
+可查；未配置时面板按变量标签自动建议）。
+
+**没有 OpenAPI 的下游**：`Add connector` 里除了粘贴 spec，还可以在 `Or custom fields` 写字段表
+（一行一个，`path: type`，结尾 `*` 表示必填）：
+
+```text
+amount: number *
+beneficiary.name: string *
+note: string
+```
+
+保存后 `Target:` 会显示 `· custom fields (3)`，映射/校验/组包与 OpenAPI 路径完全一致（`schema_kind=fields`）。
+
+**不发送也能看**：`Review & send` 里点 **`Preview request`**，显示将要发出的 `METHOD URL`、
+请求头（值显示为 `***`）、请求体与 `body_issues` —— 不发 HTTP、不写回执，断网也能演示。
+
+> 模板套用（`POST …/apply`）与值回填草稿（`POST …/write-back`）仍保留在 API，
+> 面板按"只复核 + 预览 + 发送"简化后不再提供这两个按钮。
+
+**管理已有连接器**（`3 · Downstream`）：
+
+- `Edit connector`：改名 / 换 host / 改 auth **原地生效**；`Load saved spec` 把服务器上存的 spec 读回编辑器，
+  换 spec 后映射自动重置（旧的字段路径属于旧契约），并提示 `Connector updated — the field mapping was reset for the new contract.`
+- `Disable connector` → `Yes, disable`：软删除，列表里不再出现，`dispatch` 会 404；历史回执保留可审计。
+- 模板名默认取草稿第一行（如 `TRADE APPLICATION`）；同名再保存会提示"adds a new version"。
+- 想看单步视图就勾 `Step-by-step`：只显示当前区块，`Back` / `Next` 切换，顶部引导仍然有效。
+
+**路径 A：草稿 → 模板（确定性优先）**
+
+1. 右侧 `Automation` → **`Automate`** 标签（默认打开；另一个 `Sandbox` 是纯本地演练，不发请求）。
+2. `1 · Template (server)` 里 `Template name` 填个名字 → **Save current draft as template**（提示 `Template saved on the server.`）。
+3. `2 · Fields` 点 **Find variables with AI**：出现候选变量，每行带 `<label> <key> <类型> “模板原文”`，豆包来源的带 `AI` 标。
+4. 取消勾选不需要的，点 **Confirm N variables**（只有这一步会写库）。
+5. `3 · Downstream` 选 `Local echo (demo)`。
+6. `4 · Review & send` 会自动从草稿取值（显示每个变量的值与来源、payload 预览），直接点 **Send**。
+
+**预期（线上实测，草稿 = 演示保函 188 字）**
+
+```text
+suggested by: merged · doubao:doubao-seed-2-1-lite-260915
+variables: 6（Applicant / Beneficiary / Amount / Governing rules / Expiry / Requested by）
+  例：amount · amount · “Amount: USD 250,000.00”
+bound 6/6 · missing required: []
+receipt: succeeded | 200 · 15 ms · dsp_…
+echo: {"accepted": true, "values": {"amount": "USD 250,000.00", "applicant": "Atlas Trading Ltd", …}}
+```
+
+**路径 B：散文模板 → 豆包补变量（这里体现"AI 有用"）**
+
+选 `Export contract (prose)`（中文散文，没有 `Label: value` 行，正则一无所获）→ **Find variables with AI**：
+
+```text
+suggested by: llm · 7–9 variables（模型每次命名略有不同），每行带 AI 标 + 中文原文引用
+  seller_name                   “卖方为 Northbridge Arms Trading LLC”
+  seller_registration_location  “注册于美国特拉华州”
+  buyer_name                    “买方为 Sepahan Logistics Co.”
+  buyer_registration_location   “注册于伊朗德黑兰”
+  goods_description             “货物为军用无人机部件与弹药”
+  goods_quantity                “共 120 套”            (integer)
+  contract_currency             “USD”                  (currency)
+  contract_amount               “4,800,000.00”         (amount)
+  payment_method                “第三国现金支付”
+```
+
+台词：> 确定性规则负责"看得见的格式"（占位符、`Label: value`），豆包负责"读得出语义"；
+> 两者给出的每条建议都必须带模板里的原文，编的 quote 会被丢掉并标 `quote_not_found`。
+
+**路径 C：被拒绝的一次发送（安全边界，10 秒）**
+
+连接器改选 `Refusal demo`（没有就展开 **Add connector** 建一个 `https://example.com`，No auth）→
+**Send** → 顶部红字：
+
+```text
+That downstream host is not on the server allow-list, so nothing was sent.
+An operator adds hosts to SMART_EDIT_AUTOMATION_ALLOWED_HOSTS.
+```
+
+`Recent dispatches` 最上面一条变成 `refused`（回执也记下来，不会静默失败）。
+
+台词：> 模板和"人确认过的变量"存在服务器上，换浏览器、换同事都能用；建议是**只读**的。
+> 发送是一次真实 HTTP 调用：只在主机白名单内、密钥只从环境变量读、同样的幂等键只发一次，
+> 无论成功、失败还是被拒绝都会留下回执。
+
+**路径 D：下游按 OpenAPI spec 组包（真实对接的样子）**
+
+演示环境已建连接器 `Trade intake (spec demo)`：附了 `fixtures/automation/openapi_sample.json`
+（Trade Intake API 1.4.0），选中的操作是 `POST /trade/applications`。
+
+自己导入一份：`3 · Downstream` → 展开 **Add connector** → **Import OpenAPI spec file** 选 JSON 文件
+（或直接粘到 `OpenAPI spec (JSON, optional)`）→ **Parse spec** → 在 `Connector operation` 里选操作 →
+**Save connector**。spec 通常来自对方的 `/openapi.json`、Spring 的 `/v3/api-docs`、Swagger Editor 的
+"Download JSON"、或 API 网关（Apigee / Azure APIM）的导出；Swagger 2.0 与 YAML 会明确报错，需先转成
+OpenAPI 3.x JSON。
+
+1. 编辑器里粘贴这段（模板 `Trade application (spec demo)` 已经存在，也可自己另存）：
+
+```text
+TRADE APPLICATION
+Application type: guarantee
+Applicant: Atlas Trading Ltd
+Beneficiary: Meridian Exports Pte Ltd
+Amount: USD 250,000.00
+Currency: USD
+Expiry date: 2027-06-30
+```
+
+2. `1 · Template` 选 `Trade application (spec demo)` → `3 · Downstream` 选 `Trade intake (spec demo)`。
+3. `3 · Downstream` → 展开 **`Field mapping`**：`Trade Intake API 1.4.0 · POST /trade/applications · application/json`，
+   下面是 spec 的字段（`application_type` / `amount` / `expiry_date` / `beneficiary.name` / …），
+   每行一个下拉：`Amount → amount`、`Beneficiary → beneficiary.name`（自动按标签匹配，可手改后 `Save mapping`）。
+4. `4 · Review & send` 自动取值，只读映射表显示 `amount ← Amount` 等；payload 预览**就是下游的请求体**（不是我们的信封）：
+
+```json
+{"application_type": "guarantee", "amount": 250000, "expiry_date": "2027-06-30",
+ "beneficiary": {"name": "Meridian Exports Pte Ltd"}}
+```
+
+5. **Send** → 回执 `succeeded · 200 · 15 ms`，echo 回来的 `path` 是 **`/trade/applications`**
+   （路径来自 spec，不是连接器里手填的 `/hooks/smart-edit`），body 与预览完全一致。
+
+**预期（线上实测）**
+
+```text
+spec: Trade Intake API 1.4.0 · POST /trade/applications · application/json
+fields: application_type(string,required) amount(number,required) expiry_date(string)
+        beneficiary.name(string,required) beneficiary.country(string) references(array)
+mapping: application_type→application_type  amount→amount  expiry_date→expiry_date
+         beneficiary.name→beneficiary
+body: {"application_type":"guarantee","amount":250000.0,"expiry_date":"2027-06-30",
+       "beneficiary":{"name":"Meridian Exports Pte Ltd"}}
+receipt: succeeded | 200 · 15 ms
+```
+
+**路径 E：把必填字段的映射删掉会怎样（10 秒）**
+
+`3 · Downstream` → `Field mapping` 里把 `Variable for beneficiary.name` 选 `(not sent)` → **Save mapping**：
+
+```text
+beneficiary.name — Required field has no mapped variable.
+Send 变灰（服务端同样会拒绝：409 missing_required_body，并留下 refused 回执）
+```
+
+台词：> 请求体是下游 spec 的形状：嵌套字段、数值类型都按 spec 转换，必填没给就不发，
+> 不会把一坨自定义 JSON 硬塞给对方；spec 里的 `oneOf`/数组/外部 `$ref` 会被标成不支持，不猜。
+
+**兜底**：`Local echo` 服务没起时，发送仍会执行但回执是 `failed / transport_error`（不会假装成功）；
+演示前用 §5.3 的命令把它拉起来。
+
+---
+
 ## 4. 样例文档（直接粘贴；仓库里也有）
 
 所有样例在 `fixtures/legal-samples/`（另有 `README.md` 写了各自的预期）。
@@ -368,6 +551,86 @@ Payment is by bank transfer within 30 days of invoice.
 `fixtures/imports/guarantee.docx`、`guarantee-and-standby-letters-of-credit-wording.pdf`、`scan.png`。
 注意：**Import 是"另起一个 run 去解析"，不会自动替换编辑器正文**；正文演示仍以粘贴为主。
 
+### 4.7 自动化模板样例（Automate 用）
+
+**样例 1：占位符 + 标签行混合**（确定性规则全命中；`{{...}}` 就是下游想要的字段名）
+
+```text
+DEMAND GUARANTEE
+Guarantee No: BG-2026-00417
+Applicant: {{applicant_name}}
+Beneficiary: {{beneficiary_name}}
+Amount: {{amount}}
+Currency: USD
+Issue Date: {{issue_date}}
+Expiry Date: {{expiry_date}}
+Governing Rules: URDG 758
+
+This guarantee is payable on first written demand.
+```
+
+**预期**：`suggested_by: merged`；确定性命中 5 个占位符 + `Guarantee No` / `Currency` / `Governing Rules`；
+豆包补充的同义字段（`guarantee_amount`、`expiry_date` 之类）会被**折叠回同一个字段**，不会让你确认两遍。
+
+**样例 2：中文散文**（没有冒号，正则抓不到，全靠豆包 —— 演示"AI 有用"用这段）
+
+```text
+出口合同
+
+卖方为 Northbridge Arms Trading LLC，注册于美国特拉华州。
+买方为 Sepahan Logistics Co.，注册于伊朗德黑兰。
+货物为军用无人机部件与弹药，共 120 套。
+合同金额为 USD 4,800,000.00。
+付款方式为第三国现金支付，货物经第三国转运。
+```
+
+**预期（线上实测）**：`suggested_by: llm`、8 个变量、全部带中文原文引用 ——
+`seller_company_name` / `seller_jurisdiction` / `buyer_company_name` / `buyer_jurisdiction` /
+`goods_description` / `goods_quantity`(integer) / `contract_currency`(currency) / `contract_amount`(amount)。
+
+> 散文模板的自动取值会大面积 `missing`（草稿里没有 `Seller:` 这样的标签行），
+> 这是正确行为：面板允许手动改值，或在编辑器里把标签行补齐后切一次 tab 重新取值。
+
+**样例 3：商业发票（推荐做页面测试；确定性 11 条 + 豆包 2 条，100% 绑定）**
+
+文件：`fixtures/automation-samples/commercial-invoice.txt`
+
+```text
+COMMERCIAL INVOICE AND PAYMENT INSTRUCTION
+
+Invoice No: INV-2026-0451
+Issue Date: 2026-03-14
+Seller: Northbridge Industrial Systems LLC
+Buyer: Sepahan Logistics Co.
+Buyer country: Iran
+Currency: USD
+Invoice amount: USD 486,500.00
+Payment terms: 60 days from bill of lading date
+Incoterm: CIF Bandar Abbas
+Port of loading: Houston
+Port of discharge: Bandar Abbas
+HS code: 8803.30
+Goods: unmanned aerial vehicle components and guidance modules
+
+1. The Seller shall ship the goods described above to the port of discharge stated in this invoice.
+2. Payment shall be made by telegraphic transfer to the Seller's account.
+3. This invoice is governed by the laws of the State of Delaware.
+```
+
+**预期（线上实测，浏览器跑的）**：
+
+```text
+editor 702 chars → Save current draft as template → Find variables with AI
+suggestion: Confirm 13 variables   （11 条 deterministic + 2 条 AI：payment_terms / goods_description）
+fill:       bound 13/13 · missing required []
+receipt:    succeeded | 200 · 15 ms
+echo:       {"invoice_no": "INV-2026-0451", "seller": "Northbridge Industrial Systems LLC",
+             "buyer_country": "Iran", "invoice_amount": "USD 486,500.00", …}
+```
+
+要点：`Payment terms` / `Goods` 两行因为是一整句散文，正则不认，正好由豆包补上 ——
+一次演示同时看到"确定性优先"和"模型补充"两条腿，而且 13 条全部能从草稿里取到值。
+
 ---
 
 ## 5. 运行说明（运维手册）
@@ -404,6 +667,11 @@ systemctl reload nginx                 # 改 nginx 配置后
 tail -f /var/log/nginx/smart-edit.error.log
 firewall-cmd --list-ports              # 期望 8080/tcp 8082/tcp
 ss -lntp | grep -E ':(8000|8082)\b'
+
+# 自动化真实 dispatch 用的回显服务（127.0.0.1:18080）
+nohup /opt/smart-edit/.venv/bin/python /opt/smart-edit/scripts/echo_downstream.py --port 18080 \
+  >/tmp/echo-downstream.log 2>&1 &
+curl -s http://127.0.0.1:18080/health          # {"status": "ok"}
 ```
 
 ### 5.4 演示数据与恢复
@@ -608,6 +876,7 @@ deploy/                              部署脚本 / systemd / nginx / env 模板
 
 ```text
 legal-document-risk-scan   合规扫描（含制裁/出口管制层、闸门、覆盖率）
+automation-template-registry 模板→变量（AI）→下游 dispatch（白名单/密钥/幂等/回执）
 legal-review               L1 法规问答 + 确定性规则
 knowledge-statute-chat     法规助手两段式生成
 knowledge-general-web      联网通道与引用规则

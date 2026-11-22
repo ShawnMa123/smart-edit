@@ -63,6 +63,20 @@ def _authorization_version(store, workspace_id: str) -> str | None:
     return f"org:{organization['org_id']}:{version}" if version is not None else None
 
 
+def _build_automation_registry(host, assistant_services) -> object:
+    """Server-side template registry + downstream dispatch, reusing the approved model gateway."""
+    from app.automation.registry import AutomationRegistry
+
+    settings = getattr(assistant_services, "settings", None)
+    return AutomationRegistry(
+        host.store,
+        documents=getattr(host, "documents", None),
+        gateway=getattr(assistant_services, "gateway", None),
+        approved=bool(getattr(settings, "approved_processor", False)),
+        model_label=getattr(settings, "processor_label", None),
+    )
+
+
 def _build_legal_service(host, assistant_services, *, store) -> object:
     """Wire the legal module to the document host, statute retriever and composer it already has.
 
@@ -185,6 +199,7 @@ def create_app(
         assistant_services, deadline_seconds=assistant_deadline_seconds
     )
     app.state.legal = _build_legal_service(host, assistant_services, store=app.state.store)
+    app.state.automation_registry = _build_automation_registry(host, assistant_services)
     app.include_router(auth_router)
     app.include_router(organization_router)
     app.include_router(activity_router)

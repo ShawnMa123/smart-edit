@@ -1,8 +1,10 @@
 /**
- * Frontend-first Automation workbench: Template / Variables & Fill / Downstream Mapping.
+ * Automation workbench: two areas.
  *
- * Every action here is mock-backed (`mockWorkbench.ts`); the component never fetches, never calls a
- * model and never delivers a payload. The only real effect is editing the in-memory rich document.
+ * `Automate` is the server path (`AutomationServerPanel`: templates, variables, dispatch, receipts).
+ * `Sandbox` is browser-local: local templates, variable marking, and a payload preview whose body is
+ * assembled by the server (`/automation/spec/build`) so the contract rules exist in exactly one place.
+ * The sandbox never sends anything.
  */
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -20,8 +22,13 @@ import {
 } from '../automation/mockWorkbench';
 import { describeCapture } from '../automation/templateCapture';
 import { applyTemplate } from '../automation/templateApply';
-import { parseOpenApi, type OpenApiContract } from '../automation/openapi';
-import { buildOpenApiPayload, suggestMappings } from '../automation/openapiPayload';
+import {
+  buildPayload as buildContractPayload,
+  parseContract,
+  suggestMappings,
+  type OpenApiContract,
+  type OpenApiPayload,
+} from '../automation/specContract';
 import { downloadJson } from '../automation/payloadExport';
 import {
   downstreamSystemStore,
@@ -29,7 +36,6 @@ import {
   type DownstreamSystemInput,
   type DownstreamSystemStore,
 } from '../automation/downstreamSystemStore';
-import { mockSend, type MockReceipt } from '../automation/mockDownstreamSend';
 import {
   MAX_TEMPLATES,
   automationTemplateStore,
@@ -39,6 +45,8 @@ import {
 } from '../automation/templateStore';
 import type { RichDocument } from '../rich/richDocument';
 import { projectDocument } from '../rich/projection';
+import { richToPlainText } from '../rich/plainText';
+import { AutomationServerPanel } from './AutomationServerPanel';
 import {
   collectVariables,
   replaceSelectionWithVariable,
@@ -47,13 +55,19 @@ import {
   type VariableDefinition,
 } from '../rich/variableOperations';
 
-type Area = 'template' | 'variables' | 'mapping';
+type Area = 'server' | 'sandbox';
+type SandboxArea = 'template' | 'variables' | 'mapping';
 type MappingSource = 'fixture' | 'openapi';
 
 const AREAS: Array<[Area, string]> = [
-  ['template', 'Template'],
-  ['variables', 'Variables & Fill'],
-  ['mapping', 'Downstream Mapping'],
+  ['server', 'Automate'],
+  ['sandbox', 'Sandbox'],
+];
+
+const SANDBOX_AREAS: Array<[SandboxArea, string]> = [
+  ['template', 'Templates'],
+  ['variables', 'Variables & fill'],
+  ['mapping', 'Payload preview'],
 ];
 
 const EXCERPT_LIMIT = 240;
@@ -113,6 +127,8 @@ export interface AutomationWorkbenchProps {
   downstreamStore?: DownstreamSystemStore;
   /** Apply a template snapshot to the editor (App owns the replacement/autosave path). */
   onApplyTemplate?: (document: RichDocument) => void;
+  /** Which tab opens first; `Automate` (server) unless a test asks for the sandbox. */
+  initialArea?: 'server' | 'sandbox';
   onChange: (document: RichDocument) => void;
   onVariableHandled: () => void;
 }
@@ -127,10 +143,12 @@ export function AutomationWorkbench({
   templateStore = automationTemplateStore,
   downstreamStore = downstreamSystemStore,
   onApplyTemplate,
+  initialArea = 'server',
   onChange,
   onVariableHandled,
 }: AutomationWorkbenchProps) {
-  const [area, setArea] = useState<Area>('template');
+  const [area, setArea] = useState<Area>(initialArea);
+  const [sandboxArea, setSandboxArea] = useState<SandboxArea>('template');
   const [templates, setTemplates] = useState<TemplateRecord[]>(() => templateStore.list());
   const [templateIssue, setTemplateIssue] = useState<TemplateStoreIssue | null>(() =>
     templateStore.issue(),
@@ -171,8 +189,6 @@ export function AutomationWorkbench({
   const [deletingSystemId, setDeletingSystemId] = useState<string | null>(null);
   const [openApiOperationId, setOpenApiOperationId] = useState<string | null>(null);
   const [openApiMappings, setOpenApiMappings] = useState<Record<string, string>>({});
-  const [simulateFailure, setSimulateFailure] = useState(false);
-  const [receipt, setReceipt] = useState<MockReceipt | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const labelRef = useRef<HTMLInputElement | null>(null);
 
@@ -374,7 +390,8 @@ export function AutomationWorkbench({
         ]);
       }
       setSelectedVariableId(created?.variableId ?? null);
-      setArea('variables');
+      setArea('sandbox');
+      setSandboxArea('variables');
       setNotice(`Marked "${definition.label || 'variable'}" as a variable.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
@@ -445,10 +462,10 @@ export function AutomationWorkbench({
     setSystemError(null);
   };
 
-  const saveSystem = () => {
+  const saveSystem = async () => {
     if (!systemDraft) return;
     if (systemDraft.specText.trim()) {
-      const parsed = parseOpenApi(systemDraft.specText);
+      const parsed = await parseContract(systemDraft.specText);
       if (!parsed.ok) {
         setSystemError(parsed.error);
         return;
@@ -487,7 +504,6 @@ export function AutomationWorkbench({
       setSelectedSystemId(null);
       setOpenApiOperationId(null);
       setOpenApiMappings({});
-      setReceipt(null);
     }
     setDeletingSystemId(null);
     setNotice(
@@ -499,25 +515,12 @@ export function AutomationWorkbench({
     const operation = openApiContract?.operations.find((item) => item.id === id) ?? null;
     setOpenApiOperationId(operation?.id ?? null);
     setOpenApiMappings(operation ? suggestMappings(operation.fields, mappingVariables) : {});
-    setReceipt(null);
   };
 
   const downloadOpenApiPayload = () => {
     if (!openApiOperation || !openApiPayload?.ready) return;
     const filename = downloadJson(openApiOperation, openApiPayload.payload);
     setNotice(`Downloaded ${filename} — not sent to the downstream API.`);
-  };
-
-  const sendMockPayload = () => {
-    if (!canSend || !selectedSystem || !openApiOperation || !openApiPayload) return;
-    const next = mockSend({
-      system: selectedSystem,
-      operation: openApiOperation,
-      payload: openApiPayload.payload,
-      simulateFailure,
-    });
-    setReceipt(next);
-    setNotice(`Mock send ${next.status} — simulated, no network request.`);
   };
 
   const payload = mappingTemplate
@@ -527,28 +530,74 @@ export function AutomationWorkbench({
       })
     : null;
 
-  const mappingVariables = variables.map((variable) => ({
-    variableId: variable.variableId,
-    label: variable.label,
-    displayValue: variable.displayValue,
-  }));
+  const mappingVariables = useMemo(
+    () =>
+      variables.map((variable) => ({
+        variableId: variable.variableId,
+        label: variable.label,
+        displayValue: variable.displayValue,
+      })),
+    [variables],
+  );
   const selectedSystem = systems.find((system) => system.id === selectedSystemId) ?? null;
-  const parsedSystemSpec = selectedSystem ? parseOpenApi(selectedSystem.specText) : null;
-  const openApiContract: OpenApiContract | null = parsedSystemSpec?.ok
-    ? parsedSystemSpec.contract
-    : null;
-  const openApiError =
-    selectedSystem && parsedSystemSpec && !parsedSystemSpec.ok
-      ? parsedSystemSpec.error
-      : selectedSystem && !selectedSystem.specText.trim()
-        ? 'No OpenAPI spec attached. Edit the system to add one.'
-        : null;
+  // Parsing runs on the server (`/automation/spec/parse`): the registry and this preview share one
+  // implementation of the OpenAPI subset.
+  const [systemContract, setSystemContract] = useState<OpenApiContract | null>(null);
+  const [systemSpecError, setSystemSpecError] = useState<string | null>(null);
+  useEffect(() => {
+    const specText = selectedSystem?.specText ?? '';
+    if (!specText.trim()) {
+      setSystemContract(null);
+      setSystemSpecError(
+        selectedSystem ? 'No OpenAPI spec attached. Edit the system to add one.' : null,
+      );
+      return;
+    }
+    let cancelled = false;
+    void parseContract(specText).then((parsed) => {
+      if (cancelled) return;
+      if (parsed.ok) {
+        setSystemContract(parsed.contract);
+        setSystemSpecError(null);
+      } else {
+        setSystemContract(null);
+        setSystemSpecError(parsed.error);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSystem?.id, selectedSystem?.specText]);
+  const openApiContract = systemContract;
+  const openApiError = systemSpecError;
   const openApiOperation =
     openApiContract?.operations.find((operation) => operation.id === openApiOperationId) ?? null;
-  const openApiPayload = openApiOperation
-    ? buildOpenApiPayload(openApiOperation.fields, openApiMappings, mappingVariables)
-    : null;
-  const canSend = Boolean(selectedSystem?.enabled && openApiOperation && openApiPayload?.ready);
+  const [openApiPayload, setOpenApiPayload] = useState<OpenApiPayload | null>(null);
+  useEffect(() => {
+    if (!selectedSystem || !openApiOperation) {
+      setOpenApiPayload(null);
+      return;
+    }
+    let document: Record<string, unknown>;
+    try {
+      document = JSON.parse(selectedSystem.specText) as Record<string, unknown>;
+    } catch {
+      setOpenApiPayload(null);
+      return;
+    }
+    let cancelled = false;
+    void buildContractPayload(document, openApiOperation, openApiMappings, mappingVariables)
+      .then((result) => {
+        if (!cancelled) setOpenApiPayload(result);
+      })
+      .catch(() => {
+        if (!cancelled) setOpenApiPayload(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Depend on stable identities only: a fresh array each render would loop the effect.
+  }, [selectedSystem?.id, selectedSystem?.specText, openApiOperationId, openApiMappings, mappingVariables]);
 
   useEffect(() => {
     if (selectedSystemId && systems.some((system) => system.id === selectedSystemId)) return;
@@ -559,16 +608,26 @@ export function AutomationWorkbench({
 
   useEffect(() => {
     const system = systems.find((item) => item.id === selectedSystemId) ?? null;
-    const parsed = system ? parseOpenApi(system.specText) : null;
-    const first = parsed?.ok
-      ? parsed.contract.operations.find((operation) => operation.available) ?? null
-      : null;
-    setOpenApiOperationId(first?.id ?? null);
-    setOpenApiMappings(first ? suggestMappings(first.fields, mappingVariables) : {});
-    setReceipt(null);
+    if (!system || !system.specText.trim()) {
+      setOpenApiOperationId(null);
+      setOpenApiMappings({});
+      return;
+    }
+    let cancelled = false;
+    void parseContract(system.specText).then((parsed) => {
+      if (cancelled) return;
+      const first = parsed.ok
+        ? parsed.contract.operations.find((operation) => operation.available) ?? null
+        : null;
+      setOpenApiOperationId(first?.id ?? null);
+      setOpenApiMappings(first ? suggestMappings(first.fields, mappingVariables) : {});
+    });
     // `mappingVariables` is intentionally read at selection time; depending on it would reset
     // mappings whenever a variable value changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSystemId, systems]);
 
   const confirmedRequired =
@@ -604,13 +663,14 @@ export function AutomationWorkbench({
     <section className="automation-workbench" aria-label="Automation workbench">
       <div className="row">
         <h2>Automation</h2>
-        <span className="muted tiny">fixture only</span>
+        <span className="muted tiny">server registry + local sandbox</span>
       </div>
       <p className="notice tiny" data-testid="automation-boundary">
-        <strong>Fixture-backed workbench.</strong> Template capture, variable fill and downstream
-        mapping are simulated locally; no server persistence, model or external request is used. Not
-        implemented: real extract/confirm, template registry, real API template import, payload
-        delivery, compare, rewrite and voice.
+        <strong>Automate</strong> is the real path: templates and confirmed variables persist on the
+        server, Doubao suggests variables, the request body follows the downstream contract, and
+        dispatch makes one allow-listed HTTP call with a replayable receipt. <strong>Sandbox</strong>{' '}
+        is a browser-local playground (localStorage, no network). Still not implemented: compare,
+        rewrite and voice.
       </p>
       {!draft ? (
         <p className="muted tiny" data-testid="no-draft">
@@ -654,7 +714,30 @@ export function AutomationWorkbench({
         ))}
       </div>
 
-      {area === 'template' ? (
+      {area === 'sandbox' ? (
+        <div className="sandbox-bar" data-testid="sandbox-bar">
+          <p className="notice tiny">
+            <strong>Sandbox — nothing leaves this browser.</strong> Templates live in{' '}
+            <code>localStorage</code>, the preview is built locally, and there is no send here. Use{' '}
+            <strong>Automate</strong> to persist templates, call the downstream and keep receipts.
+          </p>
+          <div className="row" role="tablist" aria-label="Sandbox areas">
+            {SANDBOX_AREAS.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={sandboxArea === id}
+                onClick={() => setSandboxArea(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {area === 'sandbox' && sandboxArea === 'template' ? (
         <div
           role="tabpanel"
           id="automation-panel-template"
@@ -935,7 +1018,7 @@ export function AutomationWorkbench({
           ) : null}
         </div>
       ) : null}
-{area === 'variables' ? (
+      {area === 'sandbox' && sandboxArea === 'variables' ? (
         <div
           role="tabpanel"
           id="automation-panel-variables"
@@ -1109,7 +1192,7 @@ export function AutomationWorkbench({
         </div>
       ) : null}
 
-      {area === 'mapping' ? (
+      {area === 'sandbox' && sandboxArea === 'mapping' ? (
         <div
           role="tabpanel"
           id="automation-panel-mapping"
@@ -1438,7 +1521,7 @@ export function AutomationWorkbench({
                         </p>
                       ) : null}
                       <div className="version-actions">
-                        <button type="button" onClick={saveSystem}>
+                        <button type="button" onClick={() => void saveSystem()}>
                           Save system
                         </button>
                         <button type="button" onClick={cancelSystemForm}>
@@ -1567,50 +1650,23 @@ export function AutomationWorkbench({
                       </button>
                     </div>
                   ) : null}
-                  <label className="tiny">
-                    <input
-                      type="checkbox"
-                      aria-label="Simulate failure"
-                      checked={simulateFailure}
-                      onChange={(event) => setSimulateFailure(event.target.checked)}
-                    />{' '}
-                    Simulate failure (mock 500)
-                  </label>
-                  <button type="button" disabled={!canSend} onClick={sendMockPayload}>
-                    Send (mock)
-                  </button>
-                  <p className="muted tiny">
-                    Simulated — no network request. No credential is read.
+                  <p className="muted tiny" data-testid="send-unavailable">
+                    Sandbox previews only — use <strong>Automate</strong> to dispatch for real
+                    (allow-listed host, receipt recorded).
                   </p>
-                  {!canSend ? (
-                    <p className="muted tiny" data-testid="send-unavailable">
-                      Select an enabled system, an operation and a ready payload to mock send.
-                    </p>
-                  ) : null}
-                  {receipt ? (
-                    <div
-                      className="notice tiny"
-                      data-testid="mock-receipt"
-                      data-status={receipt.status}
-                    >
-                      <div>
-                        <strong>{receipt.status}</strong> · {receipt.outcome} ·{' '}
-                        <strong>Simulated — no network request</strong>
-                      </div>
-                      <div>
-                        {receipt.method} {receipt.endpoint}
-                      </div>
-                      <div>
-                        requestId: {receipt.requestId} · {formatCapturedAt(receipt.sentAt)}
-                      </div>
-                      <pre>{JSON.stringify(receipt.payload, null, 2)}</pre>
-                      <p className="tiny">{receipt.message}</p>
-                    </div>
-                  ) : null}
                 </>
               ) : null}
             </div>
           )}
+        </div>
+      ) : null}
+
+      {area === 'server' ? (
+        <div role="tabpanel" id="automation-panel-server" aria-labelledby="automation-tab-server">
+          <AutomationServerPanel
+            documentId={draft?.document_id ?? null}
+            text={richToPlainText(document)}
+          />
         </div>
       ) : null}
 

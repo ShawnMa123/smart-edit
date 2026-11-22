@@ -951,6 +951,40 @@ button.primary {
   gap: 8px;
 }
 
+/* One next-step card above the four sections: tells a first-time user what to touch next. */
+.automation-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #d9dee6);
+  border-left: 3px solid var(--accent, #2f6fed);
+  border-radius: 6px;
+  background: var(--panel-soft, #f7f9fc);
+}
+
+.automation-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+
+.automation-step--done {
+  color: #217a3c;
+}
+
+.automation-step--current {
+  font-weight: 600;
+}
+
+.automation-step--todo {
+  opacity: 0.55;
+}
+
 .legal-panel textarea {
   width: 100%;
   min-height: 64px;
