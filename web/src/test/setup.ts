@@ -40,6 +40,13 @@ beforeAll(() => {
         toJSON: () => ({}),
       }) as DOMRect;
   }
+  if (typeof document !== 'undefined' && !document.elementFromPoint) {
+    // ProseMirror resolves a click position through document.elementFromPoint (jsdom lacks it).
+    Object.defineProperty(document, 'elementFromPoint', {
+      value: () => null,
+      configurable: true,
+    });
+  }
   const storage = memoryStorage();
   for (const target of [globalThis, globalThis.window]) {
     Object.defineProperty(target, 'localStorage', { value: storage, configurable: true });

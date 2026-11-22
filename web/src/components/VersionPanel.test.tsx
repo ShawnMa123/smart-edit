@@ -45,6 +45,13 @@ describe('VersionPanel', () => {
     expect(screen.getByText(/No versions yet/i)).toBeTruthy();
   });
 
+  it('disables Capture version while the editor is empty', () => {
+    renderPanel({ canCapture: false });
+
+    const buttons = screen.getAllByRole('button', { name: 'Capture version' });
+    expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+  });
+
   it('restores a version by id', async () => {
     const props = renderPanel();
 

@@ -42,6 +42,25 @@ def test_assistant_settings_carry_auth_mode():
         AssistantSettings.from_env({"SMART_EDIT_AUTH_MODE": "ldap"})
 
 
+def test_shared_editing_roles_and_the_counterparty_review_route():
+    bank_ops = set(perm.role_permissions(perm.ROLE_BANK_OPS))
+    assert perm.DOCUMENT_CREATE in bank_ops
+    assert perm.DOCUMENT_EDIT in bank_ops
+    assert perm.DOCUMENT_LOCK in bank_ops
+    # Bank-originated drafts are submitted by Bank Operations and then reviewed by the counterparty.
+    assert perm.APPROVAL_SUBMIT in bank_ops
+    assert perm.APPROVAL_FIRST in bank_ops
+
+    applicant = set(perm.role_permissions(perm.ROLE_APPLICANT))
+    assert perm.APPROVAL_COUNTERPARTY in applicant
+    assert perm.APPROVAL_FIRST not in applicant
+
+    compliance = set(perm.role_permissions(perm.ROLE_COMPLIANCE))
+    assert perm.DOCUMENT_CREATE not in compliance
+    assert perm.DOCUMENT_EDIT not in compliance
+    assert perm.APPROVAL_SECOND in compliance
+
+
 def test_role_catalog_grants_are_additive_and_no_deny_exists():
     assert "document.read" in perm.role_permissions("member")
     assert "developer.manage" in perm.role_permissions("org_admin")

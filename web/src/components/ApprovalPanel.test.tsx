@@ -342,6 +342,86 @@ describe('ApprovalPanel', () => {
     expect(openDocument).toHaveBeenCalledWith('doc_1');
   });
 
+  it('shows a counterparty first stage for bank-originated submissions', async () => {
+    const counterparty = {
+      ...summary,
+      route: 'counterparty_first' as const,
+      title: 'Bank-originated guarantee',
+    };
+    const spy = vi.fn(async (url: string) => {
+      if (String(url).includes('/approvals')) return response(200, [counterparty]);
+      return response(200, []);
+    }) as unknown as typeof fetch;
+
+    render(
+      <ApprovalPanel
+        orgId="org_1"
+        documentId="doc_1"
+        permissions={['approval.counterparty', 'approval.submit']}
+        fetchImpl={spy}
+      />,
+    );
+
+    expect(await screen.findByRole('tab', { name: 'First approval' })).toBeTruthy();
+    expect(await screen.findByText('counterparty → compliance')).toBeTruthy();
+  });
+
+  it('lists my submissions across documents with their titles', async () => {
+    const openDocument = vi.fn();
+    const second = {
+      ...summary,
+      submission_id: 'sub_2',
+      request_id: 'apr_2',
+      document_id: 'doc_2',
+      revision: 1,
+      title: 'Commercial invoice',
+    };
+    const spy = vi.fn(async (url: string) => {
+      const path = String(url);
+      if (path.includes('/approvals/submissions')) {
+        return response(200, [{ ...summary, title: 'Guarantee application' }, second]);
+      }
+      if (path.includes('/documents/doc_1')) {
+        return response(200, {
+          document_id: 'doc_1',
+          draft_id: 'draft_1',
+          title: 'Guarantee application',
+          revision: 3,
+          etag: 'draft-3',
+          content: {},
+          text: 'Amount: USD 250,000.00',
+          content_sha256: 'a'.repeat(64),
+          variables: {},
+          variables_version: 1,
+          updated_at: null,
+          submission_status: 'draft',
+          submission: null,
+        });
+      }
+      return response(200, []);
+    }) as unknown as typeof fetch;
+
+    render(
+      <ApprovalPanel
+        orgId="org_1"
+        documentId="doc_1"
+        permissions={['approval.submit']}
+        fetchImpl={spy}
+        onOpenDocument={openDocument}
+      />,
+    );
+
+    expect((await screen.findByTestId('submission-doc-sub_1')).textContent).toContain(
+      'Guarantee application',
+    );
+    expect(screen.getByTestId('submission-doc-sub_2').textContent).toContain(
+      'Commercial invoice',
+    );
+
+    await userEvent.click(screen.getByTestId('open-document-sub_2'));
+    expect(openDocument).toHaveBeenCalledWith('doc_2');
+  });
+
   it('lists documents and offers Open / New document entry points', async () => {
     const openDocument = vi.fn();
     const newDocument = vi.fn();

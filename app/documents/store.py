@@ -19,7 +19,7 @@ from typing import Any, Iterator
 from app.documents.errors import HostError, HostNotFound, LockConflict, RevisionConflict
 from app.documents.projection import plain_text_document, project_document, sha256_text
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS approval_requests (
   request_id TEXT PRIMARY KEY, submission_id TEXT NOT NULL UNIQUE, document_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL, department_id TEXT, submitted_by TEXT NOT NULL,
   status TEXT NOT NULL, current_stage TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, decided_at TEXT);
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, decided_at TEXT,
+  route TEXT NOT NULL DEFAULT 'bank_first');
 CREATE INDEX IF NOT EXISTS approval_requests_pending_idx
   ON approval_requests(workspace_id, status, created_at);
 CREATE TABLE IF NOT EXISTS approval_steps (
@@ -380,6 +381,17 @@ class HostStore:
                 if "required" not in job_columns:
                     conn.execute(
                         "ALTER TABLE automation_jobs ADD COLUMN required INTEGER NOT NULL DEFAULT 1"
+                    )
+            if found < 13:
+                # Approval routing: bank-originated submissions are first reviewed by the
+                # counterparty, applicant-originated ones by Bank Operations (shared editing).
+                request_columns = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(approval_requests)").fetchall()
+                }
+                if "route" not in request_columns:
+                    conn.execute(
+                        "ALTER TABLE approval_requests ADD COLUMN route TEXT NOT NULL DEFAULT 'bank_first'"
                     )
             conn.execute(
                 "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
@@ -758,6 +770,18 @@ class HostStore:
             (document_id,),
         )
 
+    def list_submissions_for_user(
+        self, workspace_id: str, user_id: str, *, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        """The caller's submissions across every document in the workspace (with document title)."""
+        return self.all(
+            "SELECT s.*, d.title FROM document_submissions s"
+            " JOIN documents d ON d.document_id = s.document_id"
+            " WHERE s.workspace_id = ? AND s.submitted_by = ?"
+            " ORDER BY s.created_at DESC, s.rowid DESC LIMIT ?",
+            (workspace_id, user_id, limit),
+        )
+
     def get_submission(self, submission_id: str) -> dict[str, Any] | None:
         return self.one(
             "SELECT * FROM document_submissions WHERE submission_id = ?", (submission_id,)
@@ -806,6 +830,7 @@ class HostStore:
         expected_revision: int,
         expected_sha256: str | None,
         audit_request_id: str = "",
+        route: str = "bank_first",
     ) -> dict[str, Any]:
         stamp = now_iso()
         with self.transaction() as conn:
@@ -885,6 +910,7 @@ class HostStore:
                 "created_at": stamp,
                 "updated_at": stamp,
                 "decided_at": None,
+                "route": route,
             }
             conn.execute(
                 "INSERT INTO document_submissions VALUES (:submission_id,:document_id,:draft_id,"
@@ -895,7 +921,7 @@ class HostStore:
             conn.execute(
                 "INSERT INTO approval_requests VALUES (:request_id,:submission_id,:document_id,"
                 ":workspace_id,:department_id,:submitted_by,:status,:current_stage,:revision,"
-                ":created_at,:updated_at,:decided_at)",
+                ":created_at,:updated_at,:decided_at,:route)",
                 request,
             )
             released = conn.execute(

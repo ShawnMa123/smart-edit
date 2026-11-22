@@ -194,6 +194,7 @@ function AppContent() {
   const richDocRef = useRef<RichDocument>(richDoc);
   const userEditedRef = useRef(false);
   const saveTimer = useRef<number | null>(null);
+  const saveInFlightRef = useRef(false);
   const aliveRef = useRef(true);
   /**
    * The document load must re-run when the authenticated user/organisation changes: the workspace
@@ -204,7 +205,7 @@ function AppContent() {
   const authLoadKey =
     auth.status === 'loading' || auth.status === 'unauthenticated'
       ? null
-      : `${auth.profile?.user.user_id ?? 'anonymous'}:${auth.workspaceId}:${activeDocumentId}:${documentReloadToken}`;
+      : `${auth.profile?.user.user_id ?? 'anonymous'}:${auth.workspaceId}:${activeDocumentId}:${documentReloadToken}:${authPermissionsKey}`;
 
   // First load: the server draft is authoritative. If none exists, seed one from the editor.
   useEffect(() => {
@@ -246,14 +247,16 @@ function AppContent() {
             throw error;
           }
         }
-        const lockView = await acquireLock(view.document_id, view.draft_id).catch((error) => {
-          // Reviewers can read a document without holding the edit lock; show the content read-only
-          // instead of failing the whole load (Applicant / First / Second Approver testing).
-          if (error instanceof ApiError && (error.status === 403 || error.status === 409)) {
-            return null;
-          }
-          throw error;
-        });
+        const lockView = canEditDocument
+          ? await acquireLock(view.document_id, view.draft_id).catch((error) => {
+              // Reviewers can read a document without holding the edit lock; show the content read-only
+              // instead of failing the whole load (Applicant / First / Second Approver testing).
+              if (error instanceof ApiError && (error.status === 403 || error.status === 409)) {
+                return null;
+              }
+              throw error;
+            })
+          : null;
         if (!aliveRef.current) return;
         if (!lockView) {
           draftRef.current = view;
@@ -261,14 +264,19 @@ function AppContent() {
           setDraft(view);
           setLockHeld(false);
           setLockNotice(
-            view.submission_status && view.submission_status !== 'draft'
-              ? 'This submitted version is read-only until it is returned or approved.'
-              : 'Read-only: this role cannot edit or lock the document.',
+            ['pending_first', 'pending_second', 'approved'].includes(
+              view.submission_status ?? 'draft',
+            )
+              ? 'This submitted version is read-only until it is returned or approved — open a draft document, or use Approval → Return to unlock editing.'
+              : !canEditDocument
+                ? 'Read-only: your role cannot edit this document.'
+                : 'Read-only: another session holds the edit lock.',
           );
           setRichDoc(view.content);
           richDocRef.current = view.content;
           setDirty(false);
-          setSaveState('local');
+          // The content did come from the server; a reviewer simply may not save it.
+          setSaveState('saved');
           if (announceOpenRef.current) {
             announceOpenRef.current = false;
             toast.success(`Opened “${view.title ?? 'document'}”`);
@@ -372,19 +380,22 @@ function AppContent() {
     });
   };
 
-  const scheduleSave = (nextDoc: RichDocument) => {
-    setDirty(true);
-    setSaveState('saving');
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+  const persistDraft = async (nextDoc: RichDocument, announce = false): Promise<boolean> => {
+    if (saveInFlightRef.current) {
+      if (announce) toast.info('Saving…');
+      return false;
+    }
     const currentDraft = draftRef.current;
     const currentLock = lockRef.current;
     if (!currentDraft || !currentLock) {
       setSaveState('local');
-      return;
+      if (announce) setLockNotice('Save needs a server draft and the edit lock.');
+      return false;
     }
+    saveInFlightRef.current = true;
     const nextText = richToPlainText(nextDoc);
-    saveTimer.current = window.setTimeout(() => {
-      void saveDraft(
+    try {
+      const next = await saveDraft(
         currentDraft.document_id,
         currentDraft.draft_id,
         currentDraft.revision,
@@ -394,30 +405,91 @@ function AppContent() {
           lockId: currentLock.lock_id,
           fencingToken: currentLock.fencing_token,
         },
-      )
-        .then((next) => {
-          if (aliveRef.current) {
-            applySaveResult(next);
-            if (userEditedRef.current) {
-              recordActivity({
-                kind: 'save',
-                action: 'Draft saved',
-                detail: `Draft revision ${next.revision} saved`,
-                notifiable: false,
-              });
-            }
-          }
-        })
-        .catch((error) => {
-          if (!aliveRef.current) return;
-          if (error instanceof ApiError && error.status === 412) {
-            handleConflict(error, nextDoc, nextText);
-          } else {
-            setSaveState('error');
-          }
-        });
+      );
+      if (aliveRef.current) {
+        applySaveResult(next);
+        if (userEditedRef.current) {
+          recordActivity({
+            kind: 'save',
+            action: 'Draft saved',
+            detail: `Draft revision ${next.revision} saved`,
+            notifiable: false,
+          });
+        }
+        if (announce) toast.success(`Saved · revision ${next.revision}`);
+      }
+      return true;
+    } catch (error) {
+      if (!aliveRef.current) return false;
+      if (error instanceof ApiError && error.status === 412) {
+        handleConflict(error, nextDoc, nextText);
+        if (announce) {
+          toast.warning('The draft moved on the server — choose which version to keep.');
+        }
+      } else {
+        setSaveState('error');
+        if (announce) {
+          toast.error(error instanceof ApiError ? error.message : 'Save failed');
+        }
+      }
+      return false;
+    } finally {
+      saveInFlightRef.current = false;
+    }
+  };
+
+  const scheduleSave = (nextDoc: RichDocument) => {
+    setDirty(true);
+    setSaveState('saving');
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    if (!draftRef.current || !lockRef.current) {
+      setSaveState('local');
+      return;
+    }
+    saveTimer.current = window.setTimeout(() => {
+      void persistDraft(nextDoc);
     }, 2000);
   };
+
+  /** Explicit Save (footer button / Cmd-Ctrl+S): flush the debounce and report the result. */
+  const handleSaveNow = async () => {
+    if (editorReadOnly) {
+      setLockNotice(
+        submissionReadOnly
+          ? 'This submission is under approval; saving is disabled. Use Approval → Return, or open a draft document.'
+          : 'Your role cannot edit this document, so saving is disabled.',
+      );
+      return;
+    }
+    if (!draftRef.current || !lockRef.current) {
+      setLockNotice('Save needs a server draft and the edit lock.');
+      return;
+    }
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    if (!dirty) {
+      toast.info('Nothing to save — this draft is already up to date.');
+      return;
+    }
+    await persistDraft(richDocRef.current, true);
+  };
+
+  const saveNowRef = useRef<() => void>(() => undefined);
+  saveNowRef.current = () => {
+    void handleSaveNow();
+  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        saveNowRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const useServerVersion = async () => {
     let server = conflict?.server;
@@ -684,7 +756,28 @@ function AppContent() {
   };
 
   const handleRunAudit = async () => {
-    const snapshot = await createSnapshot(text, currentVersionId);
+    if (!text.trim()) {
+      toast.warning('Add or import text before running the audit.');
+      return;
+    }
+    let snapshot: Awaited<ReturnType<typeof createSnapshot>>;
+    try {
+      snapshot = await createSnapshot(text, currentVersionId);
+    } catch {
+      const failure = {
+        code: 'SNAPSHOT_FAILED',
+        message: 'The browser could not snapshot the text, so nothing was sent.',
+      };
+      dispatch({ type: 'fail', failure, at: Date.now() });
+      recordActivity({
+        kind: 'audit',
+        action: 'Audit failed',
+        detail: `Audit failed: ${failure.code}`,
+        notifiable: true,
+      });
+      toast.error(failure.message);
+      return;
+    }
     dispatch({ type: 'start', snapshot, at: Date.now() });
     recordActivity({
       kind: 'audit',
@@ -749,6 +842,11 @@ function AppContent() {
   const submissionReadOnly = ['pending_first', 'pending_second', 'approved'].includes(
     submissionStatus,
   );
+  /** Roles without `document.edit` (e.g. Bank Operations as first approver) cannot edit drafts either. */
+  const canEditDocument = auth.profile
+    ? authPermissions.includes('document.edit')
+    : true;
+  const editorReadOnly = submissionReadOnly || !canEditDocument;
   const submissionComment = draft?.submission?.latest_comment ?? null;
 
   const panes: Record<PaneId, JSX.Element> = {
@@ -760,6 +858,7 @@ function AppContent() {
         onRestore={handleRestore}
         onClear={handleClear}
         onCompare={(ids) => setComparePair(ids)}
+        canCapture={text.trim() !== ''}
         facts={{ documentId: facts.documentId, draftRevision: facts.draftRevision }}
       />
     ),
@@ -779,11 +878,12 @@ function AppContent() {
         onKeepLocal={keepLocalRecovery}
         onReleaseLock={handleReleaseLock}
         onStartEditing={handleStartEditing}
+        onSave={() => void handleSaveNow()}
         onSubmitVersion={handleSubmitVersion}
         lockNotice={lockNotice}
         submissionStatus={submissionStatus}
         submissionComment={submissionComment}
-        readOnly={submissionReadOnly}
+        readOnly={editorReadOnly}
         documentId={facts.documentId}
         versions={facts.versions}
         draftRevision={facts.draftRevision}
@@ -801,6 +901,7 @@ function AppContent() {
         templateId={templateId}
         onTemplateChange={setTemplateId}
         now={now}
+        textEmpty={text.trim() === ''}
         canUseAutomation={canUseAutomation}
         knowledge={{
           documentId: activeDocumentId,
@@ -1026,8 +1127,12 @@ function AppContent() {
   }
 
   async function handleStartEditing() {
-    if (submissionReadOnly) {
-      setLockNotice('This submission is under approval; editing is disabled.');
+    if (editorReadOnly) {
+      setLockNotice(
+        submissionReadOnly
+          ? 'This submission is under approval; editing is disabled. Use Approval → Return, or open a draft document.'
+          : 'Your role cannot edit this document.',
+      );
       return;
     }
     const current = draftRef.current;

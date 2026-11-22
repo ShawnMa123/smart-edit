@@ -20,6 +20,8 @@ export interface ApprovalStep {
   decided_at: string;
 }
 
+export type ApprovalRoute = 'bank_first' | 'counterparty_first';
+
 export interface SubmissionSummary {
   submission_id: string;
   document_id: string;
@@ -30,11 +32,15 @@ export interface SubmissionSummary {
   created_at: string;
   request_id: string;
   current_stage: 'first' | 'second' | null;
+  /** Who reviews the first stage: Bank Operations, or the counterparty (bank-originated drafts). */
+  route?: ApprovalRoute;
   approval_revision: number;
   latest_comment: string | null;
   latest_decision: string | null;
   latest_actor: string | null;
   latest_decided_at: string | null;
+  /** Document title (the workspace-wide "My submissions" list). */
+  title?: string | null;
 }
 
 export interface ApprovalSummary extends SubmissionSummary {

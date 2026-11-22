@@ -236,7 +236,7 @@ export function DocumentHead({
   submission,
 }: DocumentHeadProps) {
   const status = submissionStatus ?? submission?.status ?? 'draft';
-  const statusMeta = approvalStatusMeta(status);
+  const statusMeta = approvalStatusMeta(status, submission?.route);
   const draftLine =
     facts.draftRevision === null ? 'server draft local-only' : `server draft rev ${facts.draftRevision}`;
   const submittedAt = submission?.created_at

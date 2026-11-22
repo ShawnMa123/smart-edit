@@ -51,6 +51,9 @@ describe('deterministic extraction from the page', () => {
       .mockResolvedValueOnce(deterministicEnvelope());
 
     render(<App />);
+    const prose = screen.getByTestId('editor-rich').querySelector('.ProseMirror') as HTMLElement;
+    await userEvent.click(prose);
+    await userEvent.type(prose, 'Amount: USD 500,000.00');
     await userEvent.type(screen.getByLabelText('Customer template'), 'adidas-guarantee');
     await userEvent.click(screen.getByRole('button', { name: /Run spec audit/i }));
 

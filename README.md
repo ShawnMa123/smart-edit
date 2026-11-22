@@ -15,6 +15,10 @@
 |---|---|
 | 地址 | **http://59.110.213.187:8082/** （HTTP，无需 VPN；建议 Chrome/Edge，窗口宽度 ≥ 1400px） |
 | 账号 | `applicant@atlas-trade.test` / `Applicant!2026`（提交人）<br>`bankops@atlas-trade.test` / `BankOps!2026`（一审）<br>`compliance@atlas-trade.test` / `Compliance!2026`（二审）<br>`admin@atlas-trade.test` / `AtlasAdmin!2026`（管理员） |
+
+> 审批路由按**提交方**：`applicant` 提交 → `bankops` 一审 → `compliance` 二审；`bankops`/`org_admin`
+> 提交 → **对方公司（`applicant`）一审** → `compliance` 二审。`applicant` / `bankops` / `org_admin`
+> 可创建与编辑草稿（`document.create/edit`），`compliance` 只读。
 | 健康检查 | `curl http://59.110.213.187:8082/health` → `{"status":"ok","auth_mode":"pg"}` |
 | 数据 | 演示组织 `Atlas Trade Bank`（`ws_demo_01`），单一文档 `demo-document` |
 
@@ -25,6 +29,8 @@
 | **合规风险能不能拦住** | 登录 applicant → 编辑器 `Cmd/Ctrl+A` 全选 → 粘贴[制裁样例](fixtures/legal-samples/sanctions-export-zh.txt) → 等 2 秒 → 右侧 `Legal → Document check → Scan document` | `Gate: Blocked`；`Sensitive goods destined for a sanctioned country`（Critical/Blocks），带 `弹药/导弹/军用无人机/伊朗` 四个草稿锚点，点 `Jump to clause` 可回跳 |
 | **法条结论有没有证据** | 粘贴[中文保函样例](fixtures/legal-samples/statute-zh.txt) → 同样扫描 | 2 条确定性措辞 + 2 条法条结论（引《…规定》第一条/第三条，附条号/法域/生效日） |
 | **要件审计是否逐项可数** | 粘贴[标准保函](fixtures/llm/sample_document.txt) → 右侧 `Audit` → `Customer template` 填 `adidas-guarantee` → `Run spec audit` | 57 项检查：`pass 36 / finding 1 / not_applicable 19 / unable 1`，唯一阻断为"开立日期早于审计日" |
+
+> 审计的逐页演示（含 3 个变体与负向场景）见 [`Demo_audit.md`](Demo_audit.md)。
 
 其它可看：`Knowledge` 点「独立保函必须载明哪些事项才有效？」（约 10 秒，5 条引用）；
 用 `bankops` / `compliance` 登录后在 `Approval` 完成一审/二审；顶栏 `Activity` / `People` / `Developer`。
@@ -217,6 +223,8 @@ uvicorn app.api.main:app --reload
 - **角色与继承**：`org_admin` / `dept_admin` / `member` / `auditor` / `applicant` / `bank_ops` / `compliance`；角色挂在组织或部门上，生效权限 = 组织级 + 资源部门祖先链上的并集，**没有 deny**；收权即删除 assignment。最后一名有效 `org_admin` 不能被移除/停用。
   - 测试账号（Applicant / Bank Operations First Approver / Compliance Second Approver）：`.venv/bin/python scripts/seed_identity_users.py --reset`，账号与密码打印在终端并写入 `runs/dev/test-users.md`。
 - **资源范围（Option B）**：文档 `department_id=NULL` = 组织级（所有 active member 可读）；部门级文档只对祖先链上拥有 `document.read` 的人员可读；写/锁/导出分别要求 `document.edit/lock/export`。所有业务 API 以服务端存储的 scope 判定，客户端提交的 `workspace_id/department_id` 不作为授权依据。
+- **Bank Operations** 可以 `document.create` / `document.edit`：可新建草稿、编辑草稿与 `returned` 文档（会取得编辑锁）；
+  `pending_first / pending_second / approved` 期间服务端冻结快照，任何角色都不能保存——需要修改先 **Return**。提交仍由 applicant（`approval.submit`）触发。
 - **邀请 v1**：生成一次性 token（只存哈希，默认 72h），管理员复制链接线下发送；**不发邮件、不做邮箱验证/自助找回密码**；接受一次后失效，邀请人不能授予超出自身权限的角色。
 - **Developer**：API Key 高熵、只存哈希、只在创建时显示一次；`Authorization: Bearer <key>` 映射为服务主体，scopes 与创建者**当前**权限取交集（失权即失效）；请求日志只记 method/path/status/latency/key，不含 body/令牌。`developer.manage` 保护页面与接口；**Webhook 首版不提供**。
 - **Activity**：登录/登出、组织/部门、成员/角色、文档提交/锁、助手 run、API Key 变更均由服务端写事件；组织级事件对所有成员可见，部门级事件按 `activity.read` 的祖先链过滤；已读状态按用户独立保存。
@@ -507,6 +515,7 @@ Bank Ops configures the delivery once instead of clicking `Send` for every docum
 | `GET /automation/settings` | Whether the global auto-send kill switch is on |
 | `GET /documents` | Workspace documents with draft revision + latest submission status (the **Documents** tab / Open entry) |
 | `POST /documents` | Create a new document (the header **New document** action; an applicant can submit several) |
+| `GET /approvals/submissions` | **My submissions** across every workspace document (title + status + revision; survives refresh) |
 
 Run the worker by hand:
 

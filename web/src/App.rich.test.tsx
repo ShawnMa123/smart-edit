@@ -1,11 +1,9 @@
 /** Tasks 3.1/3.4 and 4.3 — the projection drives snapshots, dirty state and the audit request. */
 
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
-import { ApiError } from './api/errors';
 import { richToPlainText } from './rich/plainText';
 import { createVersionStore, memoryStorage } from './versionStore';
 
@@ -43,17 +41,16 @@ afterEach(() => {
 });
 
 describe('the empty document (4.3)', () => {
-  it('projects to nothing and is never submitted as a fabricated text', async () => {
+  it('projects to nothing and cannot start an audit with fabricated text', async () => {
     expect(richToPlainText({ type: 'doc', content: [] })).toBe('');
 
-    createRun.mockRejectedValue(new ApiError(400, 'EMPTY_SUBMISSION', 'provide at least one file'));
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: /Run spec audit/i }));
+    const run = await screen.findByTestId('audit-run');
+    expect((run as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('audit-empty').textContent).toContain('Paste or import text');
 
-    await waitFor(() => expect(createRun).toHaveBeenCalledWith(''));
-    // The server refuses an empty submission, and the panel says so instead of showing a conclusion.
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('EMPTY_SUBMISSION'));
-    expect(screen.getByRole('alert').textContent).toMatch(/no conclusion/i);
+    // Nothing was sent: the empty document never becomes a fabricated submission.
+    expect(createRun).not.toHaveBeenCalled();
   });
 });
 

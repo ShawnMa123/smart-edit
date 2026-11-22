@@ -181,6 +181,10 @@ it('routes Submit new version to the sample approval in demo mode', async () => 
     expect(screen.getByText(/No activity yet/i)).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
 
+    // Capturing an empty editor is disabled; type something (the projection is the snapshot input).
+    const prose = screen.getByTestId('editor-rich').querySelector('.ProseMirror') as HTMLElement;
+    await userEvent.click(prose);
+    await userEvent.type(prose, 'Amount: USD 1.00');
     await userEvent.click(screen.getByRole('button', { name: 'Capture version' }));
     expect(screen.getByLabelText('1 unread activity entry')).toBeTruthy();
 

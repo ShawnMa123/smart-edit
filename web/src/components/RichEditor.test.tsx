@@ -697,3 +697,34 @@ describe('approval state (document-submission-approval)', () => {
     expect((screen.getByRole('button', { name: 'Submit new version' }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+describe('explicit save', () => {
+  const renderSave = (over: Partial<Parameters<typeof RichEditor>[0]> = {}) =>
+    render(
+      <RichEditor
+        document={plainTextToDocument('DEMAND GUARANTEE')}
+        onChange={() => undefined}
+        lockHeld
+        onSave={vi.fn()}
+        {...over}
+      />,
+    );
+
+  it('saves the draft from the footer button when the lock is held', async () => {
+    const onSave = vi.fn();
+    renderSave({ onSave });
+
+    await userEvent.click(screen.getByTestId('save-draft'));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables Save without the lock or while the submission is read-only', () => {
+    renderSave({ lockHeld: false });
+    expect((screen.getByTestId('save-draft') as HTMLButtonElement).disabled).toBe(true);
+
+    renderSave({ readOnly: true, lockHeld: true });
+    const buttons = screen.getAllByTestId('save-draft') as HTMLButtonElement[];
+    expect(buttons[buttons.length - 1].disabled).toBe(true);
+  });
+});

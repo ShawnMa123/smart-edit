@@ -34,6 +34,9 @@ AUDIT_READ = "audit.read"
 APPROVAL_SUBMIT = "approval.submit"
 APPROVAL_FIRST = "approval.first"
 APPROVAL_SECOND = "approval.second"
+# The counterparty's first review: used when the bank side submits a document, the other company
+# (the applicant account in this POC) approves it first, then Compliance.
+APPROVAL_COUNTERPARTY = "approval.counterparty"
 
 PERMISSIONS: tuple[str, ...] = (
     ORG_MANAGE,
@@ -60,6 +63,7 @@ PERMISSIONS: tuple[str, ...] = (
     APPROVAL_SUBMIT,
     APPROVAL_FIRST,
     APPROVAL_SECOND,
+    APPROVAL_COUNTERPARTY,
 )
 
 # Document-level permissions a department-scoped resource can require.
@@ -114,14 +118,19 @@ ROLE_CATALOG: dict[str, dict] = {
             ASSISTANT_USE,
             ACTIVITY_READ,
             APPROVAL_SUBMIT,
+            APPROVAL_COUNTERPARTY,
         ),
     },
     ROLE_BANK_OPS: {
         "name": "Bank Operations (First Approver)",
         "scope_level": "org",
-        # Reviewers may open/lock a document, but `document.edit` stays with the applicant.
+        # Bank Operations participates in the shared document workflow: it can create drafts, edit them
+        # (and edit after a return), but submitted snapshots stay frozen (the host rejects saves while
+        # a submission is pending/approved, for every role). Submission stays with `approval.submit`.
         "permissions": (
             DOCUMENT_READ,
+            DOCUMENT_CREATE,
+            DOCUMENT_EDIT,
             DOCUMENT_LOCK,
             DOCUMENT_EXPORT,
             AUDIT_READ,
@@ -131,6 +140,7 @@ ROLE_CATALOG: dict[str, dict] = {
             AUTOMATION_CONFIGURE,
             AUTOMATION_DISPATCH,
             AUTOMATION_AUDIT,
+            APPROVAL_SUBMIT,
             APPROVAL_FIRST,
         ),
     },
@@ -222,6 +232,7 @@ __all__ = [
     "APPROVAL_FIRST",
     "APPROVAL_SECOND",
     "APPROVAL_SUBMIT",
+    "APPROVAL_COUNTERPARTY",
     "ASSISTANT_USE",
     "AUDIT_READ",
     "AUTOMATION_APPLY",

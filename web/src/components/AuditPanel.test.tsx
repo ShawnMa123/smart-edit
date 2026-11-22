@@ -67,6 +67,21 @@ describe('idle state (7.1)', () => {
 
     expect(onRun).toHaveBeenCalled();
   });
+
+  it('disables the run button while the editor is empty', () => {
+    render(
+      <AuditPanel
+        state={{ phase: 'idle' }}
+        currentDigest="digest-1"
+        onRun={vi.fn()}
+        onStopWaiting={vi.fn()}
+        textEmpty
+      />,
+    );
+
+    expect((screen.getByTestId('audit-run') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('audit-empty').textContent).toContain('Paste or import text');
+  });
 });
 
 describe('running state (7.2)', () => {

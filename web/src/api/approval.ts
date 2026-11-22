@@ -73,6 +73,9 @@ export const listSubmissions = (documentId: string, options?: ApprovalOptions) =
     options,
   );
 
+export const listMySubmissions = (options?: ApprovalOptions) =>
+  request<SubmissionSummary[]>('/approvals/submissions', 'GET', undefined, options);
+
 export const listApprovals = (stage: 'first' | 'second' | null, options?: ApprovalOptions) => {
   const query = stage ? `?stage=${stage}` : '';
   return request<ApprovalSummary[]>(`/approvals${query}`, 'GET', undefined, options);

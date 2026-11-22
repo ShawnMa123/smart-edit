@@ -19,6 +19,8 @@ export interface VersionPanelProps {
   onCompare?: (ids: [string, string]) => void;
   /** Real document metadata only; omitted fields are not rendered (design D6). */
   facts?: VersionFacts;
+  /** False when the editor is empty: capturing an empty version is not useful. */
+  canCapture?: boolean;
 }
 
 /**
@@ -35,6 +37,7 @@ export function VersionPanel({
   onClear,
   onCompare,
   facts,
+  canCapture = true,
 }: VersionPanelProps) {
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
 
@@ -67,7 +70,13 @@ export function VersionPanel({
           title="No versions yet"
           hint="Capture the current text to start the history."
           action={
-            <button type="button" className="primary" onClick={onCapture}>
+            <button
+              type="button"
+              className="primary"
+              onClick={onCapture}
+              disabled={!canCapture}
+              title={canCapture ? 'Capture the current text' : 'Add text to the editor first'}
+            >
               Capture version
             </button>
           }
@@ -111,7 +120,13 @@ export function VersionPanel({
 
       {versions.length > 0 ? (
         <div className="version-actions">
-          <button type="button" className="primary" onClick={onCapture}>
+          <button
+            type="button"
+            className="primary"
+            onClick={onCapture}
+            disabled={!canCapture}
+            title={canCapture ? 'Capture the current text' : 'Add text to the editor first'}
+          >
             Capture version
           </button>
           <button

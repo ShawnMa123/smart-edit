@@ -96,6 +96,7 @@ class DocumentService:
                     "status": submission["status"],
                     "revision": int(submission["revision"]),
                     "current_stage": (request or {}).get("current_stage"),
+                    "route": (request or {}).get("route") or "bank_first",
                     "approval_revision": int((request or {}).get("revision") or 0),
                     "latest_decision": (latest or {}).get("decision"),
                     "latest_comment": (latest or {}).get("comment"),

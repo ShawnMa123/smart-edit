@@ -5,6 +5,7 @@ import {
   APPROVAL_STEPS,
   approvalStatusMeta,
   approvalStepStates,
+  approvalSteps,
 } from './approvalStatus';
 
 describe('approvalStatusMeta', () => {
@@ -100,5 +101,16 @@ describe('approvalStatusMeta', () => {
       'upcoming',
       'upcoming',
     ]);
+  });
+
+  it('routes the first stage to the counterparty for bank-originated drafts', () => {
+    const meta = approvalStatusMeta('pending_first', 'counterparty_first');
+    expect(meta.waitingFor).toContain('counterparty');
+    expect(meta.nextActor).toContain('counterparty');
+    expect(approvalSteps('counterparty_first')[1].label).toContain('counterparty');
+
+    // Applicant-originated drafts keep the existing Bank Operations wording.
+    expect(approvalStatusMeta('pending_first').waitingFor).toBe('Bank Operations');
+    expect(approvalSteps('bank_first')[1].label).toBe('Bank Operations');
   });
 });

@@ -160,7 +160,7 @@ describe('editor lock and submit actions', () => {
       active_department_id: null,
       organizations: [{ org_id: 'org_1', workspace_id: 'ws_1', name: 'Atlas Trade Bank' }],
       roles: ['applicant'],
-      permissions: ['document.read', 'document.create', 'approval.submit'],
+      permissions: ['document.read', 'document.create', 'document.edit', 'approval.submit'],
     };
     vi.stubGlobal(
       'fetch',
@@ -200,5 +200,30 @@ describe('editor lock and submit actions', () => {
     await userEvent.selectOptions(select, 'doc-2');
 
     await waitFor(() => expect(getDocument).toHaveBeenCalledWith('doc-2'));
+  });
+
+  it('keeps a reviewer without document.edit read-only and never takes the lock', async () => {
+    const reviewer = {
+      user: { user_id: 'usr_bankops', email: 'bankops@example.com', display_name: 'Bank Ops' },
+      active_org: { org_id: 'org_1', workspace_id: 'ws_1', name: 'Atlas Trade Bank' },
+      active_department_id: null,
+      organizations: [{ org_id: 'org_1', workspace_id: 'ws_1', name: 'Atlas Trade Bank' }],
+      roles: ['bank_ops'],
+      permissions: ['document.read', 'document.lock', 'document.export', 'approval.first'],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => [] }) as unknown as Response),
+    );
+
+    render(<App authStatus="authenticated" authProfile={reviewer} autoProbe={false} />);
+    await screen.findByText('lock: unknown');
+
+    expect(acquireLock).not.toHaveBeenCalled();
+    expect(
+      (screen.getByRole('button', { name: 'Start editing' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect((screen.getByTestId('save-draft') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/your role cannot edit this document/i)).toBeTruthy();
   });
 });

@@ -173,6 +173,8 @@ Warning   Needs review   Circumvention wording detected
 
 ### 3.4 业务要件审计（Rule audit，3 分钟）
 
+> 逐页操作 + 变体 + 负向场景：见 [`Demo_audit.md`](Demo_audit.md)。
+
 **操作**
 
 1. 粘贴 §4.4 的**标准保函**（`fixtures/llm/sample_document.txt`，BG-2026-00417）。
@@ -229,6 +231,10 @@ retrieval: statute ok（hits 5）· local 参与 · limitations 说明"仅覆盖
 2. 退出 → 用 `bankops` 登录 → 顶部 **Approval** → 标签 **First approval** → 选记录 → **Approve**。
 3. 退出 → 用 `compliance` 登录 → **Approval** → **Second approval** → **Approve**。
 4. 回到 applicant：文档变为只读（`Approved`），Versions/Approval 面板能看到状态与快照。
+
+> **反过来也成立（共享编辑）**：`bankops` 新建/编辑并提交的文档，首审人是 **`applicant`（对方公司）**，
+> 二审仍是 `compliance`；文档头会显示 `Waiting for the counterparty (Applicant)`，四步进度的首审标签为
+> `Applicant (counterparty)`。提交人不能审自己的单。
 
 **台词**：>
 

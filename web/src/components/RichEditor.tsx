@@ -36,6 +36,8 @@ export interface RichEditorProps {
   /** Real lock actions; App owns the API calls. */
   onReleaseLock?: () => void | Promise<void>;
   onStartEditing?: () => void | Promise<void>;
+  /** Explicit Save of the current draft (footer button / Cmd-Ctrl+S). */
+  onSave?: () => void;
   /** Opens the honest shared-submission placeholder. */
   onSubmitVersion?: () => void;
   /** Visible lock-action failure/release notice. */
@@ -185,6 +187,7 @@ export function RichEditor(props: RichEditorProps) {
       onMarkVariable={props.onMarkVariable}
       onReleaseLock={props.onReleaseLock}
       onStartEditing={props.onStartEditing}
+      onSave={props.onSave}
       onSubmitVersion={props.onSubmitVersion}
       lockNotice={props.lockNotice ?? null}
       submissionStatus={props.submissionStatus ?? 'draft'}
@@ -212,6 +215,7 @@ function Surface({
   onMarkVariable,
   onReleaseLock,
   onStartEditing,
+  onSave,
   onSubmitVersion,
   lockNotice,
   submissionStatus,
@@ -235,6 +239,7 @@ function Surface({
   onMarkVariable?: (selection: AssistantSelection) => void;
   onReleaseLock?: () => void | Promise<void>;
   onStartEditing?: () => void | Promise<void>;
+  onSave?: () => void;
   onSubmitVersion?: () => void;
   lockNotice: string | null;
   submissionStatus?: SubmissionStatus | 'draft';
@@ -520,6 +525,17 @@ function Surface({
           >
             Start editing
           </button>
+          {onSave ? (
+            <button
+              type="button"
+              data-testid="save-draft"
+              title="Save the draft to the server (Cmd/Ctrl+S)"
+              disabled={readOnly || !lockHeld}
+              onClick={onSave}
+            >
+              Save
+            </button>
+          ) : null}
           <button
             type="button"
             className="primary"

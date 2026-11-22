@@ -12,6 +12,12 @@ from app.identity.authorization import ResourceScope
 from app.identity.errors import IdentityError
 from app.shared.ports import Principal
 
+ROUTE_BANK_FIRST = "bank_first"
+ROUTE_COUNTERPARTY_FIRST = "counterparty_first"
+# Submitters on the bank side route the first review to the counterparty; everyone else starts with
+# Bank Operations (the applicant/customer side).
+BANK_SIDE_ROLES = {perm.ROLE_BANK_OPS, perm.ROLE_ORG_ADMIN, perm.ROLE_DEPT_ADMIN}
+
 
 class ApprovalService:
     """Owns submission snapshots and the first/second approval state machine."""
@@ -102,12 +108,25 @@ class ApprovalService:
             "created_at": submission["created_at"],
             "request_id": submission.get("request_id"),
             "current_stage": (request or {}).get("current_stage"),
+            "route": (request or {}).get("route") or ROUTE_BANK_FIRST,
             "approval_revision": int((request or {}).get("revision") or 0),
             "latest_comment": (step or {}).get("comment"),
             "latest_decision": (step or {}).get("decision"),
             "latest_actor": (step or {}).get("actor_user_id"),
             "latest_decided_at": (step or {}).get("decided_at"),
         }
+
+    @staticmethod
+    def _route_for(principal: Principal) -> str:
+        return (
+            ROUTE_COUNTERPARTY_FIRST
+            if BANK_SIDE_ROLES & set(principal.roles or ())
+            else ROUTE_BANK_FIRST
+        )
+
+    @staticmethod
+    def _first_action(route: str) -> str:
+        return perm.APPROVAL_FIRST if route == ROUTE_BANK_FIRST else perm.APPROVAL_COUNTERPARTY
 
     def _detail(self, request: dict[str, Any], submission: dict[str, Any]) -> dict[str, Any]:
         steps = self.store.list_steps(request["request_id"])
@@ -157,6 +176,7 @@ class ApprovalService:
         draft = self.store.find_draft_by_document(document_id)
         if not draft:
             raise HostNotFound("draft not found")
+        route = self._route_for(principal)
         result = self.store.create_submission(
             document_id=document_id,
             draft_id=draft["draft_id"],
@@ -166,6 +186,7 @@ class ApprovalService:
             expected_revision=int(payload["expected_revision"]),
             expected_sha256=payload.get("content_sha256"),
             audit_request_id=request_id,
+            route=route,
         )
         submission = result["submission"]
         request = result["request"]
@@ -178,6 +199,7 @@ class ApprovalService:
                 "request_id": request["request_id"],
                 "revision": int(submission["revision"]),
                 "status": "pending_first",
+                "route": route,
             },
         )
         return {"submission": self._summary(submission, request), "request": request}
@@ -204,6 +226,26 @@ class ApprovalService:
             for row in visible
         ]
 
+    def my_submissions(self, principal: Principal) -> list[dict[str, Any]]:
+        """Every submission by this user across the workspace's documents (not just the open one)."""
+        authorizer = self._require_authorizer()
+        rows = self.store.list_submissions_for_user(
+            principal.workspace_id or "", principal.user_id
+        )
+        visible: list[dict[str, Any]] = []
+        for row in rows:
+            document = self.store.get_document(row["document_id"])
+            if not document:
+                continue
+            try:
+                authorizer.authorize(principal, perm.DOCUMENT_READ, document)
+            except IdentityError:
+                continue
+            summary = self._summary(row, self.store.get_request(row.get("request_id") or ""))
+            summary["title"] = row.get("title") or document.get("title")
+            visible.append(summary)
+        return visible
+
     def inbox(self, principal: Principal, stage: str | None = None) -> list[dict[str, Any]]:
         authorizer = self._require_authorizer()
         organization = authorizer.organization(principal.workspace_id)
@@ -211,19 +253,19 @@ class ApprovalService:
             raise HostError(403, "FORBIDDEN", "you do not have permission for approvals")
         if stage not in (None, "first", "second"):
             raise HostError(422, "invalid_stage", "stage must be first or second")
+        can_bank_first = self._has_permission(principal, perm.APPROVAL_FIRST)
+        can_counterparty = self._has_permission(principal, perm.APPROVAL_COUNTERPARTY)
+        can_second = self._has_permission(principal, perm.APPROVAL_SECOND)
         if stage == "first":
-            if not self._has_permission(principal, perm.APPROVAL_FIRST):
+            if not (can_bank_first or can_counterparty):
                 raise HostError(403, "FORBIDDEN", "you do not have permission for first approval")
             statuses = ("pending_first",)
         elif stage == "second":
-            if not self._has_permission(principal, perm.APPROVAL_SECOND):
+            if not can_second:
                 raise HostError(403, "FORBIDDEN", "you do not have permission for second approval")
             statuses = ("pending_second",)
         else:
-            if not (
-                self._has_permission(principal, perm.APPROVAL_FIRST)
-                or self._has_permission(principal, perm.APPROVAL_SECOND)
-            ):
+            if not (can_bank_first or can_counterparty or can_second):
                 raise HostError(403, "FORBIDDEN", "you do not have permission for approvals")
             statuses = ("pending_first", "pending_second")
         rows = self.store.list_pending_approvals(principal.workspace_id or "", statuses)
@@ -232,7 +274,16 @@ class ApprovalService:
             document = self.store.get_document(row["document_id"])
             if not document:
                 continue
-            action = perm.APPROVAL_FIRST if row["status"] == "pending_first" else perm.APPROVAL_SECOND
+            if row["status"] == "pending_second":
+                action = perm.APPROVAL_SECOND
+            else:
+                route = row.get("route") or ROUTE_BANK_FIRST
+                action = self._first_action(route)
+                allowed_by_route = (
+                    can_bank_first if route == ROUTE_BANK_FIRST else can_counterparty
+                )
+                if not allowed_by_route:
+                    continue
             if not self._can(principal, action, document):
                 continue
             submission = self.store.get_submission(row["submission_id"]) or {}
@@ -255,23 +306,26 @@ class ApprovalService:
         document = self.store.get_document(request["document_id"])
         if not document or not submission:
             raise HostNotFound("approval request not found")
-        allowed = request["submitted_by"] == principal.user_id or self._can(
-            principal, perm.APPROVAL_FIRST, document
-        ) or self._can(principal, perm.APPROVAL_SECOND, document)
+        route = request.get("route") or ROUTE_BANK_FIRST
+        first_action = self._first_action(route)
+        allowed = (
+            request["submitted_by"] == principal.user_id
+            or self._can(principal, first_action, document)
+            or self._can(principal, perm.APPROVAL_SECOND, document)
+        )
         if not allowed:
             raise HostError(403, "FORBIDDEN", "you do not have permission for this approval")
         detail = self._detail(request, submission)
         detail["title"] = document.get("title")
+        stage_action = (
+            first_action
+            if request["current_stage"] == "first"
+            else perm.APPROVAL_SECOND
+        )
         detail["can_decide"] = (
             request["status"] == f"pending_{request['current_stage']}"
             and request["submitted_by"] != principal.user_id
-            and self._can(
-                principal,
-                perm.APPROVAL_FIRST
-                if request["current_stage"] == "first"
-                else perm.APPROVAL_SECOND,
-                document,
-            )
+            and self._can(principal, stage_action, document)
         )
         return detail
 
@@ -290,10 +344,30 @@ class ApprovalService:
         if not document or not submission:
             raise HostNotFound("approval request not found")
         stage = request["current_stage"]
-        action = perm.APPROVAL_FIRST if stage == "first" else perm.APPROVAL_SECOND
-        other = perm.APPROVAL_SECOND if stage == "first" else perm.APPROVAL_FIRST
+        route = request.get("route") or ROUTE_BANK_FIRST
+        first_action = self._first_action(route)
+        if stage == "first":
+            action = first_action
+            other = (
+                perm.APPROVAL_COUNTERPARTY
+                if route == ROUTE_BANK_FIRST
+                else perm.APPROVAL_FIRST
+            )
+        else:
+            action = perm.APPROVAL_SECOND
+            other = None
         if not self._can(principal, action, document):
-            if self._can(principal, other, document):
+            if other and self._can(principal, other, document):
+                raise HostError(
+                    409,
+                    "wrong_approver",
+                    "this approval belongs to the other party",
+                    {"stage": stage, "route": route},
+                )
+            if stage == "second" and (
+                self._can(principal, perm.APPROVAL_FIRST, document)
+                or self._can(principal, perm.APPROVAL_COUNTERPARTY, document)
+            ):
                 raise HostError(
                     409,
                     "wrong_stage",

@@ -367,6 +367,9 @@ DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**�
 
 - 文档头显示真实状态徽标（`Pending first approval` / `Pending second approval` / `Approved` / `Returned` / `Rejected`），不再固定显示 `Draft`；`Draft` 只在尚未提交时出现。
 - 文档上方出现 **Waiting banner + 四步进度**（Submitted → Bank Operations → Compliance → Approved），显示当前等待角色、提交时间、revision、最近意见与只读原因；退回时显示退回意见并提示重新提交。
+- **审批路由按提交方**：`applicant` 提交 → `bankops` 一审 → `compliance` 二审；`bankops` / `org_admin` 提交 →
+  **`applicant`（对方公司）一审** → `compliance` 二审。首审标签会显示 `Applicant (counterparty)`，
+  文头提示 `Waiting for the counterparty (Applicant)`。自审仍被禁止（提交人不能审自己的单）。
 - 顶部 **Approval** 入口显示当前角色的服务端待办数（0 时隐藏，>99 显示 `99+`）；**Activity** badge 使用 `/activity/unread-count`，不再拿浏览器本地通知冒充服务器待办。
 - 提交成功、审批决策、复制邀请使用 success / info / warning / error **Toast**；失败保留当前表单或详情并显示 error。只读、退回意见和冲突仍使用内联 banner。
 - 申请人在 pending 状态每 **10s** 自动刷新：页面隐藏时暂停，`Approved / Returned / Rejected` 后停止；审批人通过后无需手动刷新即可看到下一阶段。

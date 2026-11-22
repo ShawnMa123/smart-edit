@@ -6,7 +6,10 @@
  * carries a label, an icon and an accessible description.
  */
 
-import type { SubmissionStatus } from '../api/approvalTypes';
+import type { ApprovalRoute, SubmissionStatus } from '../api/approvalTypes';
+
+export const COUNTERPARTY_WAITING = 'the counterparty (Applicant)';
+export const COUNTERPARTY_ACTOR = 'Applicant (counterparty) · First Approver';
 
 export type ApprovalStatusTone = 'neutral' | 'processing' | 'success' | 'warning' | 'error';
 
@@ -122,12 +125,26 @@ const hasStatus = (value: string): value is SubmissionStatus =>
   Object.prototype.hasOwnProperty.call(APPROVAL_STATUS, value);
 
 /** Resolve any status string; unknown values stay visibly unknown instead of becoming Draft. */
-export function approvalStatusMeta(status?: string | null): ApprovalStatusMeta {
-  if (status && hasStatus(status)) return APPROVAL_STATUS[status];
-  return {
-    ...UNKNOWN_STATUS,
-    description: `Unknown approval status: ${status ?? 'none'}.`,
-  };
+export function approvalStatusMeta(
+  status?: string | null,
+  route?: ApprovalRoute | null,
+): ApprovalStatusMeta {
+  const base = status && hasStatus(status)
+    ? APPROVAL_STATUS[status]
+    : {
+        ...UNKNOWN_STATUS,
+        description: `Unknown approval status: ${status ?? 'none'}.`,
+      };
+  if (route === 'counterparty_first' && base.key === 'pending_first') {
+    // Bank-originated drafts are reviewed by the other company first, then Compliance.
+    return {
+      ...base,
+      waitingFor: COUNTERPARTY_WAITING,
+      nextActor: COUNTERPARTY_ACTOR,
+      description: 'Waiting for the counterparty to approve.',
+    };
+  }
+  return base;
 }
 
 export interface ApprovalStepDefinition {
@@ -135,7 +152,15 @@ export interface ApprovalStepDefinition {
   label: string;
 }
 
-/** The four-step path rendered by the pending banner. */
+/** The four-step path rendered by the pending banner (first reviewer depends on the route). */
+export function approvalSteps(route?: ApprovalRoute | null): ApprovalStepDefinition[] {
+  return APPROVAL_STEPS.map((step) =>
+    step.key === 'first' && route === 'counterparty_first'
+      ? { ...step, label: 'Applicant (counterparty)' }
+      : step,
+  );
+}
+
 export const APPROVAL_STEPS: ApprovalStepDefinition[] = [
   { key: 'submitted', label: 'Submitted' },
   { key: 'first', label: 'Bank Operations' },

@@ -32,6 +32,8 @@ export interface AuditPanelProps {
   onTemplateChange?: (templateId: string) => void;
   /** Injected clock so the elapsed timer is testable. */
   now?: number;
+  /** True when the editor has no text; the audit cannot start (EMPTY_SUBMISSION server-side). */
+  textEmpty?: boolean;
 }
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
@@ -267,6 +269,7 @@ export function AuditPanel({
   templateId = '',
   onTemplateChange,
   now,
+  textEmpty = false,
 }: AuditPanelProps) {
   if (state.phase === 'idle') {
     return (
@@ -276,11 +279,22 @@ export function AuditPanel({
           title="Run a spec audit"
           hint="A frozen snapshot of the current text is normalized first; the panel then reports the checks that actually ran and names the ones that did not."
           action={
-            <button type="button" className="primary" onClick={onRun} data-testid="audit-run">
+            <button
+              type="button"
+              className="primary"
+              onClick={onRun}
+              data-testid="audit-run"
+              disabled={textEmpty}
+            >
               Run spec audit
             </button>
           }
         />
+        {textEmpty ? (
+          <p className="notice notice--warn tiny" data-testid="audit-empty">
+            Paste or import text into the editor first — the audit needs a non-empty snapshot.
+          </p>
+        ) : null}
         <label className="tiny muted" htmlFor="template-id">
           Customer template (optional — narrows which published pack applies)
         </label>
@@ -373,7 +387,7 @@ export function AuditPanel({
         <span className="tiny muted">{view.resultLabel}</span>
       </div>
 
-      <button type="button" onClick={onRun}>
+      <button type="button" onClick={onRun} disabled={textEmpty}>
         Re-audit current snapshot
       </button>
 

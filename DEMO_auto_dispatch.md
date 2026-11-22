@@ -116,7 +116,8 @@ SMART_EDIT_HOST_DB=runs/host.db .venv/bin/python -m app.automation.worker --once
 
 1. 编辑器底部点 **Start editing**（拿到编辑锁）。
 2. `Cmd/Ctrl+A` 全选，粘贴 **附录 A** 的样例文本。
-3. 等 2 秒，底部出现 **Saved to server**。
+3. 等 2 秒自动保存，或随时点编辑器底部 **Save**（快捷键 `Cmd/Ctrl+S`）立即保存；
+   状态行显示 **Saved to server** 后再提交。
 4. 点 **Release lock**（把锁交出去，避免干扰后续配置）。
 
 ### 2.1b 多文档：新建 / 打开（提交后继续工作）
@@ -133,6 +134,9 @@ SMART_EDIT_HOST_DB=runs/host.db .venv/bin/python -m app.automation.worker --once
 
 > 因此「一份文档提交后不能编辑」不再阻塞你：直接 **New document** 继续下一份；
 > 想看上一份就 Approval → Documents → Open（只读），或在该行的提交上点 View submitted version 看快照。
+
+> **我的提交（My submissions）现在是跨文档的工作区列表**：显示每份提交所属的文档标题、状态与 revision，
+> 刷新页面或切换当前文档后仍然能看到之前提交的所有文档（每行都有 **Open document**）。
 
 ### 2.2 保存模板并确认变量（bankops）
 
@@ -445,9 +449,16 @@ ssh -i ~/.ssh/team04_ecs root@59.110.213.187 \
 | 交付徽标为 `Partial` | 还有 required 下游在排队；等 worker 跑完再看 |
 | 文档无法再次编辑 | `Approved` 是终态；用文档头 **New document** 建一份新草稿继续（或按 §4.1 重置） |
 | 提交后想换一份继续做 | 文档头 **New document**；新文档记得让 bankops 重新 **Bind** 模板才会自动投递 |
-| Approval → Documents 里点 Open 没内容 | 现在 Open 会真正加载那份文档；若为空，先确认该文档在编辑器里是否有正文（`Saved to server`） |
+| bankops 无法编辑文档 | `bank_ops` 已有 `document.create` / `document.edit`：可新建/编辑草稿与 `returned`；`pending_*` / `approved` 仍冻结（任何角色都不能保存），需先 **Return** |
+| bankops 编辑后如何提交 | `bank_ops` 仍没有 `approval.submit`：编辑完成后由 applicant 提交；也可以先 Return → applicant 修改并重新提交 |
+| 点 Run spec audit 没反应 | 旧版本在纯 http 下没有 `crypto.subtle`，快照摘要抛错且请求未发出；本版已内置本地 SHA-256 回退，并会把快照失败显示成错误。硬刷新后再试 |
+| 审计的不是我刚导入的 Andy 发票 | 导入文件只在 Import report 里预览；点 **Use this text** → 编辑器底部 **Save**（`Cmd/Ctrl+S`）落库后，再切到目标文档运行审计 |
+| 提交的快照不是刚粘贴的内容 | 粘贴后先等 **Saved to server**，或点底部 **Save**（`Cmd/Ctrl+S`）再提交 |
+| 点 Save 提示 “Nothing to save” | 当前没有未保存修改；状态行已是 `Saved to server` |
+| 点 Save 提示 “needs a server draft and the edit lock” | 先 **Start editing** 拿到锁（审批中/已批准时不能保存） |
 | 点左侧 **Document** 没反应 | 旧前端只切了弹窗后面的面板；本版本会同时关闭模块弹窗并切回编辑器，重新部署 `web/dist` 后再试 |
 | Approval 里看不到“提交的版本” | 看面板最上方 `Current document` 卡片；没有 **View submitted version** 说明这条文档还没有 submission（页脚应是 `Draft`） |
+| Approval → Documents 里点 Open 没内容 | Open 会真正加载那份文档；若为空，确认该文档正文已保存（`Saved to server`） |
 
 ---
 

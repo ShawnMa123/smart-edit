@@ -6,7 +6,7 @@
  */
 
 import type { SubmissionSummary } from '../api/approvalTypes';
-import { APPROVAL_STEPS, approvalStatusMeta, approvalStepStates } from '../domain/approvalStatus';
+import { approvalStatusMeta, approvalStepStates, approvalSteps } from '../domain/approvalStatus';
 import { StatusBadge } from './StatusBadge';
 
 export interface ApprovalStatusBannerProps {
@@ -20,7 +20,7 @@ export function ApprovalStatusBanner({
   submission,
   onViewApproval,
 }: ApprovalStatusBannerProps) {
-  const meta = approvalStatusMeta(status ?? submission?.status ?? 'draft');
+  const meta = approvalStatusMeta(status ?? submission?.status ?? 'draft', submission?.route);
   if (meta.key === 'draft') return null;
 
   const states = approvalStepStates(meta);
@@ -52,7 +52,7 @@ export function ApprovalStatusBanner({
       </div>
 
       <ol className="approval-stepper" aria-label="Approval progress">
-        {APPROVAL_STEPS.map((step, index) => {
+        {approvalSteps(submission?.route).map((step, index) => {
           const state = states[index];
           return (
             <li

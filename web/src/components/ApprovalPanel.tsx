@@ -6,7 +6,7 @@ import {
   decideApproval,
   getApproval,
   listApprovals,
-  listSubmissions,
+  listMySubmissions,
 } from '../api/approval';
 import { getDocument as readDocument, listDocuments, type DocumentSummary, type DraftView } from '../api/documents';
 import type {
@@ -44,9 +44,13 @@ export function ApprovalPanel({
 }: ApprovalPanelProps) {
   const toast = useToast();
   const canFirst = permissions.includes('approval.first');
+  const canCounterparty = permissions.includes('approval.counterparty');
+  const canFirstTab = canFirst || canCounterparty;
   const canSecond = permissions.includes('approval.second');
   const canSubmit = permissions.includes('approval.submit');
-  const [view, setView] = useState<View>(canFirst ? 'first' : canSecond ? 'second' : 'mine');
+  const [view, setView] = useState<View>(
+    canFirstTab ? 'first' : canSecond ? 'second' : 'mine',
+  );
   const [items, setItems] = useState<Array<ApprovalSummary | SubmissionSummary>>([]);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selected, setSelected] = useState<ApprovalDetail | null>(null);
@@ -66,7 +70,7 @@ export function ApprovalPanel({
           setDocuments(await listDocuments({ fetchImpl }));
           setItems([]);
         } else if (nextView === 'mine') {
-          setItems(await listSubmissions(documentId, { fetchImpl }));
+          setItems(await listMySubmissions({ fetchImpl }));
         } else {
           setItems(await listApprovals(nextView, { fetchImpl }));
         }
@@ -146,14 +150,14 @@ export function ApprovalPanel({
   const tabs = useMemo(
     () =>
       [
-        canFirst ? { id: 'first' as const, label: 'First approval' } : null,
+        canFirstTab ? { id: 'first' as const, label: 'First approval' } : null,
         canSecond ? { id: 'second' as const, label: 'Second approval' } : null,
         canSubmit ? { id: 'mine' as const, label: 'My submissions' } : null,
         onOpenDocument || onNewDocument
           ? { id: 'documents' as const, label: 'Documents' }
           : null,
       ].filter(Boolean) as Array<{ id: View; label: string }>,
-    [canFirst, canSecond, canSubmit, onOpenDocument, onNewDocument],
+    [canFirstTab, canSecond, canSubmit, onOpenDocument, onNewDocument],
   );
 
   if (!tabs.length) {
@@ -292,7 +296,7 @@ export function ApprovalPanel({
           {view === 'mine' ? (
             <ul className="submission-cards">
               {items.map((item) => {
-                const meta = approvalStatusMeta(item.status);
+                const meta = approvalStatusMeta(item.status, item.route);
                 return (
                   <li key={item.submission_id}>
                     <button
@@ -306,6 +310,12 @@ export function ApprovalPanel({
                       <span className="submission-card-head">
                         <StatusBadge status={item.status} />
                         <strong>Revision {item.revision}</strong>
+                        {item.route === 'counterparty_first' ? (
+                          <span className="tag tag--warn">counterparty first</span>
+                        ) : null}
+                      </span>
+                      <span className="tiny" data-testid={`submission-doc-${item.submission_id}`}>
+                        <strong>{item.title ?? item.document_id}</strong>
                       </span>
                       <span className="tiny">
                         Submitted {new Date(item.created_at).toLocaleString()}
@@ -340,6 +350,13 @@ export function ApprovalPanel({
                     {'title' in item && item.title ? item.title : item.submission_id}
                   </button>
                   <StatusBadge status={item.status} />
+                  {item.status === 'pending_first' ? (
+                    <span className="tag tag--muted">
+                      {item.route === 'counterparty_first'
+                        ? 'counterparty → compliance'
+                        : 'bank ops → compliance'}
+                    </span>
+                  ) : null}
                   <span className="tiny">
                     {' '}rev {item.revision} · {new Date(item.created_at).toLocaleString()}
                   </span>

@@ -256,4 +256,25 @@ describe('autosave', () => {
     expect(saveDraft).toHaveBeenCalledTimes(1);
     expect(vi.mocked(saveDraft).mock.calls[0][3]).toMatchObject({ text: 'Restored text' });
   });
+
+  it('saves immediately on Cmd/Ctrl+S instead of waiting for the autosave debounce', async () => {
+    vi.mocked(getDocument).mockResolvedValue(view());
+    vi.mocked(acquireLock).mockResolvedValue(lock);
+    vi.mocked(saveDraft).mockResolvedValue(view({ revision: 2, etag: 'draft-2' }));
+
+    render(<App />);
+    await waitFor(() => expect(acquireLock).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }));
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(vi.mocked(saveDraft)).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(saveDraft).mock.calls[0][3]).toMatchObject({ text: 'Changed' });
+  });
 });

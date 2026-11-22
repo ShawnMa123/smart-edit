@@ -31,6 +31,13 @@ def list_approvals(
     return _approvals(request).inbox(_principal(request), stage=stage)
 
 
+@router.get("/submissions")
+def list_my_submissions(request: Request, response: Response) -> list[dict]:
+    """The caller's submissions across all workspace documents ("My submissions" view)."""
+    response.headers["Cache-Control"] = "no-store"
+    return _approvals(request).my_submissions(_principal(request))
+
+
 @router.get("/{request_id}")
 def get_approval(request_id: str, request: Request, response: Response) -> dict:
     response.headers["Cache-Control"] = "no-store"

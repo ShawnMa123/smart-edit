@@ -58,6 +58,10 @@ def test_schema_tables_and_version(tmp_path):
     assert {"automation_rules", "automation_jobs", "automation_job_events"} <= tables
     job_columns = {row["name"] for row in store.all("PRAGMA table_info(automation_jobs)")}
     assert "required" in job_columns
+    request_columns = {
+        row["name"] for row in store.all("PRAGMA table_info(approval_requests)")
+    }
+    assert "route" in request_columns
 
     newer = sqlite3.connect(tmp_path / "host.db")
     newer.execute("UPDATE schema_meta SET value = '99' WHERE key = 'schema_version'")
