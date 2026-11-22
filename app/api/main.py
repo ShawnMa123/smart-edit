@@ -24,6 +24,7 @@ from app.api.activity import router as activity_router
 from app.api.approvals import router as approvals_router
 from app.api.auth import router as auth_router
 from app.api.automation import router as automation_router
+from app.api.conformance import router as conformance_router
 from app.api.developer import router as developer_router
 from app.api.documents import router as documents_router
 from app.api.legal import router as legal_router
@@ -115,6 +116,35 @@ def _build_legal_service(host, assistant_services, *, store) -> object:
     )
 
 
+def _build_conformance_service(host, assistant_services, *, store) -> object:
+    """Wire the conformance audit to the document host and the approved Doubao composer.
+
+    Same composer contract as the legal scan: no `compose_json` (fixture composer) or no approved
+    processor means `available` is False, and the report says `unable_to_assess` instead of passing.
+    """
+    from app.conformance.compose import ConformanceComposer
+    from app.conformance.service import ConformanceService, Settings
+    from app.conformance.store import ConformanceStore
+
+    settings = Settings.from_env()
+    gateway = getattr(assistant_services, "gateway", None)
+    assistant_settings = getattr(assistant_services, "settings", None)
+    composer = ConformanceComposer(
+        gateway,
+        approved=bool(getattr(assistant_settings, "approved_processor", False)),
+        timeout=settings.timeout,
+    )
+    db_path = os.environ.get("SMART_EDIT_CONFORMANCE_DB") or str(
+        Path(getattr(store, "runs_dir", "runs")) / "conformance.db"
+    )
+    return ConformanceService(
+        documents=getattr(host, "documents", None),
+        composer=composer,
+        store=ConformanceStore(db_path),
+        settings=settings,
+    )
+
+
 def _read_plan_refusal(plan: dict) -> ApiFailure:
     """Translate `plan_standalone()`'s vocabulary into the client contract (D5)."""
     if plan.get("error") == "unknown_stage":
@@ -199,6 +229,9 @@ def create_app(
         assistant_services, deadline_seconds=assistant_deadline_seconds
     )
     app.state.legal = _build_legal_service(host, assistant_services, store=app.state.store)
+    app.state.conformance = _build_conformance_service(
+        host, assistant_services, store=app.state.store
+    )
     app.state.automation_registry = _build_automation_registry(host, assistant_services)
     from app.automation.rules import AutomationRuleService
 
@@ -220,6 +253,7 @@ def create_app(
     app.include_router(documents_router)
     app.include_router(automation_router)
     app.include_router(legal_router)
+    app.include_router(conformance_router)
 
     @app.get("/health")
     def health() -> dict:

@@ -9,6 +9,7 @@ import type { RichDocument } from '../rich/richDocument';
 import type { ActivityKind } from '../workspace/activityStore';
 import { AuditPanel, type AuditPanelProps } from './AuditPanel';
 import { AutomationPanel } from './AutomationPanel';
+import { ConformancePanel, type ConformancePanelProps } from './ConformancePanel';
 import { KnowledgePanel } from './KnowledgePanel';
 import { LegalPanel, type LegalPanelProps } from './LegalPanel';
 
@@ -99,6 +100,8 @@ export interface AssistantPanelProps extends AuditPanelProps {
   knowledge: KnowledgePanelBinding;
   automation: AutomationPanelBinding;
   legal: LegalPanelProps;
+  /** Template audit (config + Doubao). The deterministic audit stays below it as evidence. */
+  conformance?: ConformancePanelProps;
   /** `false` when the signed-in role has no `automation.view` (Bank Operations / org admin only). */
   canUseAutomation?: boolean;
 }
@@ -111,6 +114,7 @@ export function AssistantPanel({
   knowledge,
   automation,
   legal,
+  conformance,
   canUseAutomation = true,
   ...auditProps
 }: AssistantPanelProps) {
@@ -122,7 +126,9 @@ export function AssistantPanel({
   const markBusy = (id: string) => (value: boolean) =>
     setBusyTabs((prev) => (prev[id] === value ? prev : { ...prev, [id]: value }));
   const isBusy = (id: string): boolean =>
-    id === 'audit' ? auditProps.state.phase === 'running' : Boolean(busyTabs[id]);
+    id === 'audit'
+      ? auditProps.state.phase === 'running' || Boolean(busyTabs[id])
+      : Boolean(busyTabs[id]);
 
   return (
     <aside className="pane" aria-label="AI assistant">
@@ -157,7 +163,17 @@ export function AssistantPanel({
 
       <div className="assistant-body">
         {active.id === 'audit' ? (
-          <AuditPanel {...auditProps} />
+          conformance ? (
+            <div>
+              <ConformancePanel {...conformance} onBusyChange={markBusy('audit')} />
+              <details className="audit-scope" data-testid="deterministic-audit">
+                <summary className="tiny muted">Deterministic rule audit (no model)</summary>
+                <AuditPanel {...auditProps} />
+              </details>
+            </div>
+          ) : (
+            <AuditPanel {...auditProps} />
+          )
         ) : active.id === 'knowledge' ? (
           <KnowledgePanel {...knowledge} onBusyChange={markBusy('knowledge')} />
         ) : active.id === 'automation' ? (

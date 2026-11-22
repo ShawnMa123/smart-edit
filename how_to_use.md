@@ -234,6 +234,55 @@ curl -s -X POST \
 「Template could not be resolved」。这不影响确定性提取与公司规则包，来源块仍会显示 `deterministic`。
 需要完整模板/条款演示时，用 §5.5 的 API 调用，或在 profile 中补充 `beneficiary_name` locator。
 
+## 5.6 模板一致性审计（Audit tab 首屏，豆包）
+
+`Audit` tab 现在默认是**模板一致性审计**，旧的确定性规则审计收在下方
+`Deterministic rule audit (no model)` 里（它仍是“不依赖模型”的证据层）。
+
+1. 右栏 **Audit** → **Calibration config** 选 `Demand guarantee — standard desk check`
+   （来自 `app/configs/conformance/*.yaml`，`guarantee-strict` 是更严的对照档）。
+2. 点 **Run template audit**。它读取**服务端已保存的草稿**（`revision` + `content_sha256` 钉住），
+   分两层：字段缺失来自确定性抽取（`extraction_profile: guarantee-default`），
+   语义一致性来自豆包按 config 的 `requirements` 逐条判断。
+3. 结果自上而下：结论/覆盖率 → **Required fields not found** → **Does not match the config**
+   （每条带原文引用与 `Show in document` 定位）→ 已符合 / 未能评估 / Limitations →
+   **Redaction steps** → provenance（模型、prompt 版本、config sha、耗时、字符数）。
+   - `Copy report` / `Download .md` / `Print / PDF` 导出同一份诚实结论（含限制、脱敏步骤、模型信息）；
+   - 同一文档 + 同一 config 再审时，会显示与**上次审计**的差值（findings / 缺失字段 / 覆盖率）；
+   - `Config details` 是**只读**检查器：展开可看每条 requirement 的口径、必需字段和生成上限；
+     配置的发布仍是文件改动（`app/configs/conformance/*.yaml`），因此 version + sha 可审计。
+4. **长文档**：超过 `max_document_chars` 的文档按 `chunk_chars` 分段，**每段一次模型调用**再合并：
+   任一段 `finding` 胜过其它段的 `pass`；所有段都看不到才 `unable_to_assess`；
+   超出总预算的部分不送审，报告写 `document_truncated`；分多段时写 `document_chunked`，
+   并逐段记录失败（`chunk_N_failed`）。
+5. 有未保存修改时，顶部会提示“审计读的是已保存的 revision N”，并提供 **Save now**。
+   草稿在审计后又被保存过，报告会立刻标 **Report is stale**，不会拿旧报告当结论。
+
+**模型不可用**（未配置 `SMART_EDIT_ASSISTANT_*` 或未批准）时，每条 requirement 都是
+`unable_to_assess` + `composer_unavailable`，结论是 `Unable to assess`，**不会**显示成通过。
+`/runs` 的 `extract` 在没有 provider 时仍然如实失败（`no model provider configured`）。
+
+**脱敏（简化版，默认开启）**：调用豆包前，按固定模式把账号/卡号、IBAN/BIC、邮箱、电话、证件号
+替换成 `[redacted]`；报告只展示“类型 + 次数 + 打码样例”（如 `o•••@example.com`），
+不展示原值。姓名、金额、地址仍会出境——出站策略（`SMART_EDIT_ASSISTANT_EGRESS_POLICY`）
+与 approved-processor 闸门仍是权威控制。关闭：`SMART_EDIT_CONFORMANCE_REDACT=off`（报告会写明）。
+
+**相关配置**：
+
+| 变量 | 默认 | 作用 |
+|---|---|---|
+| `SMART_EDIT_CONFORMANCE_DIR` | `app/configs/conformance` | 校准 config 目录（只加载 `published: true`） |
+| `SMART_EDIT_CONFORMANCE_REDACT` | `basic` | `basic` / `off` |
+| `SMART_EDIT_CONFORMANCE_TIMEOUT` | `60` | 单次模型调用超时（秒） |
+| `SMART_EDIT_CONFORMANCE_RATIO` | `0.6` | 覆盖率提醒阈值 |
+| `SMART_EDIT_CONFORMANCE_DB` | `runs/conformance.db` | run / report 持久化 |
+
+**新增接口**：`GET /conformance/configs`、`GET /conformance/configs/{id}`（只读详情）、
+`POST /conformance/reviews`（202 + run）、`GET /conformance/runs/{id}`、`GET /conformance/reports/{id}`。
+
+> `scripts/dev.sh` 默认**不再**注入 `SMART_EDIT_LLM=fixture:...`（那会让任何文本都回放
+> Alpha Tech / BG-2026-00417 的样例保函）。需要回放演示时显式加 `--fixture`。
+
 ## 6. 从文件导入（PDF / Word / 图片）
 
 客户不用再手打：点页面右上角 **Import file**，选一个 PDF、Word（`.docx`）或图片（`.png/.jpg`），

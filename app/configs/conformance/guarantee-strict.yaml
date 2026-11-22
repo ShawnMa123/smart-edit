@@ -1,0 +1,62 @@
+# Stricter variant used in demos to show that swapping the config changes the verdict.
+config_id: guarantee-strict
+version: 1.0.0
+published: true
+name: Demand guarantee — strict compliance check
+document_types: [guarantee]
+language: auto
+description: >-
+  Same document, stricter desk policy: an explicit governing-law clause, a stated presentation
+  period and a sanctions declaration are required on top of the standard checks.
+extraction_profile: guarantee-default
+
+fields:
+  required:
+    - guarantee_number
+    - applicant_name
+    - beneficiary_name
+    - guarantee_amount
+    - currency
+    - issue_date
+    - expiry_date
+    - governing_rules
+
+requirements:
+  - id: rules.urdg_758
+    title: Governing rules are URDG 758
+    level: must
+    check: The text must name URDG 758 explicitly.
+    suggestion: Add "This guarantee is subject to URDG 758".
+  - id: clauses.governing_law
+    title: Governing law clause is stated
+    level: must
+    check: >-
+      The document must name the governing law (for example "governed by the laws of England and
+      Wales"). A missing governing-law clause does not conform.
+    evidence_hint: Governing law / jurisdiction clause
+    suggestion: Add a governing-law clause naming the jurisdiction.
+  - id: clauses.presentation_period
+    title: Presentation period is stated
+    level: must
+    check: >-
+      A demand must be presented within a stated period (for example "within 30 days of
+      presentation" or an explicit expiry date). No period means no enforceable deadline.
+    suggestion: State the presentation period explicitly.
+  - id: clauses.sanctions
+    title: Sanctions and anti-money-laundering declaration present
+    level: should
+    check: >-
+      The document should contain a declaration that the transaction and the parties are not subject
+      to sanctions and that the funds are from lawful sources.
+    suggestion: Add the standard sanctions / lawful-source declaration.
+  - id: parties.legal_names
+    title: Applicant and beneficiary are complete legal names
+    level: must
+    check: Both parties must be written with their full registered name and company suffix.
+    suggestion: Use the full name from the registration certificate.
+
+generation:
+  max_findings: 12
+  max_quote_chars: 300
+  summary_max_chars: 600
+  max_document_chars: 24000

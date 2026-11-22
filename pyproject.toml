@@ -30,7 +30,14 @@ dev = ["pytest>=7", "httpx"]  # httpx: fastapi.testclient
 include = ["app*"]
 
 [tool.setuptools.package-data]
-app = ["configs/*.yaml", "configs/*.json"]
+app = [
+  "configs/*.yaml",
+  "configs/*.json",
+  # Deterministic extraction profiles and template-conformance calibration configs are data files
+  # the audit reads at runtime; a wheel without them would silently lose the honest extraction path.
+  "configs/extraction/*.json",
+  "configs/conformance/*.yaml",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

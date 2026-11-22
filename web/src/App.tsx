@@ -932,6 +932,19 @@ function AppContent() {
           contentSha: draft?.content_sha256 ?? null,
           onJumpToBlock: handleJumpToBlock,
         }}
+        conformance={{
+          documentId: activeDocumentId,
+          workspaceId,
+          draftId: draft?.draft_id ?? null,
+          revision: draft?.revision ?? null,
+          contentSha: draft?.content_sha256 ?? null,
+          dirty,
+          saveState,
+          onSave: () => void handleSaveNow(),
+          onJumpToBlock: handleJumpToBlock,
+          documentTitle: draft?.title ?? null,
+          demoMode,
+        }}
       />
     ),
   };

@@ -5,7 +5,8 @@
 #   ./scripts/dev.sh --pg                # PG identity (auth_mode=pg), checks/starts the team04 tunnel
 #   ./scripts/dev.sh --pg --detach       # run in background, print URLs and the stop command
 #   ./scripts/dev.sh --pg --detach --open
-#   ./scripts/dev.sh --honest            # no model provider (the "checks did not run" path)
+#   ./scripts/dev.sh --honest            # same as the default: no model provider
+#   ./scripts/dev.sh --fixture           # OPT-IN replay: every document returns the sample guarantee
 #   PORT=8010 WEB_PORT=5174 ./scripts/dev.sh
 #   ./scripts/dev.sh --status            # show ports/PIDs/PG tunnel (same as stop.sh --status)
 #
@@ -15,7 +16,8 @@
 #   --open               open the UI in the browser when ready
 #   --force              free a port even when the owner is not uvicorn/vite
 #   --no-tunnel          never start the PG tunnel automatically (fail if it is closed)
-#   --honest             clear SMART_EDIT_LLM
+#   --honest             clear SMART_EDIT_LLM (now the default)
+#   --fixture            replay fixtures/llm/extract_sample.json (demo only; ignores the document)
 #   --status             print status and exit
 #
 # Backend/frontend logs: runs/dev/backend.log and runs/dev/web.log (stable paths).
@@ -66,6 +68,7 @@ FIXTURE="fixture:fixtures/llm/extract_sample.json"
 PG_TUNNEL_HOST="${PG_TUNNEL_HOST:-team04-pg}"
 
 HONEST=0
+FIXTURE_REPLAY=0
 DETACH=0
 OPEN_UI=0
 FORCE=0
@@ -81,6 +84,7 @@ for arg in "$@"; do
     --force) FORCE=1 ;;
     --no-tunnel) TUNNEL=0 ;;
     --honest) HONEST=1 ;;
+    --fixture) FIXTURE_REPLAY=1 ;;
     --status) ACTION=status ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
@@ -174,12 +178,14 @@ else
   echo "→ 身份模式：fake（X-Demo-User，仅本地演示）"
 fi
 
-if [ "$HONEST" = 1 ]; then
+if [ "$FIXTURE_REPLAY" = 1 ]; then
+  export SMART_EDIT_LLM="$FIXTURE"
+  echo "→ 模型 provider：${SMART_EDIT_LLM}（fixture 回放：任何文本都会返回同一份样例保函，仅用于演示）"
+elif [ "$HONEST" = 1 ] || [ -z "${SMART_EDIT_LLM:-}" ]; then
   export SMART_EDIT_LLM=""
-  echo "→ 模型 provider：未配置（诚实路径：字段检查不会运行）"
+  echo "→ 模型 provider：未配置（模板一致性审计走 config 的确定性抽取档；/runs 的 extract 不会伪造字段）"
 else
-  export SMART_EDIT_LLM="${SMART_EDIT_LLM:-$FIXTURE}"
-  echo "→ 模型 provider：${SMART_EDIT_LLM}"
+  echo "→ 模型 provider：${SMART_EDIT_LLM}（来自环境变量/.env）"
 fi
 stream_logs() {
   local prefix="$1"
