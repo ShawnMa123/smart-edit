@@ -231,6 +231,50 @@ export async function acquireLock(
   ).data;
 }
 
+/** Read the draft's active lock (holder + lease) without taking it. */
+export async function getLock(
+  documentId: string,
+  draftId: string,
+  options: HostOptions = {},
+): Promise<LockView | null> {
+  const envelope = await request<{ lock: LockView | null }>(
+    `/${encodeURIComponent(documentId)}/drafts/${encodeURIComponent(draftId)}/lock`,
+    { method: 'GET' },
+    options,
+  );
+  return envelope.data.lock;
+}
+
+/** Release a lock whose lease already expired (the server refuses a live lock). */
+export async function releaseStaleLock(
+  documentId: string,
+  lockId: string,
+  options: HostOptions = {},
+): Promise<LockView> {
+  return (
+    await request<LockView>(
+      `/${encodeURIComponent(documentId)}/locks/${encodeURIComponent(lockId)}/release?stale=true`,
+      { method: 'POST' },
+      options,
+    )
+  ).data;
+}
+
+/** Keep a held lock alive; without this the 30s lease expires mid-edit and saves are refused. */
+export async function heartbeatLock(
+  documentId: string,
+  lockId: string,
+  options: HostOptions = {},
+): Promise<LockView> {
+  return (
+    await request<LockView>(
+      `/${encodeURIComponent(documentId)}/locks/${encodeURIComponent(lockId)}/heartbeat`,
+      json({ lease_seconds: 30 }),
+      options,
+    )
+  ).data;
+}
+
 export async function releaseLock(
   documentId: string,
   lockId: string,

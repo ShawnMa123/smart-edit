@@ -418,6 +418,7 @@ export function ConformancePanel({
       <select
         id="conformance-config"
         aria-label="Calibration config"
+        data-tour="conformance-config"
         value={configId}
         onChange={(event) => setConfigId(event.target.value)}
         disabled={phase === 'running' || demoMode}
@@ -437,7 +438,7 @@ export function ConformancePanel({
       ) : null}
 
       {detail ? (
-        <details className="audit-scope" data-testid="conformance-config-detail">
+        <details className="audit-scope" data-testid="conformance-config-detail" data-tour="conformance-details">
           <summary className="tiny muted">
             Config details · {detail.requirement_count} requirement(s)
           </summary>
@@ -480,6 +481,7 @@ export function ConformancePanel({
           onClick={() => void startReview()}
           disabled={!configId || demoMode}
           data-testid="conformance-run"
+          data-tour="conformance-run"
         >
           Run template audit
         </button>
@@ -553,7 +555,7 @@ export function ConformancePanel({
             </div>
           ) : null}
 
-          <div className="row" data-testid="conformance-outcome">
+          <div className="row" data-testid="conformance-outcome" data-tour="conformance-outcome">
             <span className={OUTCOME_CLASS[report.outcome]}>{OUTCOME_LABEL[report.outcome]}</span>
             <span className="tiny muted">
               {report.counts.passed}/{report.counts.requirements} requirement(s) assessed ·{' '}
@@ -561,7 +563,7 @@ export function ConformancePanel({
             </span>
           </div>
 
-          <div className="row" data-testid="conformance-export">
+          <div className="row" data-testid="conformance-export" data-tour="conformance-export">
             <button type="button" onClick={() => void copyReport()} data-testid="conformance-copy">
               Copy report
             </button>
@@ -593,7 +595,7 @@ export function ConformancePanel({
           ) : null}
 
           {report.missing_fields.length > 0 ? (
-            <div className="notice notice--warn" data-testid="conformance-missing">
+            <div className="notice notice--warn" data-testid="conformance-missing" data-tour="conformance-missing">
               <h3>Required fields not found</h3>
               <ul className="tiny">
                 {report.missing_fields.map((field) => (
@@ -607,7 +609,7 @@ export function ConformancePanel({
           ) : null}
 
           {findings.length > 0 ? (
-            <div data-testid="conformance-findings">
+            <div data-testid="conformance-findings" data-tour="conformance-findings">
               <h3>Does not match the config</h3>
               {findings.map((item) => (
                 <article key={item.id} className="notice" data-testid="conformance-finding">
@@ -686,7 +688,7 @@ export function ConformancePanel({
             </details>
           ) : null}
 
-          <details className="audit-scope" data-testid="conformance-redaction">
+          <details className="audit-scope" data-testid="conformance-redaction" data-tour="conformance-redaction">
             <summary className="tiny muted">
               Redaction steps ({report.provenance.redaction.total} value(s))
             </summary>

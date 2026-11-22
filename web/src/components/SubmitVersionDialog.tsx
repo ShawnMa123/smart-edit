@@ -73,7 +73,7 @@ export function SubmitVersionDialog({
           <button type="button" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="primary" disabled={!ready || busy} onClick={() => void submit()}>
+          <button type="button" className="primary" disabled={!ready || busy} onClick={() => void submit()} data-tour="submit-confirm">
             {busy ? 'Submitting…' : 'Submit for approval'}
           </button>
         </>

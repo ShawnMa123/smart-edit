@@ -55,6 +55,8 @@ export function AutomationRunsPanel({ documentId, client = jobsClient }: Automat
   const [delivery, setDelivery] = useState<DocumentDelivery | null>(null);
   const [settings, setSettings] = useState<AutomationSettings | null>(null);
   const [selected, setSelected] = useState<JobDetail | null>(null);
+  /** `workspace` = the open document has no jobs, so the newest workspace runs are shown instead. */
+  const [scope, setScope] = useState<'document' | 'workspace'>('document');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +82,20 @@ export function AutomationRunsPanel({ documentId, client = jobsClient }: Automat
       documentId ? client.readDocumentDelivery(documentId) : Promise.resolve(null),
       client.readSettings(),
     ]);
-    setJobs(page.items);
+    let items = page.items;
+    let nextScope: 'document' | 'workspace' = 'document';
+    if (documentId && items.length === 0) {
+      // A "no binding"/"no rule" skip is not a run: fall back to the workspace board so the panel
+      // still shows the real jobs a Bank Ops reviewer is expected to watch.
+      const all = await client.listJobs({});
+      const visible = all.items.filter((job) => job.status !== 'skipped');
+      if (visible.length > 0) {
+        items = visible;
+        nextScope = 'workspace';
+      }
+    }
+    setJobs(items);
+    setScope(nextScope);
     setDelivery(deliveryState);
     setSettings(settingsState);
   };
@@ -111,6 +126,7 @@ export function AutomationRunsPanel({ documentId, client = jobsClient }: Automat
       className="automation-server"
       aria-label="Automatic dispatch runs"
       data-testid="automation-runs"
+      data-tour="automation-runs"
     >
       {notice ? (
         <p className="tiny" role="status" aria-live="polite">
@@ -133,6 +149,7 @@ export function AutomationRunsPanel({ documentId, client = jobsClient }: Automat
           className={`notice tiny ${settings.auto_send_enabled ? '' : 'notice--warn'}`}
           data-testid="auto-send-switch"
           data-enabled={settings.auto_send_enabled ? 'yes' : 'no'}
+          data-tour="automation-auto-send"
         >
           {settings.auto_send_enabled
             ? 'Automatic sending is enabled globally (SMART_EDIT_AUTOMATION_AUTO_SEND).'
@@ -169,10 +186,20 @@ export function AutomationRunsPanel({ documentId, client = jobsClient }: Automat
 
       <div className="legal-section" aria-label="Runs">
         <h3>Runs</h3>
+        {scope === 'workspace' ? (
+          <p className="notice tiny" data-testid="runs-scope">
+            This document has no runs — showing the newest runs in this workspace.
+          </p>
+        ) : null}
         {jobs.length === 0 ? <p className="tiny muted">No automatic runs yet.</p> : null}
         <ul className="legal-findings" data-testid="runs-list">
           {jobs.map((job) => (
-            <li key={job.job_id} className="legal-finding" data-testid={`run-${job.job_id}`}>
+            <li
+              key={job.job_id}
+              className="legal-finding"
+              data-testid={`run-${job.job_id}`}
+              data-tour="automation-run-item"
+            >
               <div className="row">
                 <span className={statusClass(job.status)}>
                   {STATUS_LABELS[job.status] ?? job.status}
@@ -239,7 +266,7 @@ export function AutomationRunsPanel({ documentId, client = jobsClient }: Automat
             {selected.job_id} · {selected.document_title ?? selected.document_id} · submission{' '}
             {selected.submission_id}
           </p>
-          <ol className="tiny" data-testid="run-timeline">
+          <ol className="tiny" data-testid="run-timeline" data-tour="automation-run-timeline">
             {selected.events.map((event) => (
               <li key={event.event_id} data-testid={`run-event-${event.event_id}`}>
                 {event.from_status ? `${event.from_status} → ` : ''}

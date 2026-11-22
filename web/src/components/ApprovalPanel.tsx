@@ -52,6 +52,14 @@ export function ApprovalPanel({
     canFirstTab ? 'first' : canSecond ? 'second' : 'mine',
   );
   const [items, setItems] = useState<Array<ApprovalSummary | SubmissionSummary>>([]);
+  /** Newest first, so a just-submitted request is the first row (the lifecycle tour relies on it). */
+  const orderedItems = useMemo(
+    () =>
+      [...items].sort((left, right) =>
+        String(right.created_at).localeCompare(String(left.created_at)),
+      ),
+    [items],
+  );
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selected, setSelected] = useState<ApprovalDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -177,6 +185,7 @@ export function ApprovalPanel({
         className="approval-document"
         aria-label="Current document"
         data-testid="approval-document"
+        data-tour="approval-document"
       >
         <div className="row">
           <strong>{document?.title ?? 'Current document'}</strong>
@@ -209,13 +218,14 @@ export function ApprovalPanel({
         </div>
       </section>
 
-      <div className="inline-form" role="tablist" aria-label="Approval views">
+      <div className="inline-form" role="tablist" aria-label="Approval views" data-tour="approval-tabs">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             role="tab"
             aria-selected={view === tab.id}
+            data-tour={`approval-tab-${tab.id}`}
             onClick={() => setView(tab.id)}
           >
             {tab.label}
@@ -275,6 +285,7 @@ export function ApprovalPanel({
                     type="button"
                     className="link tiny"
                     data-testid={`open-doc-${item.document_id}`}
+                    data-tour="approval-open-document"
                     onClick={() => onOpenDocument(item.document_id)}
                   >
                     {item.document_id === activeDocumentId ? 'Back to editor' : 'Open'}
@@ -286,7 +297,7 @@ export function ApprovalPanel({
         </section>
       ) : (
         <div className="approval-grid">
-        <section aria-label="Approval queue">
+        <section aria-label="Approval queue" data-tour="approval-queue">
           <h3>{view === 'mine' ? 'My submissions' : 'Pending requests'}</h3>
           {items.length === 0 ? (
             <p className="tiny">
@@ -295,7 +306,7 @@ export function ApprovalPanel({
           ) : null}
           {view === 'mine' ? (
             <ul className="submission-cards">
-              {items.map((item) => {
+              {orderedItems.map((item) => {
                 const meta = approvalStatusMeta(item.status, item.route);
                 return (
                   <li key={item.submission_id}>
@@ -344,9 +355,9 @@ export function ApprovalPanel({
             </ul>
           ) : (
             <ul className="member-list">
-              {items.map((item) => (
+              {orderedItems.map((item) => (
                 <li key={item.submission_id}>
-                  <button type="button" className="link" onClick={() => void select(item.request_id)}>
+                  <button type="button" className="link" onClick={() => void select(item.request_id)} data-tour="approval-select">
                     {'title' in item && item.title ? item.title : item.submission_id}
                   </button>
                   <StatusBadge status={item.status} />
@@ -379,7 +390,7 @@ export function ApprovalPanel({
           )}
         </section>
 
-        <section aria-label="Approval detail">
+        <section aria-label="Approval detail" data-tour="approval-detail">
           {!selected ? (
             <p className="tiny">Select a request to read its frozen snapshot.</p>
           ) : (
@@ -428,7 +439,7 @@ export function ApprovalPanel({
                     />
                   </label>
                   <div className="inline-form">
-                    <button type="button" className="primary" disabled={busy} onClick={() => void decide('approve')}>
+                    <button type="button" className="primary" disabled={busy} onClick={() => void decide('approve')} data-tour="approval-approve">
                       Approve
                     </button>
                     <button type="button" disabled={busy} onClick={() => void decide('return')}>

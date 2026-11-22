@@ -728,3 +728,105 @@ describe('explicit save', () => {
     expect(buttons[buttons.length - 1].disabled).toBe(true);
   });
 });
+
+describe('load errors and the lock inspector', () => {
+  it('offers a retry when the document failed to load', async () => {
+    const onRetryLoad = vi.fn();
+    render(
+      <RichEditor
+        document={doc('Plain text')}
+        onChange={vi.fn()}
+        loadError="NETWORK — server unreachable"
+        onRetryLoad={onRetryLoad}
+      />,
+    );
+
+    const banner = screen.getByTestId('load-error');
+    expect(banner.textContent).toContain('NETWORK');
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the holder and lease, and releases an expired lock of another session', async () => {
+    const onInspectLock = vi.fn();
+    const onReleaseStaleLock = vi.fn();
+    const onCloseLockInfo = vi.fn();
+    render(
+      <RichEditor
+        document={doc('Plain text')}
+        onChange={vi.fn()}
+        lockHeld={false}
+        lockInspected
+        lockInfo={{
+          lock_id: 'lock-1',
+          draft_id: 'draft-1',
+          owner_user_id: 'usr_other',
+          lease_until: new Date(Date.now() - 60_000).toISOString(),
+          fencing_token: 1,
+          released_at: null,
+        }}
+        lockOurs={false}
+        onInspectLock={onInspectLock}
+        onCloseLockInfo={onCloseLockInfo}
+        onReleaseStaleLock={onReleaseStaleLock}
+      />,
+    );
+
+    const panel = screen.getByTestId('lock-panel');
+    expect(panel.textContent).toContain('usr_other');
+    expect(panel.textContent).toContain('Lease expired');
+    expect(panel.textContent).toContain('safe to release');
+
+    await userEvent.click(screen.getByTestId('release-stale-lock'));
+    expect(onReleaseStaleLock).toHaveBeenCalledWith('lock-1');
+
+    await userEvent.click(screen.getByTestId('lock-chip'));
+    expect(onInspectLock).toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close lock details' }));
+    expect(onCloseLockInfo).toHaveBeenCalled();
+  });
+
+  it('keeps a live lock of another session non-releasable', () => {
+    render(
+      <RichEditor
+        document={doc('Plain text')}
+        onChange={vi.fn()}
+        lockHeld={false}
+        lockInspected
+        lockInfo={{
+          lock_id: 'lock-2',
+          draft_id: 'draft-1',
+          owner_user_id: 'usr_other',
+          lease_until: new Date(Date.now() + 60_000).toISOString(),
+          fencing_token: 2,
+          released_at: null,
+        }}
+        lockOurs={false}
+        onInspectLock={vi.fn()}
+        onCloseLockInfo={vi.fn()}
+        onReleaseStaleLock={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('lock-panel').textContent).toContain('Lease is active');
+    expect(screen.queryByTestId('release-stale-lock')).toBeNull();
+  });
+
+  it('still enables Start editing when the only problem is a missing lock', () => {
+    render(
+      <RichEditor
+        document={doc('Plain text')}
+        onChange={vi.fn()}
+        readOnly
+        lockHeld={false}
+        canStartEditing
+        onStartEditing={vi.fn()}
+      />,
+    );
+
+    expect((screen.getByRole('button', { name: 'Start editing' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+});

@@ -1077,9 +1077,11 @@ class HostStore:
             ).fetchone()
             if active:
                 row = dict(active)
-                if row["owner_user_id"] != owner_user_id:
-                    raise LockConflict("another user holds this draft's lock")
+                # An expired lease is free, whoever took it: otherwise a crashed or abandoned tab
+                # would block every other user forever (409 on every acquire).
                 if _parse_time(row["lease_until"]) > now_dt:
+                    if row["owner_user_id"] != owner_user_id:
+                        raise LockConflict("another user holds this draft's lock")
                     return row
                 conn.execute(
                     "UPDATE document_locks SET released_at = ? WHERE lock_id = ?",
@@ -1135,6 +1137,27 @@ class HostStore:
             )
             if result.rowcount != 1:
                 raise LockConflict("the lock is missing, released or owned by someone else")
+        lock = self.one("SELECT * FROM document_locks WHERE lock_id = ?", (lock_id,))
+        if not lock:
+            raise HostNotFound("lock not found")
+        return lock
+
+    def active_lock(self, draft_id: str) -> dict[str, Any] | None:
+        """The unreleased lock on a draft, if any (expired or not: the caller decides)."""
+        return self.one(
+            "SELECT * FROM document_locks WHERE draft_id = ? AND released_at IS NULL", (draft_id,)
+        )
+
+    def force_release_lock(self, *, lock_id: str) -> dict[str, Any]:
+        """Release a lock regardless of owner (used only after the caller proves it is expired)."""
+        stamp = now_iso()
+        with self.transaction() as conn:
+            result = conn.execute(
+                "UPDATE document_locks SET released_at=? WHERE lock_id=? AND released_at IS NULL",
+                (stamp, lock_id),
+            )
+            if result.rowcount != 1:
+                raise LockConflict("the lock is missing or already released")
         lock = self.one("SELECT * FROM document_locks WHERE lock_id = ?", (lock_id,))
         if not lock:
             raise HostNotFound("lock not found")

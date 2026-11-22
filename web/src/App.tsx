@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { ApiError } from './api/errors';
 import { createRun, createRunWithFiles, triggerStage } from './api/client';
@@ -7,8 +7,11 @@ import {
   createDocument,
   getDocument,
   getDraft,
+  getLock,
+  heartbeatLock,
   listDocuments,
   releaseLock,
+  releaseStaleLock,
   saveDraft,
   type DocumentSummary,
   type DraftView,
@@ -70,6 +73,8 @@ import { loadApprovalCounts } from './domain/approvalCounts';
 import { ApprovalStatusBanner } from './components/ApprovalStatusBanner';
 import { SubmitVersionDialog } from './components/SubmitVersionDialog';
 import { ToastProvider, useToast } from './components/ToastProvider';
+import { TourProvider, useTour } from './tour/TourProvider';
+import { TOURS } from './tour/catalog';
 import type { SubmissionSummary } from './api/approvalTypes';
 
 const DEFAULT_DOCUMENT_ID = 'demo-document';
@@ -113,7 +118,9 @@ export function App({ authStatus, authProfile, autoProbe }: AppProps = {}) {
   return (
     <AuthProvider initialStatus={authStatus} initialProfile={authProfile} autoProbe={autoProbe}>
       <ToastProvider>
-        <AppContent />
+        <TourProvider tours={TOURS}>
+          <AppContent />
+        </TourProvider>
       </ToastProvider>
     </AuthProvider>
   );
@@ -122,6 +129,28 @@ export function App({ authStatus, authProfile, autoProbe }: AppProps = {}) {
 function AppContent() {
   const auth = useAuth();
   const toast = useToast();
+  const tour = useTour();
+  const registerEditorApi = useCallback(
+    (api: Parameters<typeof tour.registerEditor>[0]) => tour.registerEditor(api),
+    [tour.registerEditor],
+  );
+  const deepLinkHandled = useRef(false);
+  // Deep links after sign-in (never over the login screen):
+  //   ?presenter=1  → the 8-minute teleprompter
+  //   ?tour=legal   → the launcher, preselected on that tour
+  useEffect(() => {
+    if (auth.status !== 'authenticated' || deepLinkHandled.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const presenter = params.get('presenter');
+    const requestedTour = params.get('tour');
+    if (!presenter && !requestedTour) return;
+    deepLinkHandled.current = true;
+    if (presenter === '1') {
+      tour.openPresenter();
+    } else if (requestedTour) {
+      tour.openLauncher(requestedTour);
+    }
+  }, [auth.status, tour]);
   const workspaceId = auth.workspaceId;
   const authenticatedOrgId =
     auth.status === 'authenticated' ? auth.profile?.active_org?.org_id ?? null : null;
@@ -156,6 +185,8 @@ function AppContent() {
   const [activity, setActivity] = useState<ActivityEntry[]>(() => activityStore.list(activeDocumentId));
   const [activityAvailable, setActivityAvailable] = useState(() => activityStore.available());
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
+  /** A real server session may only edit while this window holds the edit lock. */
+  const requiresEditLock = auth.status === 'authenticated' && !demoMode;
   const [demoPersistence, setDemoPersistence] = useState(() => demoStore.available());
   const [demoState, setDemoState] = useState<DemoState>(() => demoStore.read() ?? seedDemoState());
   /** The editor owns a rich document; everything downstream reads its projection (D2/D3). */
@@ -186,6 +217,12 @@ function AppContent() {
   /** Whether this session actually holds the edit lock (design D5: unknown is its own word). */
   const [lockHeld, setLockHeld] = useState(false);
   const [lockNotice, setLockNotice] = useState<string | null>(null);
+  /** Lock inspector: holder + lease, and the explicit stale-release action. */
+  const [lockInspected, setLockInspected] = useState(false);
+  const [lockInfo, setLockInfo] = useState<LockView | null>(null);
+  const [lockInfoError, setLockInfoError] = useState<string | null>(null);
+  /** A failed document load leaves the editor read-only; this lets the operator retry. */
+  const [documentLoadError, setDocumentLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('local');
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
@@ -196,6 +233,40 @@ function AppContent() {
   const saveTimer = useRef<number | null>(null);
   const saveInFlightRef = useRef(false);
   const aliveRef = useRef(true);
+
+  /**
+   * Keep the 30-second edit-lock lease alive while it is held. Without this an ordinary editing
+   * session loses its lease mid-edit (saves are refused) and another tab may take the draft over.
+   * A 403/404/409 means the lock was released or taken over: stop pretending we can save.
+   */
+  useEffect(() => {
+    if (!requiresEditLock) return undefined;
+    const timer = window.setInterval(() => {
+      const current = draftRef.current;
+      const lock = lockRef.current;
+      if (!current || !lock) return;
+      if (typeof heartbeatLock !== 'function') return;
+      void heartbeatLock(current.document_id, lock.lock_id)
+        .then((fresh) => {
+          if (aliveRef.current) lockRef.current = fresh;
+        })
+        .catch((error: unknown) => {
+          if (!aliveRef.current) return;
+          if (
+            error instanceof ApiError &&
+            (error.status === 403 || error.status === 404 || error.status === 409)
+          ) {
+            lockRef.current = null;
+            setLockHeld(false);
+            setSaveState((state) => (state === 'saving' ? 'local' : state));
+            setLockNotice(
+              'The edit lock expired or was taken over by another window. Click Start editing to continue; nothing here is saved until you do.',
+            );
+          }
+        });
+    }, 20_000);
+    return () => window.clearInterval(timer);
+  }, [activeDocumentId, requiresEditLock]);
   /**
    * The document load must re-run when the authenticated user/organisation changes: the workspace
    * mounts before `/auth/me` answers, so a single mount-time load would 401 on the login screen and
@@ -221,6 +292,10 @@ function AppContent() {
       setDraft(null);
       setLockHeld(false);
       setLockNotice(null);
+      setLockInspected(false);
+      setLockInfo(null);
+      setLockInfoError(null);
+      setDocumentLoadError(null);
       const blank = plainTextToDocument('');
       richDocRef.current = blank;
       setRichDoc(blank);
@@ -301,8 +376,14 @@ function AppContent() {
           announceOpenRef.current = false;
           toast.success(`Opened “${view.title ?? 'document'}”`);
         }
-      } catch {
-        if (aliveRef.current) setSaveState('local');
+      } catch (error) {
+        if (!aliveRef.current) return;
+        setSaveState('local');
+        setDocumentLoadError(
+          error instanceof ApiError
+            ? `${error.code} — ${error.message}`
+            : 'The document could not be loaded.',
+        );
       }
     };
     void load();
@@ -846,7 +927,8 @@ function AppContent() {
   const canEditDocument = auth.profile
     ? authPermissions.includes('document.edit')
     : true;
-  const editorReadOnly = submissionReadOnly || !canEditDocument;
+  const editorReadOnly =
+    submissionReadOnly || !canEditDocument || (requiresEditLock && !lockHeld);
   const submissionComment = draft?.submission?.latest_comment ?? null;
 
   const panes: Record<PaneId, JSX.Element> = {
@@ -870,6 +952,21 @@ function AppContent() {
         onSelection={setKnowledgeSelection}
         onMarkVariable={setPendingVariable}
         onModeChange={setEditorMode}
+        editorApiRef={registerEditorApi}
+        loadError={documentLoadError}
+        onRetryLoad={handleRetryLoad}
+        lockInspected={lockInspected}
+        lockInfo={lockInfo}
+        lockInfoError={lockInfoError}
+        lockOurs={Boolean(lockInfo && auth.profile?.user.user_id === lockInfo.owner_user_id)}
+        onInspectLock={() => void handleInspectLock()}
+        onCloseLockInfo={() => {
+          setLockInspected(false);
+          setLockInfo(null);
+          setLockInfoError(null);
+        }}
+        onReleaseStaleLock={(lockId) => void handleReleaseStaleLock(lockId)}
+        canStartEditing={!submissionReadOnly && canEditDocument && !lockHeld}
         saveState={saveState}
         conflict={conflict}
         recoveryNotice={recoveryNotice}
@@ -1139,8 +1236,54 @@ function AppContent() {
     }
   }
 
+  /** Inspect the lock (holder + lease) without taking it; the chip in the status band calls this. */
+  async function handleInspectLock() {
+    const current = draftRef.current;
+    setLockInspected(true);
+    setLockInfoError(null);
+    if (!current) {
+      setLockInfo(null);
+      setLockInfoError('No server draft is loaded yet.');
+      return;
+    }
+    try {
+      const info = await getLock(current.document_id, current.draft_id);
+      setLockInfo(info);
+    } catch (error) {
+      setLockInfo(null);
+      setLockInfoError(
+        error instanceof ApiError ? `${error.code} — ${error.message}` : 'Could not read the lock.',
+      );
+    }
+  }
+
+  /** Release a lock whose lease expired (a crashed/abandoned window), then take it ourselves. */
+  async function handleReleaseStaleLock(lockId: string) {
+    const current = draftRef.current;
+    if (!current) return;
+    try {
+      await releaseStaleLock(current.document_id, lockId);
+      setLockInfo(null);
+      setLockInspected(false);
+      setLockNotice('The stale lock was released. Acquiring the edit lock…');
+      await handleStartEditing();
+    } catch (error) {
+      setLockInfoError(
+        error instanceof ApiError
+          ? `${error.code} — ${error.message}`
+          : 'Could not release the stale lock.',
+      );
+    }
+  }
+
+  function handleRetryLoad() {
+    setDocumentLoadError(null);
+    setDocumentReloadToken((token) => token + 1);
+  }
+
   async function handleStartEditing() {
-    if (editorReadOnly) {
+    // A missing lock is not a permission problem: the no-lock case is exactly what this fixes.
+    if (submissionReadOnly || !canEditDocument) {
       setLockNotice(
         submissionReadOnly
           ? 'This submission is under approval; editing is disabled. Use Approval → Return, or open a draft document.'
@@ -1428,6 +1571,7 @@ function AppContent() {
         onSwitchOrg={(orgId) => void auth.switchOrg(orgId)}
         userLabel={auth.profile?.user.display_name ?? null}
         onLogout={() => void auth.logout()}
+        onStartTour={() => tour.openLauncher()}
       />
       <EnvironmentStrip
         demoMode={demoMode}

@@ -2,6 +2,27 @@
 
 ---
 
+## 0.0 一键种子数据（可选，但“导览有内容”需要它）
+
+Rules / Runs 是**服务端状态**：新环境里两个面板都是空的，导览只能讲解。要在页面上看到真实规则和运行：
+
+```bash
+ssh -i ~/.ssh/team04_ecs root@59.110.213.187 \
+  'cd /opt/smart-edit && set -a && . ./.env && set +a && .venv/bin/python scripts/seed_automation_demo.py'
+```
+
+会创建/复用：
+
+- 文档 `Automation demo · trade application`（**真实提交 + Bank Ops/Compliance 双审 → Approved**）；
+- 该文档的模板绑定 `Trade application (spec demo)`；
+- 一条 **shadow** 规则 `Demo · Trade application (spec demo) → Trade intake (spec demo)`；
+- 一条 **shadowed** 运行（worker 只生成请求、**不外发**）。
+
+脚本是幂等的（同一 `rule + submission` 不会重复建 job），并且在发现同模板存在非 shadow 规则时会**拒绝执行**，
+保证不会真的发送。之后：打开该文档可看到它自己的 Delivery；打开其它文档时 Runs 会显示“工作区最新运行”。
+
+---
+
 ## 0. 先确认 3 个前置（不在页面上）
 
 1. 打开 **http://59.110.213.187:8082/**（Chrome，窗口宽度 ≥ 1400px）。

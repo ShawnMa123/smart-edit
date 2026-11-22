@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -152,6 +154,53 @@ def test_lock_heartbeat_and_release(client):
     released = client.post(f"{base}/release", headers=_headers())
     assert released.status_code == 200
     assert released.json()["released_at"] is not None
+
+
+def _stale_lock(client: TestClient, view: dict, *, user: str = "user_a") -> dict:
+    response = client.post(
+        f"/documents/{view['document_id']}/drafts/{view['draft_id']}/lock",
+        json={"lease_seconds": 1},
+        headers=_headers(user),
+    )
+    assert response.status_code == 201, response.text
+    # The smallest lease the API accepts is 1s; wait for it to expire so the stale path is used.
+    time.sleep(1.1)
+    return response.json()
+
+
+def test_lock_status_and_stale_release(client):
+    view = _create(client)
+    lock = _stale_lock(client, view)
+
+    status = client.get(
+        f"/documents/{view['document_id']}/drafts/{view['draft_id']}/lock", headers=_headers()
+    )
+    assert status.status_code == 200
+    assert status.json()["lock"]["lock_id"] == lock["lock_id"]
+
+    released = client.post(
+        f"/documents/{view['document_id']}/locks/{lock['lock_id']}/release?stale=true",
+        headers=_headers(),
+    )
+    assert released.status_code == 200, released.text
+    assert released.json()["released_at"] is not None
+
+    after = client.get(
+        f"/documents/{view['document_id']}/drafts/{view['draft_id']}/lock", headers=_headers()
+    )
+    assert after.json()["lock"] is None
+
+
+def test_stale_release_refuses_a_live_lock(client):
+    view = _create(client)
+    lock = _lock(client, view)
+
+    refused = client.post(
+        f"/documents/{view['document_id']}/locks/{lock['lock_id']}/release?stale=true",
+        headers=_headers(),
+    )
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "lock_conflict"
 
 
 def test_error_body_has_request_id(client):

@@ -809,7 +809,7 @@ export function AutomationServerPanel({
       </div>
 
       {showSection(1) ? (
-      <section className="legal-section" aria-label="Server templates">
+      <section className="legal-section" aria-label="Server templates" data-tour="automation-template">
         <h3>1 · Template (server)</h3>
         <div className="row">
           <input
@@ -926,7 +926,7 @@ export function AutomationServerPanel({
       ) : null}
 
       {selected && showSection(2) ? (
-        <section className="legal-section" aria-label="Variables">
+        <section className="legal-section" aria-label="Variables" data-tour="automation-variables">
           <h3>2 · Fields</h3>
           <p className="tiny muted">
             {variables.length
@@ -979,7 +979,7 @@ export function AutomationServerPanel({
       ) : null}
 
       {showSection(3) ? (
-      <section className="legal-section" aria-label="Downstream connector">
+      <section className="legal-section" aria-label="Downstream connector" data-tour="automation-downstream">
         <h3>3 · Downstream</h3>
         {connectors.length ? (
           <label className="tiny">
@@ -1012,7 +1012,7 @@ export function AutomationServerPanel({
         )}
         {selected && variables.length && selectedConnector?.operation ? (
           // The mapping is setup, not review: it stays in "3 · Downstream" behind a disclosure.
-          <details className="tiny" data-testid="mapping-editor" open={mappingOpen}>
+          <details className="tiny" data-testid="mapping-editor" data-tour="automation-mapping-details" open={mappingOpen}>
             <summary
               onClick={(event) => {
                 event.preventDefault();
@@ -1366,7 +1366,7 @@ export function AutomationServerPanel({
       ) : null}
 
       {showSection(4) ? (
-      <section className="legal-section" aria-label="Review and send">
+      <section className="legal-section" aria-label="Review and send" data-tour="automation-review">
         <h3>4 · Review &amp; send</h3>
         {selected ? (
           <p className="tiny muted" data-testid="review-target">
@@ -1554,7 +1554,7 @@ export function AutomationServerPanel({
           </div>
         ) : null}
         {history.length ? (
-          <details className="tiny muted" data-testid="dispatch-history-wrap">
+          <details className="tiny muted" data-testid="dispatch-history-wrap" data-tour="automation-history-details">
             <summary>Recent dispatches ({history.length})</summary>
             <p>
               <select

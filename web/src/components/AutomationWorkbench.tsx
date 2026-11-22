@@ -664,12 +664,16 @@ export function AutomationWorkbench({
   };
 
   return (
-    <section className="automation-workbench" aria-label="Automation workbench">
+    <section
+      className="automation-workbench"
+      aria-label="Automation workbench"
+      data-tour="automation-workbench"
+    >
       <div className="row">
         <h2>Automation</h2>
         <span className="muted tiny">server registry + local sandbox</span>
       </div>
-      <p className="notice tiny" data-testid="automation-boundary">
+      <p className="notice tiny" data-testid="automation-boundary" data-tour="automation-boundary">
         <strong>Automate</strong> is the real path: templates and confirmed variables persist on the
         server, Doubao suggests variables, the request body follows the downstream contract, and
         dispatch makes one allow-listed HTTP call with a replayable receipt. <strong>Sandbox</strong>{' '}
@@ -697,6 +701,7 @@ export function AutomationWorkbench({
         role="tablist"
         aria-label="Automation areas"
         aria-orientation="horizontal"
+        data-tour="automation-areas"
       >
         {AREAS.map(([id, label], index) => (
           <button
@@ -709,6 +714,7 @@ export function AutomationWorkbench({
             role="tab"
             aria-selected={area === id}
             aria-controls={`automation-panel-${id}`}
+            data-tour={`automation-area-${id}`}
             tabIndex={area === id ? 0 : -1}
             onClick={() => setArea(id)}
             onKeyDown={(event) => onTabKeyDown(event, index)}
@@ -719,7 +725,7 @@ export function AutomationWorkbench({
       </div>
 
       {area === 'sandbox' ? (
-        <div className="sandbox-bar" data-testid="sandbox-bar">
+        <div className="sandbox-bar" data-testid="sandbox-bar" data-tour="automation-sandbox">
           <p className="notice tiny">
             <strong>Sandbox — nothing leaves this browser.</strong> Templates live in{' '}
             <code>localStorage</code>, the preview is built locally, and there is no send here. Use{' '}
@@ -732,6 +738,7 @@ export function AutomationWorkbench({
                 type="button"
                 role="tab"
                 aria-selected={sandboxArea === id}
+                data-tour={`automation-sandbox-tab-${id}`}
                 onClick={() => setSandboxArea(id)}
               >
                 {label}
@@ -746,6 +753,7 @@ export function AutomationWorkbench({
           role="tabpanel"
           id="automation-panel-template"
           aria-labelledby="automation-tab-template"
+          data-tour="automation-sandbox-panel-template"
         >
           <p className="muted tiny">
             Capture the current imported or edited document as a template. Inspect it, rename it or
@@ -1027,6 +1035,7 @@ export function AutomationWorkbench({
           role="tabpanel"
           id="automation-panel-variables"
           aria-labelledby="automation-tab-variables"
+          data-tour="automation-sandbox-panel-variables"
         >
           <p className="muted tiny">
             Select text in the editor, then use right-click or the button below. Occurrences are
@@ -1201,6 +1210,7 @@ export function AutomationWorkbench({
           role="tabpanel"
           id="automation-panel-mapping"
           aria-labelledby="automation-tab-mapping"
+          data-tour="automation-sandbox-panel-mapping"
         >
           <label className="tiny">
             Downstream source

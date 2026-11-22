@@ -41,6 +41,8 @@ export interface TopBarProps {
   onSwitchOrg?: (orgId: string) => void;
   userLabel?: string | null;
   onLogout?: () => void;
+  /** Opens the guided product tour launcher (mode + submission choice). */
+  onStartTour?: () => void;
 }
 
 const badgeLabel = (entryId: string, count: number): string => {
@@ -65,6 +67,7 @@ export function TopBar({
   onSwitchOrg,
   userLabel = null,
   onLogout,
+  onStartTour,
 }: TopBarProps = {}) {
   return (
     <header className="topbar">
@@ -76,6 +79,21 @@ export function TopBar({
         <span className="product">{PRODUCT_NAME}</span>
       </div>
       <div className="topbar-actions">
+        {onStartTour ? (
+          <button
+            type="button"
+            className="small"
+            data-tour="tour-launcher"
+            title="Take the guided product tour"
+            aria-label="Take the guided product tour"
+            onClick={onStartTour}
+          >
+            <span className="topbar-icon" aria-hidden="true">
+              ?
+            </span>
+            <span className="topbar-label">Take the tour</span>
+          </button>
+        ) : null}
         {TOPBAR_ENTRIES.map((entry) => {
           const count =
             entry.id === 'approval'
@@ -90,6 +108,7 @@ export function TopBar({
               key={entry.id}
               type="button"
               className="small"
+              data-tour={`topbar-${entry.id}`}
               aria-label={entry.label}
               title={entry.label}
               onClick={() => onOpenModule?.(entry.id as WorkspaceModule)}
@@ -123,7 +142,11 @@ export function TopBar({
                 </option>
               ))}
             </select>
-            {userLabel ? <span className="tiny">{userLabel}</span> : null}
+            {userLabel ? (
+              <span className="tiny" data-tour="session-user">
+                {userLabel}
+              </span>
+            ) : null}
             {onLogout ? (
               <button type="button" className="small" onClick={onLogout}>
                 Sign out
@@ -255,7 +278,7 @@ export function DocumentHead({
         <div className="crumb tiny">
           {DOCUMENT_SECTION} / {facts.documentId}
         </div>
-        <div className="document-title">
+        <div className="document-title" data-tour="document-title">
           <h1>{facts.title}</h1>
           <StatusBadge status={status} />
         </div>

@@ -137,7 +137,12 @@ export function AutomationRulesPanel({
   };
 
   return (
-    <div className="automation-server" aria-label="Automation rules" data-testid="automation-rules">
+    <div
+      className="automation-server"
+      aria-label="Automation rules"
+      data-testid="automation-rules"
+      data-tour="automation-rules"
+    >
       {notice ? (
         <p className="tiny" role="status" aria-live="polite">
           {notice}
@@ -208,17 +213,23 @@ export function AutomationRulesPanel({
             onClick={() => void save()}
             disabled={busy || !form.template_name || !form.connector_id}
             data-testid="save-rule"
+            data-tour="automation-rule-save"
           >
             Save rule
           </button>
         </div>
       </div>
 
-      <div className="legal-section" aria-label="Rules">
+      <div className="legal-section" aria-label="Rules" data-tour="automation-rule-list">
         <h3>Rules</h3>
         {rules.length === 0 ? <p className="tiny muted">No rules yet.</p> : null}
         {rules.map((rule) => (
-          <div key={rule.rule_id} className="legal-finding" data-testid={`rule-${rule.rule_id}`}>
+          <div
+            key={rule.rule_id}
+            className="legal-finding"
+            data-testid={`rule-${rule.rule_id}`}
+            data-tour="automation-rule-item"
+          >
             <div className="row">
               <strong className="tiny">{rule.name}</strong>
               <span className="tag tag--muted">{rule.template_name}</span>
@@ -259,6 +270,7 @@ export function AutomationRulesPanel({
                 type="button"
                 onClick={() => void preview(rule)}
                 disabled={busy || !documentId}
+                data-tour="automation-rule-dry-run"
               >
                 Dry-run on this document
               </button>
@@ -274,7 +286,7 @@ export function AutomationRulesPanel({
       </div>
 
       {dryRun ? (
-        <div className="legal-findings" data-testid="rule-dry-run">
+        <div className="legal-findings" data-testid="rule-dry-run" data-tour="automation-dry-run-result">
           <p className="tiny muted">
             {dryRun.method} {dryRun.url} · template {dryRun.template_name} · {dryRun.mode}
             {dryRun.refusal ? ` · refused: ${dryRun.refusal}` : ''}

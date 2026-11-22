@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
-from app.documents.errors import HostError, HostNotFound
+from app.documents.errors import HostError, HostNotFound, LockConflict
 from app.documents.schemas import DocumentCreate, DraftSave, Heartbeat, LockCreate
 from app.documents.store import HostStore
 from app.identity.errors import IdentityError
@@ -324,11 +325,37 @@ class DocumentService:
             lock_id=lock_id, owner_user_id=principal.user_id, lease_seconds=payload.lease_seconds
         )
 
-    def release(self, principal: Principal, document_id: str, lock_id: str) -> dict[str, Any]:
+    def lock_status(
+        self, principal: Principal, document_id: str, draft_id: str
+    ) -> dict[str, Any]:
+        """Read the active lock without taking it (document.read is enough)."""
+        self._draft(principal, document_id, draft_id, "document.read")
+        return {"lock": self.store.active_lock(draft_id)}
+
+    def release(
+        self, principal: Principal, document_id: str, lock_id: str, *, stale: bool = False
+    ) -> dict[str, Any]:
         lock = self.store.one("SELECT * FROM document_locks WHERE lock_id = ?", (lock_id,))
         if not lock:
             raise HostNotFound("lock not found")
-        self._draft(principal, document_id, lock["draft_id"], "document.lock")
+        document, _ = self._draft(principal, document_id, lock["draft_id"], "document.lock")
+        if stale:
+            lease = datetime.fromisoformat(str(lock["lease_until"]))
+            if lease.tzinfo is None:
+                lease = lease.replace(tzinfo=timezone.utc)
+            if lease > datetime.now(timezone.utc):
+                raise LockConflict(
+                    "the lock is still active; release it from the window that holds it"
+                )
+            released = self.store.force_release_lock(lock_id=lock_id)
+            self._record(
+                principal,
+                "stale lock released",
+                document_id,
+                document.get("department_id"),
+                {"lock_id": lock_id, "owner_user_id": lock["owner_user_id"]},
+            )
+            return released
         return self.store.release_lock(lock_id=lock_id, owner_user_id=principal.user_id)
 
 

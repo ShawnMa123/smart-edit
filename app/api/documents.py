@@ -191,10 +191,25 @@ def heartbeat_lock(
     return lock
 
 
-@router.post("/{document_id}/locks/{lock_id}/release")
-def release_lock(document_id: str, lock_id: str, request: Request, response: Response) -> dict:
+@router.get("/{document_id}/drafts/{draft_id}/lock")
+def read_lock(document_id: str, draft_id: str, request: Request, response: Response) -> dict:
+    """Inspect the active lock (holder + lease) without taking it."""
     service = _service(request)
-    lock = service.release(service.principal(request), document_id, lock_id)
+    status = service.lock_status(service.principal(request), document_id, draft_id)
+    response.headers["Cache-Control"] = "no-store"
+    return status
+
+
+@router.post("/{document_id}/locks/{lock_id}/release")
+def release_lock(
+    document_id: str,
+    lock_id: str,
+    request: Request,
+    response: Response,
+    stale: bool = False,
+) -> dict:
+    service = _service(request)
+    lock = service.release(service.principal(request), document_id, lock_id, stale=stale)
     response.headers["Cache-Control"] = "no-store"
     return lock
 

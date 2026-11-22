@@ -57,6 +57,7 @@ export function WorkspaceDialog({ title, children, onClose, footer, wide = false
             type="button"
             className="quiet tiny"
             aria-label="Close dialog"
+            data-tour="dialog-close"
             onClick={() => onCloseRef.current()}
           >
             Close

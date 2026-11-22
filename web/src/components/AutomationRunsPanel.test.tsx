@@ -193,6 +193,22 @@ describe('AutomationRunsPanel', () => {
     expect(screen.getByText('No automatic runs yet.')).toBeTruthy();
   });
 
+  it('falls back to the newest workspace runs when the document has none', async () => {
+    const client = baseClient();
+    (client.listJobs as ReturnType<typeof vi.fn>).mockImplementation(
+      (params: { document_id?: string } = {}) =>
+        Promise.resolve({
+          items: params.document_id ? [] : [{ ...baseJob, document_id: 'doc-2' }],
+        }),
+    );
+    render(<AutomationRunsPanel documentId="doc-1" client={client} />);
+
+    expect(await screen.findByTestId('runs-scope')).toBeTruthy();
+    expect(screen.getByTestId('run-job_sent')).toBeTruthy();
+    expect(client.listJobs).toHaveBeenCalledWith({ document_id: 'doc-1' });
+    expect(client.listJobs).toHaveBeenCalledWith({});
+  });
+
   it('does not ask for a delivery state without an open document', async () => {
     const client = baseClient();
     render(<AutomationRunsPanel documentId={null} client={client} />);

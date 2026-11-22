@@ -12,10 +12,12 @@ import { useEffect, useState, type MouseEvent } from 'react';
 
 import type { AssistantSelection } from '../api/assistantTypes';
 import type { SubmissionStatus } from '../api/approvalTypes';
+import type { LockView } from '../api/documents';
 import { richToPlainText } from '../rich/plainText';
 import { plainTextToDocument, type RichDocument } from '../rich/richDocument';
 import { selectionFromEditor, selectionFromTextarea } from '../rich/selection';
 import { useRichEditor as defaultUseRichEditor } from '../rich/useRichEditor';
+import type { TourEditorApi } from '../tour/types';
 
 export interface RichEditorProps {
   document: RichDocument;
@@ -63,6 +65,21 @@ export interface RichEditorProps {
   focusToken?: number;
   /** Test seam: a throwing implementation exercises the fallback path. */
   useEditorImpl?: (typeof defaultUseRichEditor);
+  /** Guided-tour bridge: a deliberately tiny surface (clear/focus/insert), never the whole editor. */
+  editorApiRef?: (api: TourEditorApi | null) => void;
+  /** A failed document load: the editor is read-only until the operator retries. */
+  loadError?: string | null;
+  onRetryLoad?: () => void;
+  /** Lock inspector (holder + lease) and the explicit stale-release action. */
+  lockInspected?: boolean;
+  lockInfo?: LockView | null;
+  lockInfoError?: string | null;
+  lockOurs?: boolean;
+  onInspectLock?: () => void;
+  onCloseLockInfo?: () => void;
+  onReleaseStaleLock?: (lockId: string) => void;
+  /** Overrides the Start editing disabled state (a missing lock is fixable by that button). */
+  canStartEditing?: boolean;
 }
 
 interface Tool {
@@ -169,6 +186,29 @@ export function RichEditor(props: RichEditorProps) {
     if (!failure) setFailure(error instanceof Error ? error.message : String(error));
   }
 
+  // Expose a tiny editor bridge for the guided tour (typing goes through TipTap's own commands,
+  // so autosave, locks and conflict handling keep working exactly as for a human edit).
+  const registerEditorApi = props.editorApiRef;
+  useEffect(() => {
+    if (!registerEditorApi) return undefined;
+    if (!editor) {
+      registerEditorApi(null);
+      return undefined;
+    }
+    registerEditorApi({
+      clear: () => {
+        editor?.chain().focus().clearContent(true).run();
+      },
+      focus: () => {
+        editor?.commands.focus();
+      },
+      insertText: (text: string) => {
+        editor?.chain().focus().insertContent(text).run();
+      },
+    });
+    return () => registerEditorApi(null);
+  }, [editor, registerEditorApi]);
+
   if (failure || !editor) {
     return <FallbackEditor {...props} reason={failure ?? 'the editor did not start'} />;
   }
@@ -197,6 +237,16 @@ export function RichEditor(props: RichEditorProps) {
       versions={props.versions ?? 0}
       draftRevision={props.draftRevision ?? null}
       lockHeld={props.lockHeld ?? false}
+      loadError={props.loadError ?? null}
+      onRetryLoad={props.onRetryLoad}
+      lockInspected={props.lockInspected ?? false}
+      lockInfo={props.lockInfo ?? null}
+      lockInfoError={props.lockInfoError ?? null}
+      lockOurs={props.lockOurs ?? false}
+      onInspectLock={props.onInspectLock}
+      onCloseLockInfo={props.onCloseLockInfo}
+      onReleaseStaleLock={props.onReleaseStaleLock}
+      canStartEditing={props.canStartEditing}
     />
   );
 }
@@ -225,6 +275,16 @@ function Surface({
   versions,
   draftRevision,
   lockHeld,
+  loadError,
+  onRetryLoad,
+  lockInspected,
+  lockInfo,
+  lockInfoError,
+  lockOurs,
+  onInspectLock,
+  onCloseLockInfo,
+  onReleaseStaleLock,
+  canStartEditing,
 }: {
   editor: Editor;
   document: RichDocument;
@@ -249,6 +309,16 @@ function Surface({
   versions: number;
   draftRevision: number | null;
   lockHeld: boolean;
+  loadError?: string | null;
+  onRetryLoad?: () => void;
+  lockInspected?: boolean;
+  lockInfo?: LockView | null;
+  lockInfoError?: string | null;
+  lockOurs?: boolean;
+  onInspectLock?: () => void;
+  onCloseLockInfo?: () => void;
+  onReleaseStaleLock?: (lockId: string) => void;
+  canStartEditing?: boolean;
 }) {
   const [findOpen, setFindOpen] = useState(false);
   const [variableMenu, setVariableMenu] = useState<{
@@ -256,6 +326,9 @@ function Surface({
     y: number;
     selection: AssistantSelection;
   } | null>(null);
+  const lockExpired = lockInfo
+    ? new Date(lockInfo.lease_until).getTime() <= Date.now()
+    : false;
 
   // Selection capture is a read-only projection: it never changes the document or the run.
   useEffect(() => {
@@ -297,18 +370,29 @@ function Surface({
       </div>
 
       {/* One status band, one source of truth (design D5). */}
-      <div className="editor-status" data-testid="editor-status">
+      <div className="editor-status" data-testid="editor-status" data-tour="editor-status">
         <span className="status-chip status-chip--strong">
           {versions > 0 ? `snapshot v${versions}` : 'no captured version'}
         </span>
         <span className="status-chip">
           {draftRevision === null ? 'no server draft' : `draft rev ${draftRevision}`}
         </span>
-        <span className="status-chip">{lockHeld ? 'lock: this session' : 'lock: unknown'}</span>
+        <button
+          type="button"
+          className="status-chip status-chip--button"
+          data-testid="lock-chip"
+          data-tour="lock-chip"
+          title="Inspect the edit lock"
+          onClick={onInspectLock}
+          disabled={!onInspectLock}
+        >
+          {lockHeld ? 'lock: this session' : 'lock: unknown'}
+        </button>
         <span
           className="status-chip"
           aria-live="polite"
           data-testid="save-state"
+          data-tour="save-state"
           style={{
             color:
               saveState === 'conflict' || saveState === 'error'
@@ -331,6 +415,73 @@ function Surface({
                     : 'No server draft available — local only'}
         </span>
       </div>
+
+      {loadError ? (
+        <div className="notice notice--bad tiny" role="alert" data-testid="load-error">
+          Could not load this document: {loadError}{' '}
+          {onRetryLoad ? (
+            <button type="button" onClick={onRetryLoad}>
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {lockInspected ? (
+        <div className="lock-panel" role="status" data-testid="lock-panel">
+          <div className="row">
+            <strong className="tiny">Edit lock</strong>
+            <button
+              type="button"
+              className="tiny"
+              onClick={onCloseLockInfo}
+              aria-label="Close lock details"
+            >
+              ×
+            </button>
+          </div>
+          {lockInfoError ? (
+            <p className="tiny">{lockInfoError}</p>
+          ) : lockInfo ? (
+            <>
+              <p className="tiny">
+                Holder: <code>{lockInfo.owner_user_id}</code>
+                {lockOurs ? ' (this session)' : ''}
+              </p>
+              <p className="tiny">
+                Lease until: {new Date(lockInfo.lease_until).toLocaleString()}
+              </p>
+              <p className={lockExpired ? 'tiny notice notice--warn' : 'tiny muted'}>
+                {lockExpired ? 'Lease expired — safe to release.' : 'Lease is active.'}
+              </p>
+            </>
+          ) : (
+            <p className="tiny muted">No active lock on this draft.</p>
+          )}
+          <div className="row">
+            {onInspectLock ? (
+              <button type="button" className="tiny" onClick={onInspectLock}>
+                Refresh
+              </button>
+            ) : null}
+            {lockInfo && lockExpired && !lockOurs && onReleaseStaleLock ? (
+              <button
+                type="button"
+                className="tiny"
+                onClick={() => onReleaseStaleLock(lockInfo.lock_id)}
+                data-testid="release-stale-lock"
+              >
+                Release stale lock
+              </button>
+            ) : null}
+            {!lockHeld && !lockInfo && onStartEditing ? (
+              <button type="button" className="tiny" onClick={() => void onStartEditing()}>
+                Start editing
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="toolbar" role="toolbar" aria-label="Formatting">
         <select
@@ -438,6 +589,7 @@ function Surface({
           </header>
 
           <div
+            data-tour="editor-surface"
             onContextMenu={(event: MouseEvent<HTMLDivElement>) => {
           if (!onMarkVariable) return;
           const selection = selectionFromEditor(editor);
@@ -483,7 +635,7 @@ function Surface({
             <span>
               {versions > 0 ? `v${versions} captured` : 'no captured version'}
             </span>
-            <span className="chip" data-testid="approval-status">
+            <span className="chip" data-testid="approval-status" data-tour="approval-status">
               Approval: {statusLabel(submissionStatus ?? 'draft')}
             </span>
           </footer>
@@ -520,7 +672,7 @@ function Surface({
           </button>
           <button
             type="button"
-            disabled={lockHeld || readOnly}
+            disabled={canStartEditing === undefined ? lockHeld || readOnly : !canStartEditing}
             onClick={() => void onStartEditing?.()}
           >
             Start editing
@@ -541,6 +693,7 @@ function Surface({
             className="primary"
             disabled={readOnly}
             onClick={() => onSubmitVersion?.()}
+            data-tour="submit-version"
           >
             Submit new version
           </button>

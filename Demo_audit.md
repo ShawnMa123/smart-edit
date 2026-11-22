@@ -259,7 +259,8 @@ curl -s -b /tmp/cj -X POST "$B/runs/$TID/stages/audit?template=adidas-guarantee"
 | 改 `Beneficiary: Adidas AG` + template | deterministic（模板命中） | 63 | 38 | 4 | 20 | 1 | 0 | 0.667 | `findings_present` |
 | 不填 template | fixture | 56 | 36 | 1 | 19 | 0 | 0 | 0.661 | `findings_present` |
 
-> 这些数字与 `DEMO.md` §3.4 的记录一致（`planned 57 · pass 36 · finding 1 · N/A 19 · unable 1 · ratio 0.649`）。
+> 这些数字只用于 `Demo_audit.md` 的历史对照；`DEMO.md` 的 8 分钟版**不再以 Rule audit 为主流程**
+> （线上已关闭 fixture 抽取，Audit 首屏是"模板一致性审计"）。
 
 ---
 

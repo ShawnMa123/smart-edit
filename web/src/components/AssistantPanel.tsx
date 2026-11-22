@@ -137,7 +137,7 @@ export function AssistantPanel({
         <span className="muted tiny">Human decides</span>
       </div>
 
-      <div className="assistant-tabs" role="tablist" aria-label="Assistant capabilities">
+      <div className="assistant-tabs" role="tablist" aria-label="Assistant capabilities" data-tour="assistant-tabs">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -145,6 +145,7 @@ export function AssistantPanel({
             role="tab"
             aria-selected={tab.id === activeTab}
             aria-busy={isBusy(tab.id)}
+            data-tour={`tab-${tab.id}`}
             aria-label={isBusy(tab.id) ? `${tab.label} · working` : tabLabel(tab)}
             onClick={() => setActiveTab(tab.id)}
           >

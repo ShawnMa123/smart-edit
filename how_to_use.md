@@ -367,6 +367,14 @@ DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**�
 
 ## 7.2 Automation tab（fixture-backed 三块工作台）
 
+> 网页导览：顶栏 **Take the tour** → `Automation workbench`（深链 `?tour=automation`）。需要 `automation.view`
+> （Bank Operations / 组织管理员）；其余身份该 tab 被隐藏，导览会逐段跳过并提示。导览只切换区域和讲解，**不会点 Send**。
+> 选 **Watch me** 时会自动切 Automate / Rules / Runs / Sandbox、展开 Field mapping 与 Dispatch history、
+> 并切过 Sandbox 的三个子页签（展开动作是幂等的，不会把已展开的收起来）；**Guide me** 只高亮，由你自己点。
+> Rules 会点一次 **Dry-run on this document**，Runs 会点 **Details** 展开时间线 —— 两步都基于真实规则/运行。
+> 演示数据可用 `scripts/seed_automation_demo.py` 写入（真实提交 + 双审 + shadow 规则 + shadowed 运行，脚本拒绝发送）；
+> 打开 `Automation demo · trade application` 可看到该文档自己的 Delivery，其它文档则显示工作区最新运行。
+
 右栏 **AI assistant → Automation · fixture only** 现在是前端先行工作台，同一页面内有三块区域：
 
 1. **Template**：把当前**导入或本地编辑**的文档存为 template。保存前有 live preview：来源

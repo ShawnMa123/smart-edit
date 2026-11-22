@@ -372,6 +372,7 @@ function DocumentAnchors({
               <button
                 type="button"
                 className="legal-jump"
+                data-tour="legal-jump"
                 onClick={() => onJump(anchor.block_index)}
               >
                 Jump to clause
@@ -444,7 +445,7 @@ function ReportView({
       SEVERITY_ORDER.indexOf(left.severity) - SEVERITY_ORDER.indexOf(right.severity),
   );
   return (
-    <div className="legal-report" aria-label="Legal review">
+    <div className="legal-report" aria-label="Legal review" data-tour="legal-report">
       <div className="row">
         <Badge label={OUTCOME_LABEL[report.outcome]} tone={OUTCOME_TONE[report.outcome]} />
         <span className="tiny muted">
@@ -490,9 +491,11 @@ function ReportView({
         ),
       )}
 
-      {ordered.map((finding) => (
-        <FindingView key={finding.finding_id} finding={finding} onJump={onJump} />
-      ))}
+      <div data-tour="legal-findings">
+        {ordered.map((finding) => (
+          <FindingView key={finding.finding_id} finding={finding} onJump={onJump} />
+        ))}
+      </div>
 
       {report.limitations.length ? (
         <ul className="legal-limitations tiny muted">
@@ -647,6 +650,7 @@ export function LegalPanel({
           type="button"
           role="tab"
           aria-selected={mode === 'document'}
+          data-tour="legal-document-tab"
           onClick={() => switchMode('document')}
         >
           Document check
@@ -711,7 +715,7 @@ export function LegalPanel({
           </label>
           <p className="tiny muted">{WEB_TOGGLE_NOTE}</p>
           <div className="row">
-            <button type="button" onClick={() => void scanDocument()} disabled={busy}>
+            <button type="button" onClick={() => void scanDocument()} disabled={busy} data-tour="legal-scan">
               {report ? 'Scan again' : 'Scan document'}
             </button>
           </div>

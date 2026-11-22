@@ -65,6 +65,7 @@ export function DocumentActions({
             type="button"
             className="quiet"
             data-testid="new-document"
+            data-tour="new-document"
             title={
               canCreateDocument
                 ? 'Create a new document and keep the current one'
@@ -80,6 +81,7 @@ export function DocumentActions({
           <select
             aria-label="Open document"
             data-testid="open-document-select"
+            data-tour="open-document"
             value=""
             onChange={(event) => {
               const next = event.target.value;

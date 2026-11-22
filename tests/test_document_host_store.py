@@ -204,6 +204,48 @@ def test_locks_single_active_lease_and_fencing(tmp_path):
     assert expired["fencing_token"] == 3
 
 
+def test_an_expired_lock_of_another_user_can_be_taken_over(tmp_path):
+    """A crashed/abandoned tab must not block the draft forever.
+
+    The old behaviour checked the owner before the lease, so an expired lock held by user A raised
+    409 for user B (the live incident: Bank Ops held an expired lock and the applicant could not
+    autosave). An active lease still conflicts.
+    """
+    store = _store(tmp_path)
+    draft = _doc(store)
+    stale = store.acquire_lock(draft_id=draft["draft_id"], owner_user_id="user_a", lease_seconds=0)
+
+    taken = store.acquire_lock(draft_id=draft["draft_id"], owner_user_id="user_b", lease_seconds=30)
+
+    assert taken["fencing_token"] > int(stale["fencing_token"])
+    assert taken["owner_user_id"] == "user_b"
+    assert store.one(
+        "SELECT released_at FROM document_locks WHERE lock_id = ?", (stale["lock_id"],)
+    )["released_at"] is not None
+    with pytest.raises(LockConflict):
+        store.validate_lock(
+            draft_id=draft["draft_id"],
+            lock_id=stale["lock_id"],
+            owner_user_id="user_a",
+            fencing_token=int(stale["fencing_token"]),
+        )
+
+
+def test_active_lock_and_force_release(tmp_path):
+    store = _store(tmp_path)
+    draft = _doc(store)
+    lock = store.acquire_lock(draft_id=draft["draft_id"], owner_user_id="user_a", lease_seconds=0)
+
+    active = store.active_lock(draft["draft_id"])
+    assert active is not None and active["lock_id"] == lock["lock_id"]
+
+    released = store.force_release_lock(lock_id=lock["lock_id"])
+    assert released["released_at"] is not None
+    assert store.active_lock(draft["draft_id"]) is None
+    with pytest.raises(LockConflict):
+        store.force_release_lock(lock_id=lock["lock_id"])
+
+
 def test_production_uses_no_local_adapter(tmp_path):
     with pytest.raises(RuntimeError):
         build_host_services(db_path=tmp_path / "host.db", mode="production")

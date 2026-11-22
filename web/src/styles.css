@@ -2664,3 +2664,282 @@ aside[aria-label='AI assistant'] > .row h2 {
     animation: none;
   }
 }
+/* ── Guided tour (web/src/tour) ─────────────────────────────────────────────── */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tour-mask {
+  position: fixed;
+  background: rgba(16, 24, 32, 0.55);
+  pointer-events: none;
+}
+
+.tour-ring {
+  position: fixed;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  box-shadow: 0 0 0 4px rgba(31, 78, 121, 0.25);
+  pointer-events: none;
+  transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease;
+}
+
+.tour-tip {
+  position: fixed;
+  z-index: 260;
+  max-width: 380px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px 14px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(16, 24, 32, 0.24);
+}
+
+.tour-tip h3 {
+  margin: 2px 0 6px;
+  font-size: 15px;
+}
+
+.tour-tip p {
+  margin: 0 0 8px;
+}
+
+.tour-tip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tour-tip-head button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tour-tip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.tour-cursor {
+  position: fixed;
+  z-index: 262;
+  transform: translate(-3px, -3px);
+  transition: left 0.35s ease, top 0.35s ease;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.tour-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 255;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 24, 32, 0.55);
+}
+
+.tour-modal {
+  width: min(520px, calc(100vw - 32px));
+  max-height: 80vh;
+  overflow: auto;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(16, 24, 32, 0.3);
+}
+
+.tour-modal fieldset {
+  margin: 10px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.tour-modal label {
+  display: block;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-cursor,
+  .tour-ring {
+    transition: none;
+  }
+}
+/* Lock inspector (status chip opens a small panel with holder + lease). */
+.status-chip--button {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.status-chip--button:hover {
+  text-decoration: underline;
+}
+
+.status-chip--button:disabled {
+  cursor: default;
+  text-decoration: none;
+}
+
+.lock-panel {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.lock-panel p {
+  margin: 0;
+}
+/* Presenter teleprompter: floating script, never drives the UI. */
+.presenter {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 240;
+  display: grid;
+  gap: 8px;
+  max-height: 42vh;
+  overflow: auto;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(16, 24, 32, 0.28);
+}
+
+.presenter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.presenter-clock {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.presenter-clock--over {
+  color: var(--status-bad);
+}
+
+.presenter-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 14px;
+}
+
+.presenter-sections {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.presenter-sections button {
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.presenter-sections button[aria-current='true'] {
+  border-color: var(--accent);
+  background: rgba(31, 78, 121, 0.06);
+  font-weight: 600;
+}
+
+.presenter-current h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.presenter-current ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 900px) {
+  .presenter-body {
+    grid-template-columns: 1fr;
+  }
+}
+/* Launcher options: two visible columns so the submission choice is never below the fold. */
+.tour-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.tour-options fieldset {
+  margin: 0;
+}
+
+.tour-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.tour-options label strong {
+  display: block;
+  font-size: 13px;
+}
+
+.tour-options label small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tour-modal-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 8px 0 2px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 720px) {
+  .tour-options {
+    grid-template-columns: 1fr;
+  }
+}
