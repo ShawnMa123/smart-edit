@@ -13,6 +13,8 @@ const triggerStage = vi.fn();
 
 vi.mock('./api/client', () => ({
   API_BASE: '/api',
+  askGate: vi.fn(),
+  disposeFinding: vi.fn(),
   createRun: vi.fn(),
   createRunWithFiles: (...args: unknown[]) => createRunWithFiles(...args),
   triggerStage: (...args: unknown[]) => triggerStage(...args),

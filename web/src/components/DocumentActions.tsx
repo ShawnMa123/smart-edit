@@ -139,16 +139,6 @@ export function DocumentActions({
             </span>
           </button>
         ))}
-        <button
-          type="button"
-          title="Focus the document formatting toolbar"
-          onClick={() => {
-            const editor = document.querySelector<HTMLElement>('.ProseMirror');
-            editor?.focus();
-          }}
-        >
-          Formatting
-        </button>
       </div>
       {message ? (
         <p className="notice notice--warn tiny" role="status">

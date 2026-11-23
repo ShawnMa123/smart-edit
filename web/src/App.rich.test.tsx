@@ -11,6 +11,8 @@ const createRun = vi.fn();
 
 vi.mock('./api/client', () => ({
   API_BASE: '/api',
+  askGate: vi.fn(),
+  disposeFinding: vi.fn(),
   createRun: (...args: unknown[]) => createRun(...args),
   createRunWithFiles: vi.fn(),
   triggerStage: vi.fn(),

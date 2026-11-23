@@ -58,7 +58,16 @@ def _inline_text(nodes: list[dict[str, Any]]) -> str:
             piece = _inline_text(list(node.get("content") or []))
         if not piece:
             continue
-        if text and not text.endswith(tuple(" \t\n")) and not piece.startswith(tuple(" \t\n")):
+        # Adjacent text runs are one sentence split only by marks: joining them must not invent a
+        # character. A filled blank (variable atom) is a separate token, so keep one readable space
+        # at its boundary when neither side already carries whitespace.
+        is_gap = node.get("type") != "text"
+        if (
+            is_gap
+            and text
+            and not text.endswith(tuple(" \t\n"))
+            and not piece.startswith(tuple(" \t\n"))
+        ):
             text += " "
         text += piece
     return text

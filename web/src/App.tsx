@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState
 
 import { ApiError } from './api/errors';
 import { jobsClient, type DeliveryStatus } from './api/automationJobs';
-import { createRun, createRunWithFiles, triggerStage } from './api/client';
+import { askGate, createRun, createRunWithFiles, disposeFinding, getRun, triggerStage } from './api/client';
 import {
   acquireLock,
   createDocument,
@@ -35,7 +35,6 @@ import { AssistantPanel } from './components/AssistantPanel';
 import { ActivityPanel } from './components/ActivityPanel';
 import { DocumentHead, EnvironmentStrip, TopBar } from './components/AppShell';
 import { DocumentActions } from './components/DocumentActions';
-import type { LegalState } from './components/LegalPanel';
 import { ImportReport, initialImportState, type ImportState } from './components/ImportReport';
 import { NotificationPanel } from './components/NotificationPanel';
 import { DemoActivityPanel } from './components/DemoActivityPanel';
@@ -203,8 +202,6 @@ function AppContent() {
   const [currentDigest, setCurrentDigest] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [audit, dispatch] = useReducer(auditReducer, initialAuditState);
-  const [legalState, setLegalState] = useState<LegalState>({ phase: 'idle' });
-  const [legalRun, setLegalRun] = useState<{ threadId: string; digest: string } | null>(null);
   const [auditActionError, setAuditActionError] = useState<string | null>(null);
   /** Which published template to audit against; empty means "rule bundle only" (design D18). */
   const [templateId, setTemplateId] = useState('');
@@ -240,6 +237,8 @@ function AppContent() {
   const userEditedRef = useRef(false);
   const saveTimer = useRef<number | null>(null);
   const saveInFlightRef = useRef(false);
+  /** The save currently on the wire, so a caller can wait for it instead of starting a second one. */
+  const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const aliveRef = useRef(true);
 
   /**
@@ -469,11 +468,7 @@ function AppContent() {
     });
   };
 
-  const persistDraft = async (nextDoc: RichDocument, announce = false): Promise<boolean> => {
-    if (saveInFlightRef.current) {
-      if (announce) toast.info('Saving…');
-      return false;
-    }
+  const persistDraftNow = async (nextDoc: RichDocument, announce = false): Promise<boolean> => {
     const currentDraft = draftRef.current;
     const currentLock = lockRef.current;
     if (!currentDraft || !currentLock) {
@@ -481,7 +476,6 @@ function AppContent() {
       if (announce) setLockNotice('Save needs a server draft and the edit lock.');
       return false;
     }
-    saveInFlightRef.current = true;
     const nextText = richToPlainText(nextDoc);
     try {
       const next = await saveDraft(
@@ -522,9 +516,50 @@ function AppContent() {
         }
       }
       return false;
-    } finally {
-      saveInFlightRef.current = false;
     }
+  };
+
+  /** One save at a time; callers may await the promise returned here. */
+  const persistDraft = (nextDoc: RichDocument, announce = false): Promise<boolean> => {
+    if (saveInFlightRef.current) {
+      if (announce) toast.info('Saving…');
+      return Promise.resolve(false);
+    }
+    saveInFlightRef.current = true;
+    const run = persistDraftNow(nextDoc, announce).finally(() => {
+      saveInFlightRef.current = false;
+      savePromiseRef.current = null;
+    });
+    savePromiseRef.current = run;
+    return run;
+  };
+
+  /**
+   * A document scan reads the saved revision, never the editor buffer. Flush the debounced autosave
+   * (and any save already in flight) first, so the scan covers what the operator sees instead of an
+   * older, possibly empty revision. `null` means nothing could be saved and no scan may start.
+   */
+  const flushDraftForScan = async (): Promise<{
+    revision: number | null;
+    contentSha: string | null;
+  } | null> => {
+    if (saveTimer.current !== null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    if (savePromiseRef.current) await savePromiseRef.current;
+    const current = draftRef.current;
+    if (!current) return null;
+    if (dirty || richToPlainText(richDocRef.current) !== current.text) {
+      // Unsaved text needs the edit lock; a read-only viewer can still scan an unchanged draft.
+      if (!lockRef.current) return null;
+      const saved = await persistDraft(richDocRef.current);
+      if (!saved) return null;
+    }
+    const fresh = draftRef.current;
+    return fresh
+      ? { revision: fresh.revision, contentSha: fresh.content_sha256 }
+      : null;
   };
 
   const scheduleSave = (nextDoc: RichDocument) => {
@@ -910,41 +945,6 @@ function AppContent() {
     }
   };
 
-  /**
-   * Reuse the audit's run when it still matches the editor; otherwise create a fresh run from the
-   * current document. The legal check is therefore usable without running the audit first, and a
-   * stale audit can never make it inspect old text.
-   */
-  const handleRunLegal = async () => {
-    if (!text.trim()) return;
-    setLegalState({ phase: 'running' });
-    try {
-      let threadId: string;
-      let digest: string;
-      if (legalRun && legalRun.digest === currentDigest) {
-        threadId = legalRun.threadId;
-        digest = legalRun.digest;
-      } else if (audit.phase === 'report' && audit.snapshot.digest === currentDigest) {
-        threadId = audit.envelope.thread_id;
-        digest = currentDigest;
-      } else {
-        const snapshot = await createSnapshot(text, currentVersionId);
-        const created = await createRun(snapshot.text);
-        threadId = created.thread_id;
-        digest = snapshot.digest;
-      }
-      setLegalRun({ threadId, digest });
-      const report = await triggerStage(threadId, 'agent3');
-      setLegalState({ phase: 'report', envelope: report });
-    } catch (error) {
-      const failure =
-        error instanceof ApiError
-          ? { code: error.code, message: error.message }
-          : { code: 'NETWORK', message: String(error) };
-      setLegalState({ phase: 'failed', failure });
-    }
-  };
-
   const refreshAudit = async (threadId: string) => {
     const refreshed = await getRun(threadId);
     dispatch({ type: 'refresh', envelope: refreshed, at: Date.now() });
@@ -1108,6 +1108,11 @@ function AppContent() {
         currentDigest={currentDigest}
         onRun={() => void handleRunAudit()}
         onStopWaiting={handleStopWaiting}
+        onAskGate={(operation) => void handleAskGate(operation)}
+        onDispose={(findingId, disposition, reason, operation) =>
+          void handleDispose(findingId, disposition, reason, operation)
+        }
+        actionError={auditActionError}
         templateId={templateId}
         onTemplateChange={setTemplateId}
         now={now}
@@ -1142,6 +1147,8 @@ function AppContent() {
           workspaceId,
           revision: facts.draftRevision,
           contentSha: draft?.content_sha256 ?? null,
+          dirty,
+          onBeforeScan: flushDraftForScan,
           onJumpToBlock: handleJumpToBlock,
         }}
         conformance={{

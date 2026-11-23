@@ -33,6 +33,18 @@ class AuditRunError(RuntimeError):
     """The audit cannot be produced at all (no schema, no bundle, unusable plan)."""
 
 
+def _guarded(unit, evaluate) -> CheckResult:
+    """One crashing evaluator must fail its own unit, not abort the whole audit."""
+    try:
+        return evaluate()
+    except Exception as exc:  # noqa: BLE001 - deliberately isolates third-party/rule failures
+        return CheckResult(
+            unit.check_id,
+            FAILED,
+            reason_code=f"checker_crashed: {type(exc).__name__}",
+        )
+
+
 def _audit_date(as_of: str | date | None) -> str:
     """Validate and normalize the audit date; only the boundary may read the clock."""
     if as_of is None:

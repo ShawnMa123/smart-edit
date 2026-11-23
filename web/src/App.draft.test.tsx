@@ -26,6 +26,22 @@ vi.mock('./api/documents', () => ({
   listDocuments: vi.fn().mockResolvedValue([]),
 }));
 
+const legalApi = vi.hoisted(() => ({
+  submitReview: vi.fn(),
+  getRun: vi.fn(),
+  getReport: vi.fn(),
+}));
+
+vi.mock('./api/legal', () => ({
+  legalClient: {
+    submitReview: legalApi.submitReview,
+    getRun: legalApi.getRun,
+    getReport: legalApi.getReport,
+  },
+  LEGAL_POLL_INTERVAL_MS: 1,
+  LEGAL_SCAN_TIMEOUT_MS: 5000,
+}));
+
 vi.mock('./components/RichEditor', () => ({
   RichEditor: (props: {
     onChange: (document: unknown) => void;
@@ -102,6 +118,9 @@ beforeEach(() => {
   vi.mocked(acquireLock).mockReset();
   vi.mocked(saveDraft).mockReset();
   vi.mocked(getDraft).mockReset();
+  legalApi.submitReview.mockReset();
+  legalApi.getRun.mockReset();
+  legalApi.getReport.mockReset();
 });
 
 afterEach(() => {
@@ -276,5 +295,73 @@ describe('autosave', () => {
 
     await waitFor(() => expect(vi.mocked(saveDraft)).toHaveBeenCalledTimes(1));
     expect(vi.mocked(saveDraft).mock.calls[0][3]).toMatchObject({ text: 'Changed' });
+  });
+});
+
+describe('legal document scan', () => {
+  it('saves pending editor changes before scanning the saved draft', async () => {
+    vi.mocked(getDocument).mockResolvedValue(view());
+    vi.mocked(acquireLock).mockResolvedValue(lock);
+    vi.mocked(saveDraft).mockResolvedValue(
+      view({ revision: 2, etag: 'draft-2', text: 'Changed' }),
+    );
+    legalApi.submitReview.mockResolvedValue({
+      run_id: 'run_1',
+      status: 'succeeded',
+      stage: 'done',
+      created_at: '2026-11-23T00:00:00Z',
+      deadline_at: '2026-11-23T00:02:00Z',
+      report_id: 'rep_1',
+      error: null,
+      finished_at: '2026-11-23T00:00:01Z',
+      progress: { stage: 'done', planned: 3, done: 3 },
+    });
+    legalApi.getReport.mockResolvedValue({
+      report_id: 'rep_1',
+      run_id: 'run_1',
+      completion: 'complete',
+      outcome: 'no_findings',
+      findings: [],
+      coverage: [],
+      limitations: [],
+      snapshot: { document_id: 'demo-document', revision: 2, content_sha256: 'a'.repeat(64) },
+      coverage_summary: {
+        planned: 3,
+        settled: 3,
+        assessed: 3,
+        assessed_ratio: 1,
+        by_status: { pass: 3 },
+        clauses: 1,
+        truncated: false,
+      },
+      retrieval: { queries: 0, hits: 0, web_requested: false, web_used: false, web_calls: 0 },
+      gate: { status: 'clear', reasons: [], coverage_ratio: 1, policy: 'legal-scan/1' },
+    });
+
+    render(<App />);
+    await waitFor(() => expect(acquireLock).toHaveBeenCalled());
+    await screen.findByText(/server draft rev 1/i);
+
+    // The operator types and immediately asks for a document check, before the 2 s autosave fires.
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }));
+    expect(screen.getByTestId('save-state').textContent).toBe('saving');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Legal advice' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    expect(screen.getByTestId('legal-dirty')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() => expect(legalApi.submitReview).toHaveBeenCalledTimes(1));
+    // The scan must not read the old, saved revision: the pending text is saved first, and the scan
+    // pins that new revision.
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(saveDraft).mock.calls[0][3]).toMatchObject({ text: 'Changed' });
+    expect(legalApi.submitReview).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'document', expected_revision: 2 }),
+      expect.anything(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('legal-scan-target').textContent).toContain('rev 2'),
+    );
   });
 });

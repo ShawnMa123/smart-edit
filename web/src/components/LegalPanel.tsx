@@ -32,12 +32,24 @@ import {
   type SupportLevel,
 } from '../api/legal';
 
+export interface LegalScanTarget {
+  revision: number | null;
+  contentSha: string | null;
+}
+
 export interface LegalPanelProps {
   documentId: string;
   workspaceId?: string;
   /** The draft revision on screen; a scan pins it so a stale answer is refused, not silently used. */
   revision?: number | null;
   contentSha?: string | null;
+  /** True while the editor holds changes that have not reached the saved draft yet. */
+  dirty?: boolean;
+  /**
+   * Persist unsaved editor changes and return the revision the scan should pin. A scan reads the
+   * saved draft, so without this hook an unsaved draft must not be scanned silently.
+   */
+  onBeforeScan?: () => Promise<LegalScanTarget | null>;
   /** Injected in tests; defaults to the real client. */
   client?: LegalClient;
   options?: LegalOptions;
@@ -135,7 +147,7 @@ const GATE_REASON_COPY: Record<string, string> = {
   limited_coverage: 'Too little of the draft could be assessed.',
   unchecked_units: 'Some checks could not run; this result does not cover them.',
   human_review_finding: 'At least one finding needs a human decision.',
-  no_document_text: 'The draft has no text to scan.',
+  no_document_text: 'The saved draft has no text to scan. Save the draft and scan again.',
 };
 
 const STAGE_COPY: Record<string, string> = {
@@ -516,6 +528,8 @@ export function LegalPanel({
   workspaceId = DEFAULT_WORKSPACE,
   revision = null,
   contentSha = null,
+  dirty = false,
+  onBeforeScan,
   client = legalClient,
   options = {},
   onJumpToBlock,
@@ -530,9 +544,19 @@ export function LegalPanel({
   const [run, setRun] = useState<ReviewRun | null>(null);
   const [report, setReport] = useState<ReviewReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The revision this panel actually pinned, which may be newer than the prop after a pre-scan save. */
+  const [pinned, setPinned] = useState<LegalScanTarget | null>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
   const busyNotify = useRef(onBusyChange);
   busyNotify.current = onBusyChange;
+  // A report and its pinned revision belong to one document; opening another must not keep showing
+  // the previous draft's result as if it described this one.
+  useEffect(() => {
+    setPinned(null);
+    setReport(null);
+    setRun(null);
+    setError(null);
+  }, [documentId]);
   useEffect(() => {
     busyNotify.current?.(busy);
   }, [busy]);
@@ -572,14 +596,31 @@ export function LegalPanel({
     }
   };
 
-  /** Scan the draft on screen: queue a run, poll it, then read the report. */
+  /** Scan the draft on screen: save any pending edit, queue a run, poll it, then read the report. */
   const scanDocument = async () => {
     if (busy) return;
+    if (dirty && !onBeforeScan) {
+      setError('Save the draft first: this scan reads the saved revision, not unsaved editor changes.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setReport(null);
     setRun(null);
     try {
+      let target: LegalScanTarget = { revision: revision ?? null, contentSha: contentSha ?? null };
+      if (onBeforeScan) {
+        const flushed = await onBeforeScan();
+        if (!flushed) {
+          throw new ApiError(
+            0,
+            'draft_not_saved',
+            'the draft could not be saved, so it was not scanned',
+          );
+        }
+        target = flushed;
+        setPinned(flushed);
+      }
       const getRun = client.getRun;
       let current = await client.submitReview(
         {
@@ -587,8 +628,8 @@ export function LegalPanel({
           document_id: documentId,
           scope: 'document',
           modes: ['deterministic', 'legal'],
-          expected_revision: revision ?? undefined,
-          expected_content_sha256: contentSha ?? undefined,
+          expected_revision: target.revision ?? undefined,
+          expected_content_sha256: target.contentSha ?? undefined,
           web_search: webSearch,
         },
         options,
@@ -627,15 +668,18 @@ export function LegalPanel({
     setMode(next);
     setReport(null);
     setRun(null);
+    setPinned(null);
     setError(null);
     setQuestion('');
   };
 
   const stage = run?.progress?.stage ?? run?.stage;
+  const scanRevision = pinned?.revision ?? revision;
+  const scanContentSha = pinned?.contentSha ?? contentSha;
   const stale =
     report?.snapshot?.revision != null &&
-    revision != null &&
-    report.snapshot.revision !== revision;
+    scanRevision != null &&
+    report.snapshot.revision !== scanRevision;
 
   return (
     <div className="legal-panel">
@@ -703,9 +747,16 @@ export function LegalPanel({
             {DOCUMENT_MODE_NOTE}
           </p>
           <p className="tiny muted" data-testid="legal-scan-target">
-            Draft {revision != null ? `rev ${revision}` : 'current revision'}
-            {contentSha ? ` · ${contentSha.slice(0, 12)}…` : ''}
+            Draft {scanRevision != null ? `rev ${scanRevision}` : 'current revision'}
+            {scanContentSha ? ` · ${scanContentSha.slice(0, 12)}…` : ''}
           </p>
+          {dirty ? (
+            <p className="notice notice--warn tiny" role="status" data-testid="legal-dirty">
+              {onBeforeScan
+                ? 'There are unsaved editor changes. They are saved first, so this scan covers the text you see.'
+                : 'There are unsaved editor changes. This scan reads the saved revision — save the draft first.'}
+            </p>
+          ) : null}
           <label className="legal-web-toggle tiny">
             <input
               type="checkbox"
@@ -717,7 +768,12 @@ export function LegalPanel({
           </label>
           <p className="tiny muted">{WEB_TOGGLE_NOTE}</p>
           <div className="row">
-            <button type="button" onClick={() => void scanDocument()} disabled={busy} data-tour="legal-scan">
+            <button
+              type="button"
+              onClick={() => void scanDocument()}
+              disabled={busy || (dirty && !onBeforeScan)}
+              data-tour="legal-scan"
+            >
               {report ? 'Scan again' : 'Scan document'}
             </button>
           </div>

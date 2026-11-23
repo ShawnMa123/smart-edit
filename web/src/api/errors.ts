@@ -91,6 +91,9 @@ const MESSAGES: Record<string, string> = {
     'Someone else holds the editing lock, so the draft was not changed. Take the lock and retry.',
   lock_missing:
     'The editing lock expired, so the draft was not changed. Click into the editor to re-acquire it.',
+  // Document scan: the pre-scan save did not land, so the scan never started.
+  draft_not_saved:
+    'The draft could not be saved, so nothing was scanned. Fix the save error (or re-acquire the edit lock) and scan again.',
 };
 
 export function explainError(code: string): string {

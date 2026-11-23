@@ -370,7 +370,10 @@ def run_document_scan(
             findings=[],
             coverage=[check],
             limitations=[
-                {"code": "no_document_text", "message": "The draft has no text to scan."}
+                {
+                    "code": "no_document_text",
+                    "message": "The saved draft has no text to scan.",
+                }
             ],
             snapshot=snapshot_meta,
             coverage_summary=summary,

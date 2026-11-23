@@ -15,6 +15,11 @@ Design: `openspec/changes/frontend-console/design.md` D1-D2.
 
 from __future__ import annotations
 
+try:
+    from langgraph.types import Overwrite
+except ImportError:  # pragma: no cover - older langgraph layout
+    from langgraph.graph.message import Overwrite  # type: ignore[no-redef]
+
 from app.audit.resolve import resolve_template
 from app.config import FieldsConfigError, load_fields_config
 from app.nodes.audit import audit_node
@@ -22,6 +27,7 @@ from app.nodes.extract import extract_node
 from app.nodes.normalize import normalize_node
 from app.nodes.parse import parse_node
 from app.parsing.extraction_profile import resolve_profile
+from app.regulatory.node import regulatory_node
 from app.rules.templates import load_templates
 from app.stages import STAGE_TARGETS, latest_stage
 from app.standalone import clear_previous_outputs
@@ -104,6 +110,8 @@ def execute_chain(
     template_reference: dict | None = None,
     profile=None,
     as_of: str | None = None,
+    retriever=None,
+    answerer=None,
 ) -> dict:
     """Run `chain` in order, merging each node update into `state` (mutated in place).
 
@@ -151,6 +159,8 @@ def execute_chain(
                 profile=profile,
                 fields_yaml=fields_yaml,
             )
+        elif stage == "agent3":
+            update = regulatory_node(state, retriever=retriever, answerer=answerer)
         elif stage == "audit":
             update = audit_node(state, template_reference=template_reference, as_of=as_of)
         else:

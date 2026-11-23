@@ -81,7 +81,9 @@ def _seed(store: RunStore, thread_id: str, *, drop: str | None = None) -> None:
 
 
 def _audit(client: TestClient, thread_id: str) -> dict:
-    response = client.post(f"/runs/{thread_id}/stages/audit")
+    # `CO-ISSUE-NOT-PAST` compares against the audit date; pin it so the clean fixture stays clean
+    # (the same convention as `test_audit_acceptance` / `test_audit_node`).
+    response = client.post(f"/runs/{thread_id}/stages/audit?as_of=2026-03-12")
     assert response.status_code == 200, response.text
     return response.json()
 

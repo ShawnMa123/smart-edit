@@ -485,13 +485,15 @@ def test_a_second_audit_does_not_accumulate_old_findings():
     del state["fields"]["guarantee_amount"]
     state["docs"][0]["full_text"] = state["docs"][0]["full_text"].replace("500000.00", "")
     state["docs"][0]["blocks"][0]["text"] = state["docs"][0]["full_text"]
-    merge_update(state, audit_node(state))
+    # `CO-ISSUE-NOT-PAST` compares against the audit date; pin it so the only finding is the missing
+    # amount this test is about (the same convention as `test_audit_acceptance` / `test_audit_node`).
+    merge_update(state, audit_node(state, as_of="2026-03-12"))
     first = list(state["findings"])
     assert len(first) == 1
 
     state["fields"]["guarantee_number"] = _field("guarantee_number", "BG-2026-00417")
     state["docs"][0]["full_text"] += "\nedited"
-    merge_update(state, audit_node(state))
+    merge_update(state, audit_node(state, as_of="2026-03-12"))
 
     assert len(state["findings"]) == 1
     assert state["findings"][0]["id"] == "B-001"

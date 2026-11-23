@@ -41,7 +41,11 @@ const inlineText = (nodes: InlineNode[] | undefined): string => {
       piece = inlineText(node.content);
     }
     if (!piece) continue;
-    if (text && !/\s$/.test(text) && !/^\s/.test(piece)) text += ' ';
+    // Adjacent text runs are one sentence split only by marks: joining them must not invent a
+    // character. A filled blank (variable atom) is a separate token, so keep one readable space at
+    // its boundary when neither side already carries whitespace.
+    const isGap = node.type !== 'text';
+    if (isGap && text && !/\s$/.test(text) && !/^\s/.test(piece)) text += ' ';
     text += piece;
   }
   return text;

@@ -209,11 +209,15 @@ def test_an_invalid_as_of_fails_the_audit_instead_of_using_today():
 def test_the_gate_is_written_only_when_an_operation_is_asked():
     """6.3 An audit alone approves nothing; asking for an operation stores one decision."""
     clean = audit_node(_state(), as_of=TEST_AS_OF)
-    assert "gate" not in clean
+    assert clean.get("gate") is None
 
     state = _state()
     state["fields"].pop("guarantee_amount")
-    decided = audit_node(state, operation=START_APPROVAL, as_of=TEST_AS_OF)
+    merge_update(state, audit_node(state, as_of=TEST_AS_OF))
+    assert state.get("gate") is None, "an audit must not decide the gate"
+
+    decided = gate_node(state, START_APPROVAL)
+    assert decided["gate"]["decision"] == BLOCKED
 
 
 def test_an_audit_replaces_its_own_rows_and_keeps_other_producers():

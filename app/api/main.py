@@ -36,6 +36,9 @@ from app.api.organization import router as organization_router
 from app.assistant.bootstrap import build_services
 from app.assistant.errors import AssistantError
 from app.assistant.service import AssistantService
+from app.audit.disposition import DispositionError, append_event, latest
+from app.audit.gate import GateError
+from app.audit.policy import OPERATIONS
 from app.documents.bootstrap import build_host_services
 from app.documents.errors import HostError
 from app.identity.authorization import begin_request_cache, end_request_cache
@@ -45,9 +48,12 @@ from app.identity.principal import has_csrf_signal, is_public_path, requires_csr
 from app.identity.resources import DocumentAccess
 from app.llm import resolve_llm
 from app.logging_setup import get_logger
+from app.nodes.audit import AUDIT_AGENT, AUDIT_STAGE
+from app.nodes.gate import gate_node
 from app.parsing.extraction_profile import ProfileError
+from app.runner import Runner
 from app.runs import RunStore, UnknownRun
-from app.runtime import UnknownStage, execute_chain, resolve_extraction_profile
+from app.runtime import UnknownStage, execute_chain, merge_update, resolve_extraction_profile
 from app.standalone import plan_standalone
 from app.stages import AGENT_SPECS
 from app.trail import record
@@ -256,6 +262,8 @@ def create_app(
     store: RunStore | None = None,
     llm=_UNSET,
     runs_dir: str | Path | None = None,
+    runner: Runner | None = None,
+    checkpointer_path: str | Path | None = None,
     assistant_services=None,
     assistant_deadline_seconds: int = 120,
     host_services=None,
@@ -265,6 +273,11 @@ def create_app(
     app = FastAPI(title="smart-edit console API", version="0.1.0")
     app.state.store = store if store is not None else RunStore(runs_dir)
     app.state.llm = resolve_llm() if llm is _UNSET else llm
+    app.state.runner = runner or Runner(
+        app.state.store,
+        llm=app.state.llm,
+        checkpointer_path=checkpointer_path,
+    )
     identity = identity_services or build_identity_services()
     app.state.identity = identity
     host = host_services or build_host_services(
@@ -424,8 +437,31 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        """Validation refusals keep each API family's error contract.
+
+        The legacy console (`/runs…`) returns `{code, message, detail?}`; the newer identity /
+        assistant / document / automation APIs nest under `error` and echo the request id.
+        """
+        if request.url.path == "/runs" or request.url.path.startswith("/runs/"):
+            errors = [
+                {
+                    "loc": [str(part) for part in error.get("loc", ())],
+                    "msg": str(error.get("msg") or ""),
+                    "type": str(error.get("type") or ""),
+                }
+                for error in exc.errors()
+            ]
+            return JSONResponse(
+                status_code=422,
+                content=error_body(
+                    "INVALID_REQUEST", "request validation failed", {"errors": errors}
+                ),
+            )
         fields = [
-            {"field": ".".join(str(part) for part in error.get("loc", [])), "code": str(error.get("type"))}
+            {
+                "field": ".".join(str(part) for part in error.get("loc", [])),
+                "code": str(error.get("type")),
+            }
             for error in exc.errors()
         ]
         return JSONResponse(
@@ -462,22 +498,6 @@ def create_app(
     @app.exception_handler(IncompleteResult)
     async def _incomplete(request: Request, exc: IncompleteResult) -> JSONResponse:  # noqa: ARG001
         return JSONResponse(status_code=500, content=error_body("INCOMPLETE_RESULT", str(exc)))
-
-    @app.exception_handler(RequestValidationError)
-    async def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:  # noqa: ARG001
-        """Transport validation uses the same `{code,message,detail?}` envelope as refusals."""
-        errors = [
-            {
-                "loc": [str(part) for part in error.get("loc", ())],
-                "msg": str(error.get("msg") or ""),
-                "type": str(error.get("type") or ""),
-            }
-            for error in exc.errors()
-        ]
-        return JSONResponse(
-            status_code=422,
-            content=error_body("INVALID_REQUEST", "request validation failed", {"errors": errors}),
-        )
 
     @app.post("/runs", status_code=201)
     async def create_run(request: Request, autostart: bool = False) -> JSONResponse:
@@ -531,6 +551,7 @@ def create_app(
         thread_id: str,
         stage: str,
         template: str | None = None,
+        input_mode: str = "raw",
         as_of: str | None = None,
         profile: str | None = None,
     ) -> dict:

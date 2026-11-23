@@ -37,6 +37,17 @@ export interface AuditPanelProps {
   now?: number;
   /** True when the editor has no text; the audit cannot start (EMPTY_SUBMISSION server-side). */
   textEmpty?: boolean;
+  /** Ask one protected operation; the caller refreshes the envelope afterwards. */
+  onAskGate?: (operation: string) => void;
+  /** Append a disposition; the caller re-asks `operation` afterwards. */
+  onDispose?: (
+    findingId: string,
+    disposition: string,
+    reason: string | undefined,
+    operation: string,
+  ) => void;
+  /** Last gate/disposition failure from the caller. */
+  actionError?: string | null;
 }
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
@@ -282,6 +293,9 @@ export function AuditPanel({
   onTemplateChange,
   now,
   textEmpty = false,
+  onAskGate,
+  onDispose,
+  actionError = null,
 }: AuditPanelProps) {
   const [operation, setOperation] = useState('start_approval');
   const [reasons, setReasons] = useState<Record<string, string>>({});

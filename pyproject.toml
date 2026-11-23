@@ -21,6 +21,8 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "psycopg_pool>=3.2",
     "argon2-cffi>=23.1",
+    # Vendored `mercatoria` retrieval (statute / knowledge citations) embeds and ranks with numpy.
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]

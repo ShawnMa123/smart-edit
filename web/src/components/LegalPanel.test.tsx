@@ -253,4 +253,69 @@ describe('LegalPanel · document check', () => {
       expect(screen.getByText(/The draft changed since this scan/)).toBeTruthy(),
     );
   });
+
+  it('saves unsaved editor changes before scanning so the scan covers the text on screen', async () => {
+    // The panel's props still pin rev 3, but the pre-scan save lands rev 4: the scan must use the
+    // saved result, otherwise the backend scans the older (possibly empty) revision silently.
+    const client = documentClient(
+      makeReport({ snapshot: { document_id: 'doc-1', revision: 4, content_sha256: 'fresh-sha' } }),
+    );
+    const onBeforeScan = vi.fn().mockResolvedValue({ revision: 4, contentSha: 'fresh-sha' });
+    render(
+      <LegalPanel
+        documentId="doc-1"
+        revision={3}
+        contentSha="abcdef1234567890"
+        dirty
+        onBeforeScan={onBeforeScan}
+        client={client}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    expect(screen.getByTestId('legal-dirty').textContent).toContain('saved first');
+    await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() => expect(onBeforeScan).toHaveBeenCalledTimes(1));
+    expect(client.submitReview).toHaveBeenCalledWith(
+      expect.objectContaining({ expected_revision: 4, expected_content_sha256: 'fresh-sha' }),
+      expect.anything(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('legal-scan-target').textContent).toContain('rev 4'),
+    );
+    expect(screen.queryByText(/The draft changed since this scan/)).toBeNull();
+  });
+
+  it('refuses to scan a saved revision that is behind unsaved editor changes', async () => {
+    const client = documentClient();
+    render(<LegalPanel documentId="doc-1" revision={3} dirty client={client} />);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    const button = screen.getByRole('button', { name: 'Scan document' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByTestId('legal-dirty').textContent).toContain('save the draft first');
+    expect(client.submitReview).not.toHaveBeenCalled();
+  });
+
+  it('does not scan when the pre-scan save fails', async () => {
+    const client = documentClient();
+    const onBeforeScan = vi.fn().mockResolvedValue(null);
+    render(
+      <LegalPanel
+        documentId="doc-1"
+        revision={3}
+        dirty
+        onBeforeScan={onBeforeScan}
+        client={client}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByRole('alert').textContent).toContain('could not be saved');
+    expect(client.submitReview).not.toHaveBeenCalled();
+  });
 });

@@ -61,13 +61,6 @@ const TABS: Tab[] = [
   },
 ];
 
-export interface AssistantPanelProps extends AuditPanelProps {
-  legalState?: LegalState;
-  onRunLegal?: () => void;
-  canRunLegal?: boolean;
-  legalHint?: string;
-}
-
 /**
  * Accessible name: base label plus the build status, so assistive tech hears the same caveat the
  * visible tag shows. The visible label stays short (design D7).

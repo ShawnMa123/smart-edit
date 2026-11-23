@@ -26,7 +26,7 @@
 
 | 想验证什么 | 怎么做 | 预期 |
 |---|---|---|
-| **合规风险能不能拦住** | 登录 applicant → 编辑器 `Cmd/Ctrl+A` 全选 → 粘贴[制裁样例](fixtures/legal-samples/sanctions-export-zh.txt) → 等 2 秒 → 右侧 `Legal → Document check → Scan document` | `Gate: Blocked`；`Sensitive goods destined for a sanctioned country`（Critical/Blocks），带 `弹药/导弹/军用无人机/伊朗` 四个草稿锚点，点 `Jump to clause` 可回跳 |
+| **合规风险能不能拦住** | 登录 applicant → 编辑器 `Cmd/Ctrl+A` 全选 → 粘贴[制裁样例](fixtures/legal-samples/sanctions-export-zh.txt) → 右侧 `Legal → Document check → Scan document`（未保存的编辑会先自动保存） | `Gate: Blocked`；`Sensitive goods destined for a sanctioned country`（Critical/Blocks），带 `弹药/导弹/军用无人机/伊朗` 四个草稿锚点，点 `Jump to clause` 可回跳 |
 | **法条结论有没有证据** | 粘贴[中文保函样例](fixtures/legal-samples/statute-zh.txt) → 同样扫描 | 2 条确定性措辞 + 2 条法条结论（引《…规定》第一条/第三条，附条号/法域/生效日） |
 | **要件审计是否逐项可数** | 粘贴[标准保函](fixtures/llm/sample_document.txt) → 右侧 `Audit` → `Customer template` 填 `adidas-guarantee` → `Run spec audit` | 57 项检查：`pass 36 / finding 1 / not_applicable 19 / unable 1`，唯一阻断为"开立日期早于审计日" |
 
@@ -361,6 +361,11 @@ draft → clauses (with code-point anchors) → plan (= coverage denominator)
 
 Things that will not happen, by construction:
 
+- A scan never reads the editor buffer as if it were the draft. Clicking **Scan document** first
+  flushes the pending autosave (and waits for any save already in flight), then pins that saved
+  revision; if the save fails, the scan does not start and says so. Without unsaved changes the
+  saved revision is scanned directly, so an empty, never-saved draft cannot be reported as
+  "no text" behind your back.
 - A clause that was never planned can never read as "checked". `assessed/planned < 0.6` adds
   `limited_coverage`; any `failed`/`unable_to_assess`/`needs_input` unit adds `unchecked_units`.
 - The model cannot invent evidence (`evidence_ids` are filtered), cannot raise `severity` above

@@ -14,8 +14,56 @@ from tests.helpers import make_doc
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL_CONFIG = ROOT / "data" / "regulatory" / "config.json"
+CORPUS_MANIFEST = ROOT / "data" / "regulatory" / "corpus" / "manifest.json"
 
 
+def _local_index_available() -> bool:
+    """True when the generated index that `current.txt` names is present in this checkout.
+
+    Reads the config with `json` on purpose: importing `mercatoria.config` would load `.env` into
+    `os.environ` at collection time and leak production settings into unrelated tests.
+    """
+    try:
+        cfg = json.loads(LOCAL_CONFIG.read_text(encoding="utf-8"))
+        index_dir = Path(cfg.get("index_dir") or "data/regulatory/index")
+        if not index_dir.is_absolute():
+            index_dir = ROOT / index_dir
+        current = index_dir / "current.txt"
+        if not current.is_file():
+            return False
+        return (index_dir / current.read_text(encoding="utf-8").strip()).is_file()
+    except Exception:  # noqa: BLE001 - an unusable config means "no local index here"
+        return False
+
+
+def _corpus_available() -> bool:
+    """True when the raw regulatory corpus has been fetched (it is deliberately not committed)."""
+    if not CORPUS_MANIFEST.is_file():
+        return False
+    try:
+        documents = json.loads(CORPUS_MANIFEST.read_text(encoding="utf-8")).get("docs") or []
+    except Exception:  # noqa: BLE001 - an unreadable manifest means "no corpus here"
+        return False
+    return bool(documents)
+
+
+requires_local_index = pytest.mark.skipif(
+    not _local_index_available(),
+    reason=(
+        "the generated regulatory index is not checked in; fetch the corpus and build the index "
+        "(data/regulatory/corpus/fetch_*.py, then `python -m app.regulatory.index build`)"
+    ),
+)
+requires_corpus = pytest.mark.skipif(
+    not _corpus_available(),
+    reason=(
+        "the raw regulatory corpus is not checked in; run the fetchers in "
+        "data/regulatory/corpus/ before this build test"
+    ),
+)
+
+
+@requires_local_index
 def test_default_local_index_retrieves_without_a_service():
     retriever = InProcessRetriever(keyword_only=True)
 
@@ -30,6 +78,7 @@ def test_default_local_index_retrieves_without_a_service():
     assert to_chunks(payload["chunks"])[0]["source_type"] == "kb"
 
 
+@requires_local_index
 def test_regulatory_node_uses_the_local_index_without_external_config(monkeypatch):
     monkeypatch.delenv("SMART_EDIT_RAG", raising=False)
     monkeypatch.setenv("SMART_EDIT_RAG_KEYWORD_ONLY", "1")
@@ -63,6 +112,7 @@ def test_missing_local_index_is_reported_as_empty(tmp_path):
         retriever.retrieve(["保函"], {})
 
 
+@requires_corpus
 def test_keyword_only_build_creates_a_usable_index(tmp_path):
     config = tmp_path / "config.json"
     config.write_text(
