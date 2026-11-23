@@ -88,6 +88,8 @@ openspec validate --all
 
 ## 架构一句话
 
+> 技术总览（组件、AI 使用与呈现、证据/安全边界、部署与测试）见 **`DEMO_Tech.md`**。
+
 ```text
 ingest → parse → extract → normalize → reset → (Agent2 要件校验 ‖ Agent3 法规合规) → merge
        → Agent4 Verifier → ⏸ 人工核对 → 闸门 → 导出
