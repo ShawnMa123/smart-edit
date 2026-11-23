@@ -548,7 +548,14 @@ function AppContent() {
     if (savePromiseRef.current) await savePromiseRef.current;
     const current = draftRef.current;
     if (!current) return true;
-    if (!dirty && richToPlainText(richDocRef.current) === current.text) return true;
+    const textNow = richToPlainText(richDocRef.current);
+    if (textNow.trim() === '' && (current.text ?? '').trim() !== '') {
+      setLockNotice(
+        'The editor is empty but the saved draft has text. Nothing was saved or scanned; paste again or reload to restore the draft.',
+      );
+      return false;
+    }
+    if (!dirty && textNow === current.text) return true;
     if (!lockRef.current) return false;
     return persistDraft(richDocRef.current);
   };
@@ -572,8 +579,20 @@ function AppContent() {
 
   const scheduleSave = (nextDoc: RichDocument) => {
     setDirty(true);
-    setSaveState('saving');
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    const nextText = richToPlainText(nextDoc);
+    const savedText = draftRef.current?.text ?? '';
+    if (nextText.trim() === '' && savedText.trim() !== '') {
+      // A select-all + failed paste must not wipe the saved draft. Explicit Save can still replace
+      // it; auto-save stays paused until the editor has text again.
+      saveTimer.current = null;
+      setSaveState('local');
+      setLockNotice(
+        'The editor is empty but the saved draft has text. Auto-save is paused: paste again, reload to restore, or use Save to replace it.',
+      );
+      return;
+    }
+    setSaveState('saving');
     if (!draftRef.current || !lockRef.current) {
       setSaveState('local');
       return;
@@ -1169,6 +1188,7 @@ function AppContent() {
           dirty,
           editorCharacters: text.length,
           editorPreview,
+          savedCharacters: draft?.text?.length ?? null,
           onBeforeScan: flushDraftForScan,
           onJumpToBlock: handleJumpToBlock,
         }}

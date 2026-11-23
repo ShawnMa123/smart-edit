@@ -61,6 +61,9 @@ vi.mock('./components/RichEditor', () => ({
       >
         edit
       </button>
+      <button type="button" onClick={() => props.onChange({ type: 'doc', content: [] })}>
+        clear
+      </button>
       <span data-testid="save-state">{props.saveState}</span>
       {props.conflict ? (
         <div data-testid="conflict">
@@ -295,6 +298,26 @@ describe('autosave', () => {
 
     await waitFor(() => expect(vi.mocked(saveDraft)).toHaveBeenCalledTimes(1));
     expect(vi.mocked(saveDraft).mock.calls[0][3]).toMatchObject({ text: 'Changed' });
+  });
+
+  it('does not autosave an empty editor over a non-empty server draft', async () => {
+    vi.mocked(getDocument).mockResolvedValue(view({ text: 'Server body' }));
+    vi.mocked(acquireLock).mockResolvedValue(lock);
+    vi.mocked(saveDraft).mockResolvedValue(
+      view({ revision: 2, etag: 'draft-2', text: 'Changed' }),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(acquireLock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1), { timeout: 4000 });
+
+    // A select-all + failed paste leaves an empty editor; it must not wipe the saved draft.
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }));
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('save-state').textContent).toBe('local');
   });
 
   it('warns before leaving the page with unsaved changes', async () => {

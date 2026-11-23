@@ -49,6 +49,8 @@ export interface LegalPanelProps {
   editorCharacters?: number | null;
   /** First ~80 characters of the editor text, so the operator sees what will be scanned. */
   editorPreview?: string | null;
+  /** Canonical length of the saved draft, used to explain an empty editor. */
+  savedCharacters?: number | null;
   /**
    * Persist unsaved editor changes and return the revision the scan should pin. A scan reads the
    * saved draft, so without this hook an unsaved draft must not be scanned silently.
@@ -542,6 +544,7 @@ export function LegalPanel({
   dirty = false,
   editorCharacters = null,
   editorPreview = null,
+  savedCharacters = null,
   onBeforeScan,
   client = legalClient,
   options = {},
@@ -612,6 +615,14 @@ export function LegalPanel({
   /** Scan the draft on screen: save any pending edit, queue a run, poll it, then read the report. */
   const scanDocument = async () => {
     if (busy) return;
+    if (editorCharacters === 0) {
+      setError(
+        savedCharacters
+          ? `The editor is empty, but the saved draft has ${savedCharacters} characters. Pasting may have failed; click into the document and paste again before scanning.`
+          : 'The editor is empty — paste the document text into the editor before scanning.',
+      );
+      return;
+    }
     if (dirty && !onBeforeScan) {
       setError('Save the draft first: this scan reads the saved revision, not unsaved editor changes.');
       return;
@@ -770,6 +781,13 @@ export function LegalPanel({
             <p className="tiny muted" data-testid="legal-editor-target">
               Editor text: {editorCharacters} characters
               {editorPreview ? ` — “${editorPreview}”` : ''}
+            </p>
+          ) : null}
+          {editorCharacters === 0 ? (
+            <p className="notice notice--warn tiny" role="status" data-testid="legal-editor-empty">
+              The editor is empty
+              {savedCharacters ? `, but the saved draft has ${savedCharacters} characters` : ''}. Paste
+              the text into the document before scanning.
             </p>
           ) : null}
           {dirty ? (

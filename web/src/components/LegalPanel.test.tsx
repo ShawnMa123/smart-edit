@@ -334,6 +334,28 @@ describe('LegalPanel · document check', () => {
     );
   });
 
+  it('refuses to scan an empty editor instead of reporting no text', async () => {
+    const client = documentClient();
+    render(
+      <LegalPanel
+        documentId="doc-1"
+        revision={5}
+        contentSha="sha"
+        editorCharacters={0}
+        savedCharacters={163}
+        client={client}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    expect(screen.getByTestId('legal-editor-empty').textContent).toContain('163 characters');
+    await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByRole('alert').textContent).toContain('editor is empty');
+    expect(client.submitReview).not.toHaveBeenCalled();
+  });
+
   it('does not scan when the pre-scan save fails', async () => {
     const client = documentClient();
     const onBeforeScan = vi.fn().mockResolvedValue(null);
