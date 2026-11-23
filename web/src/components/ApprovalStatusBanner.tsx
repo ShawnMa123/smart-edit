@@ -6,7 +6,8 @@
  */
 
 import type { SubmissionSummary } from '../api/approvalTypes';
-import { approvalStatusMeta, approvalStepStates, approvalSteps } from '../domain/approvalStatus';
+import { approvalStatusMeta } from '../domain/approvalStatus';
+import { ApprovalStepper } from './ApprovalStepper';
 import { StatusBadge } from './StatusBadge';
 
 export interface ApprovalStatusBannerProps {
@@ -23,7 +24,6 @@ export function ApprovalStatusBanner({
   const meta = approvalStatusMeta(status ?? submission?.status ?? 'draft', submission?.route);
   if (meta.key === 'draft') return null;
 
-  const states = approvalStepStates(meta);
   const submittedAt = submission?.created_at
     ? new Date(submission.created_at).toLocaleString()
     : null;
@@ -51,24 +51,10 @@ export function ApprovalStatusBanner({
         ) : null}
       </div>
 
-      <ol className="approval-stepper" aria-label="Approval progress">
-        {approvalSteps(submission?.route).map((step, index) => {
-          const state = states[index];
-          return (
-            <li
-              key={step.key}
-              className={`approval-step approval-step--${state}`}
-              data-state={state}
-              aria-current={state === 'current' ? 'step' : undefined}
-            >
-              <span className="approval-step-dot" aria-hidden="true">
-                {state === 'done' ? '✓' : state === 'current' ? '●' : index + 1}
-              </span>
-              <span className="approval-step-label">{step.label}</span>
-            </li>
-          );
-        })}
-      </ol>
+      <ApprovalStepper
+        status={status ?? submission?.status}
+        route={submission?.route}
+      />
 
       <p className="approval-banner-meta tiny">
         {submittedAt ? `Submitted ${submittedAt}` : 'Submitted'}

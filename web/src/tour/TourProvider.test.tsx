@@ -292,6 +292,63 @@ describe('TourProvider', () => {
     );
   });
 
+  it('shows the autopilot countdown as a draining bar plus a whole-tour rail', async () => {
+    const tour = makeTour([
+      { id: 'read', title: 'Read me', body: 'Long copy', placement: 'center' },
+      { id: 'done', title: 'Done', body: 'Done', placement: 'center' },
+    ]);
+
+    render(
+      <TourProvider tour={tour} autoDwellMs={4000}>
+        <LaunchButton />
+      </TourProvider>,
+    );
+
+    await startTour('auto');
+    const bar = await screen.findByTestId('tour-countdown-bar');
+    expect(bar.getAttribute('role')).toBe('progressbar');
+    expect(bar.getAttribute('aria-valuenow')).toBe('100');
+    // Step 1 of 2 → the rail is half full.
+    expect(screen.getByTestId('tour-progress').querySelector('span')?.getAttribute('style')).toContain(
+      'width: 50%',
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const drained = Number(bar.getAttribute('aria-valuenow'));
+    expect(drained).toBeLessThan(100);
+    expect(drained).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(screen.getByTestId('tour-countdown').getAttribute('data-paused')).toBe('yes');
+  });
+
+  it('explains why Next is locked while the step waits', async () => {
+    const tour = makeTour([
+      {
+        id: 'gate',
+        title: 'Wait for the app',
+        body: 'The gate opens when the run finishes',
+        target: '[data-tour="gate"]',
+        until: { kind: 'selector', selector: '[data-tour="ready"]' },
+      },
+      { id: 'done', title: 'Done', body: 'Done', placement: 'center' },
+    ]);
+
+    render(
+      <TourProvider tour={tour}>
+        <LaunchButton />
+        <button type="button" data-tour="gate">
+          gate
+        </button>
+      </TourProvider>,
+    );
+
+    await startTour('guide');
+    expect(await screen.findByTestId('tour-waiting')).toBeTruthy();
+    expect(screen.getByTestId('tour-waiting').textContent).toContain('Next unlocks');
+    expect(screen.getByTestId('tour-waiting').querySelector('.ai-wait__glyph')).toBeTruthy();
+  });
+
   it('lets the operator pick a tour from the catalog', async () => {
     const first: Tour = {
       id: 'first',
@@ -433,6 +490,94 @@ describe('TourProvider', () => {
       { timeout: 4000 },
     );
     expect(details.open).toBe(true);
+  });
+
+  it('selects an option by its visible label', async () => {
+    const tour = makeTour([
+      {
+        id: 'pick',
+        title: 'Pick the spec connector',
+        body: 'Choosing',
+        target: '[data-tour="picker"]',
+        action: { kind: 'selectByText', selector: '[data-tour="picker"]', includes: 'Beta' },
+      },
+      { id: 'done', title: 'Picked', body: 'Done', placement: 'center' },
+    ]);
+
+    render(
+      <TourProvider tour={tour} autoDwellMs={300}>
+        <LaunchButton />
+        <select data-tour="picker" defaultValue="alpha">
+          <option value="alpha">Alpha connector</option>
+          <option value="beta">Beta connector</option>
+        </select>
+      </TourProvider>,
+    );
+
+    const picker = screen.getByRole('combobox') as HTMLSelectElement;
+    await startTour('auto');
+    await waitFor(() => expect(picker.value).toBe('beta'));
+    await waitFor(
+      () => expect(screen.getByTestId('tour-tooltip').textContent).toContain('Picked'),
+      { timeout: 4000 },
+    );
+  });
+
+  it('clicks the first control whose label matches', async () => {
+    const onClick = vi.fn();
+    const tour = makeTour([
+      {
+        id: 'pick-row',
+        title: 'Pick the trade template',
+        body: 'Choosing',
+        target: '[data-tour="row"]',
+        action: { kind: 'clickByText', selector: '[data-tour="row"]', includes: 'Trade' },
+      },
+      { id: 'done', title: 'Picked row', body: 'Done', placement: 'center' },
+    ]);
+
+    render(
+      <TourProvider tour={tour} autoDwellMs={300}>
+        <LaunchButton />
+        <button type="button" data-tour="row">
+          Export contract
+        </button>
+        <button type="button" data-tour="row" onClick={onClick}>
+          Trade application
+        </button>
+      </TourProvider>,
+    );
+
+    await startTour('auto');
+    await waitFor(() => expect(onClick).toHaveBeenCalledTimes(1));
+    await waitFor(
+      () => expect(screen.getByTestId('tour-tooltip').textContent).toContain('Picked row'),
+      { timeout: 4000 },
+    );
+  });
+
+  it('renders the two modes as cards with a recommendation and the role requirement', async () => {
+    const automation: Tour = {
+      id: 'automation',
+      version: 1,
+      title: 'Automation workbench',
+      description: 'Back office',
+      requiresRole: 'Bank Operations',
+      steps: [{ id: 'one', title: 'One', body: 'B', placement: 'center' }],
+    };
+
+    render(
+      <TourProvider tour={automation}>
+        <LaunchButton />
+      </TourProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'start' }));
+
+    expect(screen.getByTestId('tour-mode-guide').closest('.tour-mode-card')).toBeTruthy();
+    expect(screen.getByTestId('tour-mode-auto').closest('.tour-mode-card')).toBeTruthy();
+    expect(screen.getByText('Recommended')).toBeTruthy();
+    expect(screen.getByTestId('tour-requirement').textContent).toContain('Bank Operations');
   });
 
   it('shows both submission choices and reflects the selection', async () => {

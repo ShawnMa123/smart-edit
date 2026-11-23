@@ -9,6 +9,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ApiError, explainError } from '../api/errors';
+import { AiWaitBox } from './AiWaitBox';
+import { useElapsedMs } from './useElapsedMs';
 import { parseContract, type OpenApiContract } from '../automation/specContract';
 import { suggestMappings } from '../automation/specContract';
 import { automationFlow, type AutomationStepId } from '../automation/flow';
@@ -76,6 +78,9 @@ export function AutomationServerPanel({
     if (!nameTouched) setName(suggestedTemplateName);
   }, [suggestedTemplateName, nameTouched]);
   const [suggestion, setSuggestion] = useState<TemplateSuggestion | null>(null);
+  /** The Doubao call is its own wait state so the box only appears for the model step. */
+  const [suggesting, setSuggesting] = useState(false);
+  const suggestElapsed = useElapsedMs(suggesting);
   const [accepted, setAccepted] = useState<Record<string, boolean>>({});
   const [prepared, setPrepared] = useState<PreparedPayload | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -474,14 +479,19 @@ export function AutomationServerPanel({
 
   const suggest = async () => {
     if (!selected) return;
-    const result = await run(
-      () => client.suggestVariables(selected.template_id, true),
-      'Variables suggested — review and confirm.',
-    );
-    if (!result) return;
-    setSuggestion(result);
-    setAccepted(Object.fromEntries(result.variables.map((item) => [item.key, true])));
-    setPrepared(null);
+    setSuggesting(true);
+    try {
+      const result = await run(
+        () => client.suggestVariables(selected.template_id, true),
+        'Variables suggested — review and confirm.',
+      );
+      if (!result) return;
+      setSuggestion(result);
+      setAccepted(Object.fromEntries(result.variables.map((item) => [item.key, true])));
+      setPrepared(null);
+    } finally {
+      setSuggesting(false);
+    }
   };
 
   const saveVariables = async () => {
@@ -732,7 +742,7 @@ export function AutomationServerPanel({
         </p>
       ) : null}
 
-      <div className="automation-next" data-testid="automation-next">
+      <div className="automation-next" data-testid="automation-next" data-tour="automation-next">
         <div className="row">
           <span className="tag tag--muted">
             Step {flow.index}/{flow.total}
@@ -743,6 +753,7 @@ export function AutomationServerPanel({
             className="tiny"
             onClick={() => goToStep(flow.id)}
             data-testid="automation-next-go"
+            data-tour="automation-next-go"
           >
             Show me
           </button>
@@ -815,6 +826,7 @@ export function AutomationServerPanel({
           <input
             aria-label="Template name"
             ref={templateNameRef}
+            data-tour="automation-template-name"
             value={name}
             onChange={(event) => {
               setNameTouched(true);
@@ -827,6 +839,7 @@ export function AutomationServerPanel({
             className="primary"
             onClick={() => void saveTemplate()}
             disabled={busy || !text.trim()}
+            data-tour="automation-save-template"
           >
             Save current draft as template
           </button>
@@ -871,7 +884,7 @@ export function AutomationServerPanel({
           </div>
         ) : null}
         {documentId ? (
-          <div className="row tiny" data-testid="document-template-binding">
+          <div className="row tiny" data-testid="document-template-binding" data-tour="automation-bind">
             <span className="tiny muted">Document type:</span>
             <strong className="tiny" data-testid="document-template-name">
               {binding?.template_name ?? 'not bound'}
@@ -904,7 +917,12 @@ export function AutomationServerPanel({
         {templates.length === 0 ? (
           <p className="tiny muted">No server template yet. Save the current draft to start.</p>
         ) : (
-          <div role="radiogroup" aria-label="Server templates" className="legal-suggestions">
+          <div
+            role="radiogroup"
+            aria-label="Server templates"
+            className="legal-suggestions"
+            data-tour="automation-template-list"
+          >
             {templates.map((item) => (
               <button
                 key={item.template_id}
@@ -928,13 +946,19 @@ export function AutomationServerPanel({
       {selected && showSection(2) ? (
         <section className="legal-section" aria-label="Variables" data-tour="automation-variables">
           <h3>2 · Fields</h3>
-          <p className="tiny muted">
-            {variables.length
-              ? `${variables.length} confirmed: ${variables.map((item) => item.label).join(', ')}`
-              : 'No confirmed variables yet.'}
+          <p className="tiny muted" data-tour="automation-variable-summary">
+              {variables.length
+                ? `${variables.length} confirmed: ${variables.map((item) => item.label).join(', ')}`
+                : 'No confirmed variables yet.'}
           </p>
           <div className="row">
-            <button type="button" onClick={() => void suggest()} disabled={busy} ref={detectRef}>
+            <button
+              type="button"
+              onClick={() => void suggest()}
+              disabled={busy}
+              ref={detectRef}
+              data-tour="automation-find-variables"
+            >
               Find variables with AI
             </button>
             {suggestion ? (
@@ -943,13 +967,23 @@ export function AutomationServerPanel({
                 className="primary"
                 onClick={() => void saveVariables()}
                 disabled={busy}
+                data-tour="automation-confirm-variables"
               >
                 Confirm {Object.values(accepted).filter(Boolean).length} variables
               </button>
             ) : null}
           </div>
+          {suggesting ? (
+            <AiWaitBox
+              testId="automation-suggest-wait"
+              title="Doubao is reading the template"
+              message="Looking for fields that carry a verbatim quote…"
+              hint="Nothing is saved until you confirm; the model never sends by itself."
+              elapsedMs={suggestElapsed}
+            />
+          ) : null}
           {suggestion ? (
-            <div className="legal-findings">
+            <div className="legal-findings" data-tour="automation-suggestions">
               <p className="tiny muted">
                 suggested by: {suggestion.suggested_by}
                 {suggestion.model ? ` · ${suggestion.model}` : ''}
@@ -987,6 +1021,7 @@ export function AutomationServerPanel({
             <select
               aria-label="Downstream connector"
               ref={connectorRef}
+              data-tour="automation-connector-select"
               value={connectorId}
               onChange={(event) => {
                 const nextId = event.target.value;
@@ -1082,6 +1117,7 @@ export function AutomationServerPanel({
                   onClick={() => void resetMapping()}
                   disabled={busy}
                   data-testid="reset-mapping"
+                  data-tour="automation-reset-mapping"
                   title="Replace this pair's mapping with the label-based suggestions"
                 >
                   Reset to suggestions
@@ -1243,7 +1279,7 @@ export function AutomationServerPanel({
             </div>
           </div>
         ) : null}
-        <details className="tiny">
+        <details className="tiny" data-tour="automation-add-connector">
           <summary>Add connector</summary>
           <div className="legal-section">
             <input
@@ -1369,7 +1405,7 @@ export function AutomationServerPanel({
       <section className="legal-section" aria-label="Review and send" data-tour="automation-review">
         <h3>4 · Review &amp; send</h3>
         {selected ? (
-          <p className="tiny muted" data-testid="review-target">
+          <p className="tiny muted" data-testid="review-target" data-tour="automation-review-target">
             {selected.name} v{selected.version} → {selectedConnector?.name ?? 'no downstream yet'}
             {selectedConnector?.operation
               ? ` · ${selectedConnector.operation} · ${
@@ -1383,6 +1419,7 @@ export function AutomationServerPanel({
             className="legal-findings"
             aria-label="Request body mapping"
             data-testid="spec-mapping"
+            data-tour="automation-review-body"
           >
             <ul className="tiny" aria-label="Mapping summary">
               {selectedConnector.request_fields.map((field) => {
@@ -1449,7 +1486,7 @@ export function AutomationServerPanel({
                       </span>
                     </label>
                   ))}
-                  <pre className="tiny" aria-label="Payload preview">
+                  <pre className="tiny" aria-label="Payload preview" data-tour="automation-payload-preview">
                     {JSON.stringify(prepared.request_body ?? prepared.payload, null, 2)}
                   </pre>
                   {prepared.request_body ? (
@@ -1481,6 +1518,7 @@ export function AutomationServerPanel({
                 onClick={() => void previewRequest()}
                 disabled={busy || !connectorId || !prepared}
                 data-testid="preview-request"
+                data-tour="automation-preview-request"
               >
                 Preview request
               </button>
@@ -1491,12 +1529,13 @@ export function AutomationServerPanel({
                 onClick={() => void send()}
                 disabled={busy || !connectorId || !prepared || prepared.body_issues.length > 0}
                 data-testid="send"
+                data-tour="automation-send"
               >
                 Send
               </button>
             </div>
           {preview ? (
-            <div className="legal-findings" data-testid="request-preview">
+            <div className="legal-findings" data-testid="request-preview" data-tour="automation-request-preview">
               <p className="tiny muted">
                 {preview.method} {preview.url}
                 {preview.schema_kind ? ` · ${preview.schema_kind}` : ''}

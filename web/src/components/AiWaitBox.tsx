@@ -23,6 +23,8 @@ export interface AiWaitBoxProps {
   onCancel?: () => void;
   cancelLabel?: string;
   testId?: string;
+  /** `card` is the full status card; `inline` is a one-line status for tooltips. */
+  variant?: 'card' | 'inline';
 }
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s elapsed`;
@@ -37,7 +39,42 @@ export function AiWaitBox({
   onCancel,
   cancelLabel = 'Stop waiting',
   testId = 'ai-wait',
+  variant = 'card',
 }: AiWaitBoxProps) {
+  const glyph = <span className="ai-wait__glyph" aria-hidden="true" />;
+  const thinking = (
+    <span className="ai-wait__thinking" aria-hidden="true">
+      <i />
+      <i />
+      <i />
+    </span>
+  );
+
+  if (variant === 'inline') {
+    // Tooltip-sized status: no progress bar, no message/hint — just the live marker and the cause.
+    return (
+      <div
+        className="ai-wait ai-wait--inline"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        data-testid={testId}
+      >
+        {glyph}
+        <strong>{title}</strong>
+        {thinking}
+        {elapsedMs !== undefined ? (
+          <span className="tiny muted">{seconds(elapsedMs)}</span>
+        ) : null}
+        {onCancel ? (
+          <button type="button" className="tiny" onClick={onCancel}>
+            {cancelLabel}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div
       className="ai-wait"
@@ -50,8 +87,9 @@ export function AiWaitBox({
         <span />
       </div>
       <div className="ai-wait__head">
-        <span className="ai-wait__dot" aria-hidden="true" />
+        {glyph}
         <strong>{title}</strong>
+        {thinking}
         {elapsedMs !== undefined ? (
           <span className="tiny muted">{seconds(elapsedMs)}</span>
         ) : null}

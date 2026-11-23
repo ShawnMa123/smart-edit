@@ -28,6 +28,7 @@ import {
 import { ApiError, explainError } from '../api/errors';
 import type { ActivityKind } from '../workspace/activityStore';
 import { AiWaitBox } from './AiWaitBox';
+import { useElapsedMs } from './useElapsedMs';
 import { EmptyState } from './EmptyState';
 import { onboardingCopy, suggestionsFor } from './knowledgeSuggestions';
 
@@ -330,6 +331,7 @@ export function KnowledgePanel({
   }, [capabilities]);
 
   const busy = phase !== 'idle';
+  const waitElapsed = useElapsedMs(busy);
   const busyNotify = useRef(onBusyChange);
   busyNotify.current = onBusyChange;
   useEffect(() => {
@@ -529,6 +531,7 @@ export function KnowledgePanel({
           steps={RUN_STEPS}
           activeStep={run ? (RUN_STEP_INDEX[run.stage] ?? 0) : 0}
           hint="Every claim will cite the evidence returned for this run; nothing is approved automatically."
+          elapsedMs={waitElapsed}
         />
       ) : null}
       {error ? (

@@ -1,6 +1,6 @@
 /** Runs panel: delivery badge, job list, timeline and the manual fallback buttons. */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -107,7 +107,13 @@ describe('AutomationRunsPanel', () => {
     const badge = await screen.findByTestId('document-delivery');
     expect(badge.getAttribute('data-status')).toBe('needs_attention');
     expect(badge.textContent).toContain('Needs attention');
-    expect(screen.getByTestId('delivery-rows').textContent).toContain('Core · needs_attention');
+    expect(screen.getByRole('columnheader', { name: 'Downstream' })).toBeTruthy();
+    const failedRow = screen.getByTestId('delivery-row-job_failed');
+    expect(within(failedRow).getByRole('rowheader', { name: 'Core' })).toBeTruthy();
+    expect(within(failedRow).getByText('Needs attention')).toBeTruthy();
+    expect(within(failedRow).getByText(/Required/)).toBeTruthy();
+    const sentRow = screen.getByTestId('delivery-row-job_sent');
+    expect(within(sentRow).getByText('Sent')).toBeTruthy();
     expect(screen.getByTestId('run-job_sent').textContent).toContain('Sent');
     expect(screen.getByTestId('run-job_failed').textContent).toContain('Needs attention');
   });
@@ -191,6 +197,12 @@ describe('AutomationRunsPanel', () => {
     );
     expect(screen.getByTestId('delivery-skip').textContent).toContain('no template binding');
     expect(screen.getByText('No automatic runs yet.')).toBeTruthy();
+
+    const before = (client.listJobs as ReturnType<typeof vi.fn>).mock.calls.length;
+    await userEvent.click(screen.getByTestId('runs-refresh'));
+    await waitFor(() =>
+      expect((client.listJobs as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(before),
+    );
   });
 
   it('falls back to the newest workspace runs when the document has none', async () => {
@@ -207,6 +219,16 @@ describe('AutomationRunsPanel', () => {
     expect(screen.getByTestId('run-job_sent')).toBeTruthy();
     expect(client.listJobs).toHaveBeenCalledWith({ document_id: 'doc-1' });
     expect(client.listJobs).toHaveBeenCalledWith({});
+  });
+
+  it('ties approval and delivery into one rail', async () => {
+    render(
+      <AutomationRunsPanel documentId="doc-1" submissionStatus="approved" client={baseClient()} />,
+    );
+
+    const rail = await screen.findByTestId('delivery-chain');
+    expect(rail.querySelectorAll('[data-state]')).toHaveLength(5);
+    expect(screen.getByTestId('delivery-chain-caption').textContent).toContain('Approved');
   });
 
   it('does not ask for a delivery state without an open document', async () => {

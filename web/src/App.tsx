@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { ApiError } from './api/errors';
+import { jobsClient, type DeliveryStatus } from './api/automationJobs';
 import { createRun, createRunWithFiles, triggerStage } from './api/client';
 import {
   acquireLock,
@@ -160,6 +161,9 @@ function AppContent() {
   // on, so it keeps the tab; an authenticated session needs `automation.view`.
   const canUseAutomation =
     auth.status !== 'authenticated' || authPermissions.includes('automation.view');
+  // Compliance can read the back office but cannot create rules or move tiers.
+  const canConfigureAutomation =
+    auth.status !== 'authenticated' || authPermissions.includes('automation.configure');
   const inviteMatch = window.location.pathname.match(/^\/invites\/([^/]+)$/);
   const inviteToken = inviteMatch ? decodeURIComponent(inviteMatch[1]) : null;
   useEffect(() => {
@@ -920,6 +924,32 @@ function AppContent() {
   const submissionStatus = draft?.submission_status ?? 'draft';
   /** Real approval state is only shown for an authenticated PG session (D8). */
   const realSubmission = auth.status === 'authenticated';
+  /**
+   * Delivery state for the document-head rail. Only roles with `automation.view` may read it, so a
+   * 403 simply leaves the rail at "Delivered: not configured" rather than failing the page.
+   */
+  const [deliveryStatus, setDeliveryStatus] = useState<DeliveryStatus | null>(null);
+  useEffect(() => {
+    if (!realSubmission || !activeDocumentId) {
+      setDeliveryStatus(null);
+      return;
+    }
+    let alive = true;
+    jobsClient
+      .readDocumentDelivery(activeDocumentId)
+      .then((state) => {
+        if (!alive) return;
+        const status =
+          state && typeof state === 'object' ? (state as { status?: unknown }).status : null;
+        setDeliveryStatus(typeof status === 'string' ? (status as DeliveryStatus) : null);
+      })
+      .catch(() => {
+        if (alive) setDeliveryStatus(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [activeDocumentId, realSubmission, submissionStatus]);
   const submissionReadOnly = ['pending_first', 'pending_second', 'approved'].includes(
     submissionStatus,
   );
@@ -1000,6 +1030,7 @@ function AppContent() {
         now={now}
         textEmpty={text.trim() === ''}
         canUseAutomation={canUseAutomation}
+        canConfigureAutomation={canConfigureAutomation}
         knowledge={{
           documentId: activeDocumentId,
           workspaceId,
@@ -1014,6 +1045,7 @@ function AppContent() {
         automation={{
           draft,
           document: richDoc,
+          submissionStatus: realSubmission ? submissionStatus : 'draft',
           selection: knowledgeSelection,
           pendingVariable,
           digest: currentDigest,
@@ -1587,6 +1619,7 @@ function AppContent() {
             facts={facts}
             submissionStatus={realSubmission ? submissionStatus : 'draft'}
             submission={realSubmission ? draft?.submission ?? null : null}
+            deliveryStatus={realSubmission ? deliveryStatus : null}
             actions={
               <DocumentActions
                 onImport={(files) => void handleImport(files)}

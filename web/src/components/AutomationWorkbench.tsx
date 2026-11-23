@@ -133,6 +133,10 @@ export interface AutomationWorkbenchProps {
   onApplyTemplate?: (document: RichDocument) => void;
   /** Which tab opens first; `Automate` (server) unless a test asks for the sandbox. */
   initialArea?: 'server' | 'sandbox';
+  /** False when the role can view automation but not create rules/connectors. */
+  canConfigure?: boolean;
+  /** Latest submission status, so Runs can show approval + delivery as one rail. */
+  submissionStatus?: string | null;
   onChange: (document: RichDocument) => void;
   onVariableHandled: () => void;
 }
@@ -148,6 +152,8 @@ export function AutomationWorkbench({
   downstreamStore = downstreamSystemStore,
   onApplyTemplate,
   initialArea = 'server',
+  canConfigure = true,
+  submissionStatus,
   onChange,
   onVariableHandled,
 }: AutomationWorkbenchProps) {
@@ -1686,13 +1692,19 @@ export function AutomationWorkbench({
 
       {area === 'rules' ? (
         <div role="tabpanel" id="automation-panel-rules" aria-labelledby="automation-tab-rules">
-          <AutomationRulesPanel documentId={draft?.document_id ?? null} />
+          <AutomationRulesPanel
+            documentId={draft?.document_id ?? null}
+            canConfigure={canConfigure}
+          />
         </div>
       ) : null}
 
       {area === 'runs' ? (
         <div role="tabpanel" id="automation-panel-runs" aria-labelledby="automation-tab-runs">
-          <AutomationRunsPanel documentId={draft?.document_id ?? null} />
+          <AutomationRunsPanel
+            documentId={draft?.document_id ?? null}
+            submissionStatus={submissionStatus}
+          />
         </div>
       ) : null}
 

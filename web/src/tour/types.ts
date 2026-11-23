@@ -30,6 +30,10 @@ export type TourAction =
   /** Ensure a `<details>` disclosure is open (idempotent: an open one stays open). */
   | { kind: 'open'; selector: string }
   | { kind: 'select'; selector: string; value: string }
+  /** Choose the first option whose visible text contains `includes` (labels survive id churn). */
+  | { kind: 'selectByText'; selector: string; includes: string }
+  /** Click the first control matching `selector` whose visible text contains `includes`. */
+  | { kind: 'clickByText'; selector: string; includes: string }
   /** Replace the document with a block of text (a paste-like insertion). */
   | { kind: 'paste'; text: string }
   /** Type character-by-character through the editor bridge (or a DOM fallback). */
@@ -73,6 +77,8 @@ export interface Tour {
   version: number;
   title: string;
   description: string;
+  /** Display-only note: the role a session needs for every step (e.g. Bank Operations). */
+  requiresRole?: string;
   steps: TourStep[];
 }
 

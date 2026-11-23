@@ -11,10 +11,14 @@ import {
   type JobsClient,
 } from '../api/automationJobs';
 import { ApiError, explainError } from '../api/errors';
+import { approvalStatusMeta } from '../domain/approvalStatus';
+import { DeliveryStepper, deliveryStages } from './DeliveryStepper';
 
 export interface AutomationRunsPanelProps {
   /** Runs are always shown for the open document; without one only the global switch is shown. */
   documentId: string | null;
+  /** Latest submission status, so approval and delivery share one rail. */
+  submissionStatus?: string | null;
   client?: JobsClient;
 }
 
@@ -50,7 +54,11 @@ export const canRetry = (job: Job): boolean =>
 export const canCancel = (job: Job): boolean =>
   job.status === 'queued' || job.status === 'needs_review' || job.status === 'needs_attention';
 
-export function AutomationRunsPanel({ documentId, client = jobsClient }: AutomationRunsPanelProps) {
+export function AutomationRunsPanel({
+  documentId,
+  submissionStatus,
+  client = jobsClient,
+}: AutomationRunsPanelProps) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [delivery, setDelivery] = useState<DocumentDelivery | null>(null);
   const [settings, setSettings] = useState<AutomationSettings | null>(null);
@@ -157,27 +165,69 @@ export function AutomationRunsPanel({ documentId, client = jobsClient }: Automat
         </p>
       ) : null}
 
-      {delivery ? (
-        <div className="notice tiny" data-testid="document-delivery" data-status={delivery.status}>
-          <span className={statusClass(delivery.status)}>
-            Delivery: {STATUS_LABELS[delivery.status] ?? delivery.status}
+      {documentId ? (
+        <div className="delivery-chain" data-testid="delivery-chain">
+          <DeliveryStepper
+            variant="compact"
+            submissionStatus={submissionStatus}
+            deliveryStatus={delivery?.status ?? null}
+          />
+          <span className="tiny muted" data-testid="delivery-chain-caption">
+            {approvalStatusMeta(submissionStatus ?? 'draft').shortLabel}
+            {delivery
+              ? ` · ${deliveryStages(submissionStatus, delivery.status).at(-1)?.label ?? ''}`
+              : ''}
           </span>
-          {delivery.skipped_reason ? (
-            <span data-testid="delivery-skip">
-              {' '}
-              {SKIP_LABELS[delivery.skipped_reason] ?? delivery.skipped_reason}
+        </div>
+      ) : null}
+
+      {delivery ? (
+        <div className="delivery-block" data-testid="document-delivery" data-status={delivery.status}>
+          <div className="delivery-head">
+            <span className={statusClass(delivery.status)}>
+              Delivery: {STATUS_LABELS[delivery.status] ?? delivery.status}
             </span>
-          ) : null}
+            {delivery.skipped_reason ? (
+              <span data-testid="delivery-skip" className="tiny muted">
+                {SKIP_LABELS[delivery.skipped_reason] ?? delivery.skipped_reason}
+              </span>
+            ) : null}
+          </div>
           {delivery.rows.length ? (
-            <ul className="tiny" data-testid="delivery-rows">
-              {delivery.rows.map((row) => (
-                <li key={row.job_id} data-status={row.status}>
-                  {row.connector_name ?? row.connector_id} · {row.status}
-                  {row.required ? ' · required' : ' · optional'}
-                  {row.error_code ? ` · ${row.error_code}` : ''}
-                </li>
-              ))}
-            </ul>
+            <table className="delivery-table" data-testid="delivery-rows">
+              <caption className="visually-hidden">Delivery per downstream</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Downstream</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {delivery.rows.map((row) => (
+                  <tr
+                    key={row.job_id}
+                    data-status={row.status}
+                    data-testid={`delivery-row-${row.job_id}`}
+                  >
+                    <th scope="row">{row.connector_name ?? row.connector_id}</th>
+                    <td>
+                      <span className={statusClass(row.status)}>
+                        {STATUS_LABELS[row.status] ?? row.status}
+                      </span>
+                      <span className="tiny muted delivery-meta">
+                        {row.required ? 'Required' : 'Optional'}
+                        {row.attempts > 0 ? ` · attempt ${row.attempts}` : ''}
+                      </span>
+                    </td>
+                    <td className="tiny muted">
+                      {row.error_code ??
+                        (row.receipt_id ? `receipt ${row.receipt_id.slice(0, 12)}` : '—')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : null}
         </div>
       ) : (
@@ -191,7 +241,25 @@ export function AutomationRunsPanel({ documentId, client = jobsClient }: Automat
             This document has no runs — showing the newest runs in this workspace.
           </p>
         ) : null}
-        {jobs.length === 0 ? <p className="tiny muted">No automatic runs yet.</p> : null}
+        {jobs.length === 0 ? (
+          <div className="empty-state" data-testid="runs-empty">
+            <p className="tiny muted">No automatic runs yet.</p>
+            <ol className="empty-steps tiny muted">
+              <li>Bind this document to a server template in Automate.</li>
+              <li>Add an enabled rule for that template.</li>
+              <li>Send it through final approval; the worker queues one job per downstream.</li>
+            </ol>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void run(refresh, 'Runs reloaded.')}
+              disabled={busy}
+              data-testid="runs-refresh"
+            >
+              Refresh runs
+            </button>
+          </div>
+        ) : null}
         <ul className="legal-findings" data-testid="runs-list">
           {jobs.map((job) => (
             <li

@@ -101,4 +101,41 @@ describe('AutomationRulesPanel', () => {
     await waitFor(() => expect(screen.getByTestId('rule-dry-run')).toBeTruthy());
     expect(screen.getByLabelText('Rule dry-run body').textContent).toContain('750000');
   });
+
+  it('offers a one-click shadow rule when the list is empty', async () => {
+    const client = baseClient();
+    (client.listRules as ReturnType<typeof vi.fn>).mockResolvedValue({ items: [] });
+    render(<AutomationRulesPanel documentId="doc-1" client={client} registry={registry} />);
+
+    const create = await screen.findByTestId('rules-create-demo');
+    expect((create as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.click(create);
+
+    await waitFor(() =>
+      expect(client.createRule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mode: 'shadow',
+          template_name: 'Demand guarantee',
+          connector_id: 'con_1',
+        }),
+      ),
+    );
+  });
+
+  it('disables the empty-state action when the role cannot configure', async () => {
+    const client = baseClient();
+    (client.listRules as ReturnType<typeof vi.fn>).mockResolvedValue({ items: [] });
+    render(
+      <AutomationRulesPanel
+        documentId="doc-1"
+        client={client}
+        registry={registry}
+        canConfigure={false}
+      />,
+    );
+
+    const create = await screen.findByTestId('rules-create-demo');
+    expect((create as HTMLButtonElement).disabled).toBe(true);
+    expect(create.getAttribute('title')).toContain('review rules but not create');
+  });
 });

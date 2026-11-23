@@ -368,7 +368,10 @@ DOCX 是按文件里的样式**确定性**映射；PDF 是按字号与位置**�
 ## 7.2 Automation tab（fixture-backed 三块工作台）
 
 > 网页导览：顶栏 **Take the tour** → `Automation workbench`（深链 `?tour=automation`）。需要 `automation.view`
-> （Bank Operations / 组织管理员）；其余身份该 tab 被隐藏，导览会逐段跳过并提示。导览只切换区域和讲解，**不会点 Send**。
+> （Bank Operations / 组织管理员）；其余身份该 tab 被隐藏，导览会逐段跳过并提示。
+> 选 **Watch me** 时它会**实际执行**：打开 `Automation demo · trade application` → 选模板 → Find variables with AI →
+> Confirm → 切到契约下游 → Reset mapping → Preview → Rules Dry-run → Runs Details → Sandbox 三个子页签，
+> 最后切回 `Demand Guarantee Application`；**Send 只讲不点**。**Guide me** 只高亮，由你自己点。
 > 选 **Watch me** 时会自动切 Automate / Rules / Runs / Sandbox、展开 Field mapping 与 Dispatch history、
 > 并切过 Sandbox 的三个子页签（展开动作是幂等的，不会把已展开的收起来）；**Guide me** 只高亮，由你自己点。
 > Rules 会点一次 **Dry-run on this document**，Runs 会点 **Details** 展开时间线 —— 两步都基于真实规则/运行。

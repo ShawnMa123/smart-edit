@@ -14,6 +14,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_WORKSPACE } from '../api/assistantTypes';
 import { ApiError, explainError } from '../api/errors';
 import { AiWaitBox } from './AiWaitBox';
+import { useElapsedMs } from './useElapsedMs';
 import {
   legalClient,
   LEGAL_POLL_INTERVAL_MS,
@@ -525,6 +526,7 @@ export function LegalPanel({
   const [question, setQuestion] = useState('');
   const [webSearch, setWebSearch] = useState(false);
   const [busy, setBusy] = useState(false);
+  const waitElapsed = useElapsedMs(busy);
   const [run, setRun] = useState<ReviewRun | null>(null);
   const [report, setReport] = useState<ReviewReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -743,6 +745,7 @@ export function LegalPanel({
               ? 'The answer will cite the statute chunks it used, or say it could not assess them.'
               : 'Deterministic checks run first; statute evidence follows per clause.'
           }
+          elapsedMs={waitElapsed}
         />
       ) : null}
 

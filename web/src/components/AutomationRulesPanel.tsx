@@ -17,6 +17,8 @@ export interface AutomationRulesPanelProps {
   documentId: string | null;
   client?: RulesClient;
   registry?: RegistryClient;
+  /** `false` when the role can view rules but not configure them (e.g. Compliance). */
+  canConfigure?: boolean;
 }
 
 const MODES: Array<[RuleMode, string]> = [
@@ -35,6 +37,7 @@ export function AutomationRulesPanel({
   documentId,
   client = rulesClient,
   registry = registryClient,
+  canConfigure = true,
 }: AutomationRulesPanelProps) {
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [templates, setTemplates] = useState<Array<{ name: string }>>([]);
@@ -104,6 +107,25 @@ export function AutomationRulesPanel({
     );
     if (!created) return;
     setForm((current) => ({ ...current, name: '' }));
+    await run(refresh);
+  };
+
+  /** Empty-state action: one shadow rule from the first template + connector, no typing. */
+  const createShadowRule = async () => {
+    if (!form.template_name || !form.connector_id) return;
+    const created = await run(
+      () =>
+        client.createRule({
+          name: `Shadow check · ${form.template_name}`,
+          template_name: form.template_name,
+          connector_id: form.connector_id,
+          mode: 'shadow',
+          required: true,
+          priority: 100,
+        }),
+      'Shadow rule created — dry-run it before raising the tier.',
+    );
+    if (!created) return;
     await run(refresh);
   };
 
@@ -222,7 +244,29 @@ export function AutomationRulesPanel({
 
       <div className="legal-section" aria-label="Rules" data-tour="automation-rule-list">
         <h3>Rules</h3>
-        {rules.length === 0 ? <p className="tiny muted">No rules yet.</p> : null}
+        {rules.length === 0 ? (
+          <div className="empty-state" data-testid="rules-empty">
+            <p className="tiny muted">
+              No rules yet — a final approval queues nothing until an enabled rule matches the
+              document’s template.
+            </p>
+            <ol className="empty-steps tiny muted">
+              <li>Save a server template in Automate.</li>
+              <li>Bind the document type to that template.</li>
+              <li>Add a downstream connector, then create the rule.</li>
+            </ol>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void createShadowRule()}
+              disabled={!canConfigure || busy || !form.template_name || !form.connector_id}
+              title={canConfigure ? undefined : 'Your role can review rules but not create them.'}
+              data-testid="rules-create-demo"
+            >
+              Create shadow rule
+            </button>
+          </div>
+        ) : null}
         {rules.map((rule) => (
           <div
             key={rule.rule_id}

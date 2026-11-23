@@ -85,6 +85,7 @@ export interface KnowledgePanelBinding {
 export interface AutomationPanelBinding {
   draft: DraftView | null;
   document: RichDocument;
+  submissionStatus?: string | null;
   selection: AssistantSelection | null;
   pendingVariable: AssistantSelection | null;
   digest?: string;
@@ -104,6 +105,8 @@ export interface AssistantPanelProps extends AuditPanelProps {
   conformance?: ConformancePanelProps;
   /** `false` when the signed-in role has no `automation.view` (Bank Operations / org admin only). */
   canUseAutomation?: boolean;
+  /** `false` when the role can view automation but not configure it (Compliance). */
+  canConfigureAutomation?: boolean;
 }
 
 /**
@@ -116,6 +119,7 @@ export function AssistantPanel({
   legal,
   conformance,
   canUseAutomation = true,
+  canConfigureAutomation = true,
   ...auditProps
 }: AssistantPanelProps) {
   const [activeTab, setActiveTab] = useState<string>('audit');
@@ -178,7 +182,11 @@ export function AssistantPanel({
         ) : active.id === 'knowledge' ? (
           <KnowledgePanel {...knowledge} onBusyChange={markBusy('knowledge')} />
         ) : active.id === 'automation' ? (
-          <AutomationPanel {...automation} canUseAutomation={canUseAutomation} />
+          <AutomationPanel
+            {...automation}
+            canUseAutomation={canUseAutomation}
+            canConfigure={canConfigureAutomation}
+          />
         ) : active.id === 'legal' ? (
           <LegalPanel {...legal} onBusyChange={markBusy('legal')} />
         ) : null}

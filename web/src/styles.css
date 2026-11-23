@@ -1,20 +1,21 @@
 /* Three-pane workspace: geometry follows the reference prototype (208 / 1fr / 352). */
 
 :root {
-  --bg: #f4f6f6;
+  /* HSBC Create-inspired global palette: white paper, ink type, one red accent. */
+  --bg: #ffffff;
   --surface: #ffffff;
-  --canvas: #eceff0;
-  --border: #d9dee0;
-  --text: #1c2430;
-  --muted: #5b6672;
-  --accent: #1f4e79;
-  --radius: 4px;
-  --radius-tag: 3px;
+  --canvas: #f7f7f7;
+  --border: #e5e5e5;
+  --text: #1a1a1a;
+  --muted: #5c5c5c;
+  --accent: #db0011;
+  --radius: 2px;
+  --radius-tag: 2px;
   --serif: Georgia, 'Noto Serif SC', serif;
   /* HSBC-inspired editorial accents: white paper, ink text, one red accent. Scoped to the AI pane
      and the AI wait box so the rest of the workspace keeps its existing palette. */
   --hsbc-red: #db0011;
-  --hsbc-red-dark: #a3000d;
+  --hsbc-red-dark: #c0000f;
   --hsbc-ink: #1a1a1a;
   --hsbc-paper: #ffffff;
   --hsbc-mist: #f6f5f2;
@@ -2731,6 +2732,49 @@ aside[aria-label='AI assistant'] > .row h2 {
   cursor: pointer;
 }
 
+/* Whole-tour progress: a thin rail under “Step x / n”, not a second number to read. */
+.tour-progress {
+  height: 3px;
+  margin: 6px 0 8px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.tour-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+/* Autopilot reading time: the bar drains; the number is a secondary label. */
+.tour-countdown {
+  margin: 6px 0 8px;
+}
+
+.tour-countdown-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.tour-countdown-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+
+.tour-countdown[data-paused='yes'] .tour-countdown-bar > span {
+  background: var(--muted);
+}
+
+.tour-countdown p {
+  margin: 4px 0 0;
+}
+
 .tour-tip-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2783,7 +2827,9 @@ aside[aria-label='AI assistant'] > .row h2 {
 
 @media (prefers-reduced-motion: reduce) {
   .tour-cursor,
-  .tour-ring {
+  .tour-ring,
+  .tour-progress > span,
+  .tour-countdown-bar > span {
     transition: none;
   }
 }
@@ -2940,6 +2986,873 @@ aside[aria-label='AI assistant'] > .row h2 {
 
 @media (max-width: 720px) {
   .tour-options {
+    grid-template-columns: 1fr;
+  }
+}
+/* ===========================================================================
+   HSBC Create theme layer
+   ---------------------------------------------------------------------------
+   One place for the global restyle: typography, white utility bar, hexagon
+   motif, flat buttons and quiet cards. Component behaviour is untouched.
+   =========================================================================== */
+
+/* --- 1. Typography: one sans stack, weight carries the hierarchy ---------- */
+body {
+  font-family:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  line-height: 1.6;
+  letter-spacing: 0.005em;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.document-head h1 {
+  font-size: 20px;
+}
+
+/* The pane label is a quiet eyebrow: ink, bold, spaced — never a colour block. */
+.pane h2 {
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* Long copy keeps a 65–75 character measure. */
+.tour-tip p,
+.dialog-body p,
+.legal-finding p,
+.notice {
+  max-width: 72ch;
+}
+
+/* --- 2. Utility bar: white paper, 1px rule, ink type (replaces the dark bar) */
+.topbar {
+  background: var(--surface);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar .brand strong,
+.topbar .brand {
+  color: var(--text);
+}
+
+.topbar .brand .product {
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.topbar-actions button {
+  color: var(--text);
+  background: transparent;
+  border-color: transparent;
+}
+
+.topbar-actions button:hover {
+  background: var(--canvas);
+  color: var(--accent);
+}
+
+.topbar-actions .badge {
+  background: var(--accent);
+  color: #fff;
+}
+
+.topbar .session-chip,
+.topbar .muted {
+  color: var(--muted);
+}
+
+/* --- 3. Hexagon motif: logo mark, list markers, section eyebrows ---------- */
+.brand-mark {
+  border-radius: 0;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+.legal-section > h3::before,
+.tour-tip-head > span::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 8px;
+  margin-right: 7px;
+  background: var(--accent);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  vertical-align: -1px;
+}
+
+/* Finding markers become small hexagons instead of dots. */
+.audit-findings .finding::before {
+  width: 8px;
+  height: 9px;
+  border-radius: 0;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  box-shadow: none;
+}
+
+/* --- 4. Navigation: white rail, ink labels, 2px red current marker -------- */
+.rail {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+  gap: 8px;
+}
+
+.rail button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.rail button:hover {
+  background: var(--canvas);
+}
+
+.rail button.active {
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.rail button.active::before {
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 0;
+  background: var(--accent);
+}
+
+/* Current tab: bold ink + a 2px red underline (no pill, no fill). */
+.pane-tabs button[aria-selected='true'],
+.assistant-tabs button[aria-selected='true'] {
+  color: var(--text);
+  font-weight: 700;
+  border-bottom: 2px solid var(--accent);
+  background: var(--surface);
+}
+
+/* --- 5. Buttons: flat, 2px corners, red primary, quiet red outline ------- */
+button {
+  border-radius: var(--radius);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: #bdbdbd;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--hsbc-red-dark);
+  border-color: var(--hsbc-red-dark);
+}
+
+button.primary:disabled {
+  background: #f3c3c7;
+  border-color: #f3c3c7;
+  color: #fff;
+}
+
+button.quiet {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button.quiet:hover:not(:disabled) {
+  background: #fff5f6;
+  border-color: var(--accent);
+}
+
+button.link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* --- 6. Cards and sections: white, 1px hairline, no heavy shadow --------- */
+.legal-finding,
+.notice,
+.automation-next,
+.pane-menu,
+.dialog,
+.tour-tip,
+.tour-modal,
+.auth-card {
+  border-radius: var(--radius);
+  box-shadow: none;
+  background: var(--surface);
+}
+
+.legal-finding {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease;
+}
+
+.legal-finding:hover {
+  border-color: #cfcfcf;
+}
+
+.automation-next {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.tour-tip,
+.tour-modal,
+.dialog {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* --- 7. Spacing: wide modules with room to breathe ----------------------- */
+.document-head {
+  padding: 20px 24px;
+}
+
+.pane {
+  padding: 20px 22px;
+  gap: 14px;
+}
+
+.legal-section {
+  gap: 12px;
+}
+
+.dialog-body {
+  padding: 18px 20px;
+}
+
+.tour-modal {
+  padding: 20px 22px;
+}
+
+/* --- 8. Hexagon grid texture (5%) on the utility bar, document head, auth - */
+.topbar,
+.document-head,
+.auth-page {
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='48' viewBox='0 0 56 48'%3E%3Cpath d='M14 1 L42 1 L55 24 L42 47 L14 47 L1 24 Z' fill='none' stroke='%231a1a1a' stroke-opacity='0.05'/%3E%3C/svg%3E");
+  background-size: 56px 48px;
+}
+
+/* --- 9. Tour chrome inherits the red/ink language ------------------------ */
+.tour-ring {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(219, 0, 17, 0.14);
+}
+
+.tour-cursor svg path {
+  stroke: var(--accent);
+}
+
+.tour-tip {
+  border-top: 2px solid var(--accent);
+}
+
+.tour-countdown-bar > span,
+.tour-progress > span {
+  background: var(--accent);
+}
+
+/* --- 10. Sign-in -------------------------------------------------------- */
+.auth-page {
+  background-color: var(--surface);
+}
+
+.auth-card {
+  padding: 28px 28px 24px;
+  border: 1px solid var(--border);
+}
+/* --- 11. Keep semantic tints after the flat-card reset -------------------- */
+.notice {
+  border-left: 3px solid var(--muted);
+}
+
+.notice--warn {
+  background: var(--status-warn-bg);
+  border-left-color: var(--status-warn);
+}
+
+.notice--bad {
+  background: var(--status-bad-bg);
+  border-left-color: var(--status-bad);
+}
+
+/* --- 12. Environment strip + avatar: quiet grey band, hexagon avatar ----- */
+.environment-strip {
+  background: #fafafa;
+  color: var(--muted);
+}
+
+.demo-identity .avatar {
+  border-radius: 0;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+/* --- 13. Small radius everywhere a component still hard-codes a round one */
+.tag,
+.badge,
+.chip,
+.status-chip,
+.tab-status {
+  border-radius: var(--radius-tag);
+}
+/* --- 14. Layout fixes found in the visual pass --------------------------- */
+/* Keep the white utility bar on one line: labels never wrap, and the two
+   decorative pieces drop out before the real actions do. */
+.topbar {
+  gap: 14px;
+}
+
+.topbar-actions {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.topbar-actions button,
+.topbar .session-chip,
+.topbar .org-switcher,
+.topbar .org-switcher label {
+  white-space: nowrap;
+}
+
+.topbar .brand .product {
+  white-space: nowrap;
+}
+
+@media (max-width: 1500px) {
+  .topbar .brand .product,
+  .topbar .org-switcher > label {
+    display: none;
+  }
+}
+
+/* Pane eyebrows stay on one line at the 208px rail width. */
+.pane h2 {
+  white-space: nowrap;
+  letter-spacing: 0.06em;
+}
+
+/* Secondary tour actions: white with the 1px red outline from the spec. */
+.tour-tip-actions button:not(.primary):not(.link),
+.tour-modal-actions button:not(.primary):not(.link) {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tour-tip-actions button:not(.primary):hover:not(:disabled),
+.tour-modal-actions button:not(.primary):hover:not(:disabled) {
+  background: #fff5f6;
+  border-color: var(--accent);
+}
+/* --- 15. Delivery table + empty states (Runs / Rules) -------------------- */
+.delivery-block {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--surface);
+}
+
+.delivery-block[data-status='sent'] {
+  border-left-color: var(--status-ok);
+}
+
+.delivery-block[data-status='needs_attention'],
+.delivery-block[data-status='cancelled'] {
+  border-left-color: var(--status-bad);
+}
+
+.delivery-block[data-status='queued'],
+.delivery-block[data-status='sending'],
+.delivery-block[data-status='partial'],
+.delivery-block[data-status='needs_review'] {
+  border-left-color: var(--status-warn);
+}
+
+.delivery-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.delivery-table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.delivery-table th,
+.delivery-table td {
+  padding: 7px 8px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+
+.delivery-table thead th {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.delivery-table tbody th {
+  font-weight: 600;
+}
+
+.delivery-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.delivery-table tbody tr:hover {
+  background: #fafafa;
+}
+
+/* Empty states: dashed frame, a short causal list, one primary action. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: #fcfcfc;
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.empty-steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.empty-steps li::marker {
+  color: var(--accent);
+}
+
+.empty-state .primary {
+  align-self: flex-start;
+}
+/* Delivery table fits the 352px assistant pane: three columns, fixed layout. */
+.delivery-table {
+  table-layout: fixed;
+}
+
+.delivery-table th:first-child,
+.delivery-table td:first-child {
+  width: 34%;
+}
+
+.delivery-table th:nth-child(2),
+.delivery-table td:nth-child(2) {
+  width: 40%;
+}
+
+.delivery-table th,
+.delivery-table td {
+  padding: 6px;
+  overflow-wrap: anywhere;
+}
+
+.delivery-meta {
+  display: block;
+  margin-top: 2px;
+}
+
+/* Automation forms stack inside the narrow pane instead of overflowing. */
+.automation-server .row {
+  flex-wrap: wrap;
+}
+
+.automation-server .row > input,
+.automation-server .row > select {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.automation-server input,
+.automation-server select,
+.automation-server textarea {
+  max-width: 100%;
+}
+/* --- 16. Approval stepper: one model, two densities --------------------- */
+/* Document head: four small hexagons, labels in aria/title only. */
+.document-approval {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 2px;
+}
+
+.document-approval-caption {
+  white-space: nowrap;
+}
+
+.approval-stepper--compact {
+  margin: 0;
+}
+
+.approval-stepper--compact .approval-step {
+  flex: 0 0 auto;
+  gap: 0;
+}
+
+.approval-stepper--compact .approval-step + .approval-step::before {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 1px;
+  margin: 0 6px;
+}
+
+.approval-stepper--compact .approval-step-dot {
+  width: 11px;
+  height: 12px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  background: var(--surface);
+  font-size: 0;
+}
+
+.approval-stepper--compact .approval-step--done .approval-step-dot {
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.approval-stepper--compact .approval-step--current .approval-step-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Banner: white surface with a status rule; red marks the current step. */
+.approval-banner {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+}
+
+.approval-banner--processing {
+  background: var(--surface);
+  border-left-color: var(--accent);
+}
+
+.approval-banner--success {
+  background: var(--surface);
+  border-left-color: var(--status-ok);
+}
+
+.approval-banner--warning {
+  background: var(--surface);
+  border-left-color: var(--status-warn);
+}
+
+.approval-banner--error {
+  background: var(--surface);
+  border-left-color: var(--status-bad);
+}
+
+.approval-step--done {
+  color: var(--text);
+}
+
+.approval-step--done .approval-step-dot {
+  border-color: var(--text);
+  background: var(--text);
+  color: #fff;
+}
+
+.approval-step--current .approval-step-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.approval-step--upcoming .approval-step-dot {
+  border-color: var(--border);
+  background: var(--surface);
+}
+/* --- 17. AI wait box: hexagon pulse, thinking dots, honest elapsed ------ */
+.ai-wait {
+  background: var(--surface);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+}
+
+.ai-wait__glyph {
+  width: 14px;
+  height: 16px;
+  background: var(--accent);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  animation: ai-hex 1.6s ease-in-out infinite;
+}
+
+@keyframes ai-hex {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.86);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.ai-wait__thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ai-wait__thinking i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: ai-dot 1.2s ease-in-out infinite;
+}
+
+.ai-wait__thinking i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.ai-wait__thinking i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes ai-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-wait__glyph,
+  .ai-wait__thinking i,
+  .ai-wait__dot,
+  .ai-wait__progress span {
+    animation: none;
+  }
+}
+/* --- 18. Delivery rail: approval + downstream on one line --------------- */
+.delivery-chain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.delivery-chain .approval-stepper--compact {
+  margin: 0;
+}
+
+/* Shadowed = recorded but not sent: amber outline, never a green tick. */
+.approval-step--held {
+  color: var(--status-warn);
+}
+
+.approval-step--held .approval-step-dot {
+  border-color: var(--status-warn);
+  background: transparent;
+}
+
+.approval-step--error {
+  color: var(--status-bad);
+}
+
+.approval-step--error .approval-step-dot {
+  border-color: var(--status-bad);
+  background: var(--status-bad);
+  color: #fff;
+}
+
+.approval-stepper--compact .approval-step--held .approval-step-dot {
+  background: transparent;
+  border-color: var(--status-warn);
+}
+
+.approval-stepper--compact .approval-step--error .approval-step-dot {
+  background: var(--status-bad);
+  border-color: var(--status-bad);
+}
+/* --- 19. Inline AI wait: tooltip-sized, same hexagon pulse --------------- */
+.ai-wait--inline {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.ai-wait--inline .ai-wait__glyph {
+  width: 10px;
+  height: 12px;
+}
+
+.ai-wait--inline strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ai-wait--inline button {
+  margin-left: auto;
+}
+/* --- 20. Launcher: mode cards, recommendation and role requirement ------ */
+.tour-options {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.tour-mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.tour-mode-cards legend {
+  grid-column: 1 / -1;
+  padding: 0 0 2px;
+}
+
+.tour-mode-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.tour-mode-card:hover {
+  border-color: #cfcfcf;
+}
+
+.tour-mode-card[data-selected='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.tour-mode-card:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tour-mode-card input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.tour-mode-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 26px;
+  background: #fff5f6;
+  color: var(--accent);
+  font-size: 12px;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+.tour-mode-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tour-mode-copy strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tour-mode-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.tour-mode-copy .tag,
+.tour-requirement .tag {
+  margin-left: 4px;
+  padding: 0 4px;
+  font-size: 9px;
+  background: #fff5f6;
+  color: var(--accent);
+  border-color: #f3c3c7;
+}
+
+.tour-requirement {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+@media (max-width: 560px) {
+  .tour-mode-cards {
     grid-template-columns: 1fr;
   }
 }

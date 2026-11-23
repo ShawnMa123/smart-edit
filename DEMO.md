@@ -86,7 +86,7 @@ Bank Ops / Compliance 的审批仍需各自窗口，导览会在此处交接。
 | `Audit deep dive` | 严格配置、证据、脱敏、导出 | ~2 min |
 | `Legal risk scan` | 打开制裁样例 → Document check → 闸门/发现/锚点 | ~2 min |
 | `Two-person approval` | Approval 面板、职责分离、二审交接 | ~1.5 min |
-| `Automation workbench` | Automate 模板/字段/下游契约 → Rules 分级（自动 dry-run）→ Runs 回执（自动展开 Details）→ Sandbox（**全程不发送**；Watch me 会自动切区域、展开映射/回执、切三个沙盒子页签） | ~4 min |
+| `Automation workbench` | **真操作**：切到预置文档 → 选模板 → AI 找字段并确认 → 换契约下游 → Reset mapping → Preview → Rules dry-run → Runs 时间线 → Sandbox（全程不发送；**Send 只讲不点**） | ~6 min |
 | `Lifecycle 1/3` | **新建** → 粘贴 → 审计 → 提交（applicant 窗口） | ~3 min |
 | `Lifecycle 2/3` | Bank Ops 一审 → Pending second（bankops 窗口） | ~1 min |
 | `Lifecycle 3/3` | Compliance 二审 → **Approved**（compliance 窗口） | ~1 min |
@@ -98,7 +98,9 @@ Bank Ops / Compliance 的审批仍需各自窗口，导览会在此处交接。
 也可用深链直接打开选择框：`?tour=audit`、`?tour=legal`、`?tour=approval`、`?tour=automation`（`?tour=core` 为默认）。
 
 > `Automation workbench` 需要 **Bank Operations**（或组织管理员）身份：`automation.view` 缺失时该标签会被隐藏，
-> 导览会逐段跳过并在弹框里提示换 `bankops@atlas-trade.test` 登录。导览只讲解、不点 **Send**，不会产生派发。
+> 导览会逐段跳过并在弹框里提示换 `bankops@atlas-trade.test` 登录。选 **Watch me** 时它会**真的操作**
+> （切文档、选模板、跑 AI 字段并确认、换下游、重置映射、Preview、Dry-run、展开运行时间线），
+> 但**绝不点 Send**，不会产生派发。
 
 **提词器（Presenter script）**：弹框底部的 **Presenter script** 按钮，或直接访问 `?presenter=1`。
 底部会出现 8 分钟脚本面板：分段（开场 / 模板审计 / 对照 / 审批 / 法规 / 收尾）、总倒计时、当前段要点；

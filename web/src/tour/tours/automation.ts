@@ -1,38 +1,54 @@
 /**
- * Automation deep dive: the Bank Operations back office behind the Automation tab.
+ * The Automation tour: one walkthrough that **performs** the workbench, then explains the rest.
  *
- * Automation is the only surface that hands a document to another system, so this tour explains the
- * registry, the downstream contract and the delivery tiers *before* anything is sent. It never
- * dispatches: Send is described, not clicked, and there is no submission step to approve.
+ * It opens the prepared demo document and really clicks through Automate (template → AI fields →
+ * confirm → downstream → mapping → preview), then switches to Rules (dry-run), Runs (job timeline)
+ * and Sandbox. Send is the one control it never presses: that is a real allow-listed HTTP call.
  *
- * The tab is hidden (not merely disabled) for roles without `automation.view`, so every step is
- * guarded by an `absent` predicate: an applicant session skips the walkthrough with one note
- * instead of failing on a control it cannot see.
+ * Bank Operations only: the tab is hidden without `automation.view`, so every step is guarded and
+ * falls back to a skip with a note instead of failing on a control the session cannot see.
  */
 
 import type { Tour, TourStep, WaitPredicate } from '../types';
 
 const T = (name: string): string => `[data-tour="${name}"]`;
 
-/** `AssistantPanel` drops the tab entirely without `automation.view` (Bank Ops / admins only). */
 const NO_AUTOMATION_ACCESS: WaitPredicate = { kind: 'absent', selector: T('tab-automation') };
 
-/** Skip politely — never fail — when this session cannot see the tab or the area is data-empty. */
 const guarded = (step: TourStep): TourStep => ({
   ...step,
   optional: true,
   skipIf: [...(step.skipIf ?? []), NO_AUTOMATION_ACCESS],
 });
 
+const DEMO_TITLE = 'Automation demo';
+const HOME_TITLE = 'Demand Guarantee';
+
 export const AUTOMATION_TOUR: Tour = {
   id: 'automation',
-  version: 1,
+  version: 2,
   title: 'Automation workbench',
   description:
-    'Template → confirmed fields → downstream contract → rules and runs — about 4 minutes. Bank Operations only; nothing is sent during the tour.',
+    'The tour runs Automate on a prepared document — template → AI fields → mapping → preview — then walks Rules, Runs and Sandbox. About 6 minutes; Send is explained, never clicked.',
+  requiresRole: 'Bank Operations',
   steps: [
     guarded({
-      id: 'open-tab',
+      id: 'open-demo-document',
+      title: 'Open the prepared demo document',
+      target: T('open-document'),
+      placement: 'bottom',
+      action: { kind: 'selectByText', selector: T('open-document'), includes: DEMO_TITLE },
+      until: { kind: 'text', selector: T('document-title'), includes: DEMO_TITLE },
+      timeoutMs: 20_000,
+      skipIf: [{ kind: 'text', selector: T('document-title'), includes: DEMO_TITLE }],
+      skipNote: 'The prepared demo document is already open.',
+      timeoutHint:
+        'The seeded document is missing: run scripts/seed_automation_demo.py on the server, then Retry (or Skip to work on the current document).',
+      body:
+        '“Automation demo · trade application” was created by the seed script with a real submission and two approvals, and it is bound to the trade-application template. The tour switched to it so every click below has matching data — autopilot just picked it in the document switcher.',
+    }),
+    guarded({
+      id: 'open-automate',
       title: 'Open the Automation tab',
       target: T('assistant-tabs'),
       placement: 'left',
@@ -40,103 +56,140 @@ export const AUTOMATION_TOUR: Tour = {
       until: { kind: 'selector', selector: T('automation-workbench') },
       timeoutMs: 15_000,
       skipNote:
-        'This session cannot see the Automation tab. It needs the Bank Operations role (or an organisation administrator); sign in as bankops@atlas-trade.test and run `?tour=automation` again.',
+        'This session cannot see the Automation tab. Sign in as bankops@atlas-trade.test (or an organisation administrator) and run `?tour=automation` again.',
       body:
-        'Automation sits in the right pane beside Audit, Knowledge and Legal. It is a Bank Operations back office: without `automation.view` the tab is hidden rather than shown and refused. If you are signed in as applicant, this step skips — switch role first.',
+        'Automation is a Bank Operations back office. It has four areas — Automate, Rules, Runs and Sandbox — and the tour walks all of them, starting with the server registry.',
     }),
     guarded({
       id: 'boundary',
-      title: 'Two halves, one boundary',
+      title: 'One area is real, one is practice',
       target: T('automation-boundary'),
       placement: 'left',
       body:
-        '**Automate** is the real path: templates and confirmed fields persist on the server, the request body follows the downstream contract, and dispatch makes one allow-listed HTTP call with a replayable receipt. **Sandbox** is a browser-local playground — localStorage, no network, no send. Neither one approves or submits anything.',
+        '**Automate** is the real path: templates and confirmed fields persist on the server, the body follows the downstream contract, and dispatch makes one allow-listed HTTP call with a replayable receipt. **Sandbox** is browser-local — localStorage, no network, no send. Neither approves or submits anything.',
     }),
     guarded({
-      id: 'areas',
-      title: 'Four areas',
-      target: T('automation-areas'),
+      id: 'select-template',
+      title: '1 · Select the template (tour clicks it)',
+      target: T('automation-template-list'),
       placement: 'left',
-      body:
-        'Automate is the server registry; Rules decide which template reaches which downstream and at what tier; Runs is what the worker did after the final approval; Sandbox is the local practice area. Machine suggestions never send on their own.',
-    }),
-    guarded({
-      id: 'template',
-      title: '1 · Template (server)',
-      target: T('automation-areas'),
-      placement: 'left',
-      action: { kind: 'click', selector: T('automation-area-server') },
-      until: { kind: 'selector', selector: T('automation-template') },
+      targetTimeoutMs: 3_000,
+      action: {
+        kind: 'clickByText',
+        selector: `${T('automation-template-list')} button`,
+        includes: 'Trade application',
+      },
+      until: { kind: 'selector', selector: T('automation-variables') },
       timeoutMs: 15_000,
       body:
-        'Saving the open draft creates a versioned server template (name + version), not a browser snapshot. Binding the document to a template is what “same kind of document” means for automatic rules, so the binding is a deliberate click, not a guess.',
+        'Each row is a template version with its confirmed-variable count; the tour picked the trade-application one. Saving the same name later adds a version instead of overwriting, and Document type must be bound — this document is, or the worker would record `skipped / no_binding`.',
     }),
     guarded({
-      id: 'fields',
-      title: '2 · Fields are confirmed, never assumed',
-      target: T('automation-variables'),
+      id: 'find-variables',
+      title: '2 · The tour asks the model for fields',
+      target: T('automation-find-variables'),
       placement: 'left',
       targetTimeoutMs: 3_000,
+      action: { kind: 'click', selector: T('automation-find-variables') },
+      until: { kind: 'selector', selector: T('automation-suggestions') },
+      timeoutMs: 120_000,
+      timeoutHint:
+        'The model did not answer in time. Skip this step — the template already has confirmed fields — and continue.',
       body:
-        '“Find variables with AI” proposes fields with a verbatim quote; nothing is stored until you confirm. The mapping downstream can only use confirmed variables, so an AI guess never becomes a sent value on its own.',
+        '“Find variables with AI” just ran. Every proposal carries a verbatim quote and a source tag, and the checkboxes arrive pre-ticked; nothing is persisted yet. This is a real model call, hence the longer wait.',
     }),
     guarded({
-      id: 'downstream',
-      title: '3 · Downstream contract',
-      target: T('automation-downstream'),
+      id: 'confirm-variables',
+      title: '2 · Confirm writes them',
+      target: T('automation-confirm-variables'),
+      placement: 'left',
+      targetTimeoutMs: 5_000,
+      action: { kind: 'click', selector: T('automation-confirm-variables') },
+      until: { kind: 'text', selector: T('automation-variable-summary'), includes: 'confirmed:' },
+      timeoutMs: 30_000,
+      body:
+        'The tour pressed Confirm: the ticked fields are merged into the template on the server. The heading above now counts only confirmed variables — the only ones the mapping is allowed to use.',
+    }),
+    guarded({
+      id: 'select-connector',
+      title: '3 · Switch to the contract downstream',
+      target: T('automation-connector-select'),
       placement: 'left',
       targetTimeoutMs: 3_000,
+      action: {
+        kind: 'selectByText',
+        selector: T('automation-connector-select'),
+        includes: 'Trade intake',
+      },
+      until: { kind: 'selector', selector: T('automation-payload-preview') },
+      timeoutMs: 30_000,
+      timeoutHint:
+        'The “Trade intake …” connector is missing. Pick a connector that has an OpenAPI operation, or Skip this step.',
       body:
-        'A connector names an allow-listed host and an OpenAPI operation. Field mapping says which confirmed variable fills each request field; a missing required mapping blocks Send instead of silently dropping the field.',
+        'A connector is an allow-listed host + path + method + auth, plus an OpenAPI operation. The tour switched to the spec-driven connector; Review rebuilt itself from the document’s values.',
     }),
     guarded({
-      id: 'mapping-details',
-      title: 'Open the field mapping',
+      id: 'open-mapping',
+      title: '3 · Open the field mapping',
       target: T('automation-mapping-details'),
       placement: 'left',
       targetTimeoutMs: 3_000,
       action: { kind: 'open', selector: T('automation-mapping-details') },
       body:
-        'The disclosure is idempotent: autopilot opens it only when it is closed, so a repeat run never flips it shut. Mapping is setup, not review — unmapped required fields and unsupported schema types are flagged here and block Send.',
+        'Mapping is setup, not review. The tour opened the disclosure idempotently — running it again will not close it. Each request field points at one confirmed variable.',
     }),
     guarded({
-      id: 'review',
-      title: '4 · Review, then a human sends',
-      target: T('automation-review'),
+      id: 'reset-mapping',
+      title: '3 · The tour maps fields by label',
+      target: T('automation-reset-mapping'),
+      placement: 'left',
+      targetTimeoutMs: 3_000,
+      action: { kind: 'click', selector: T('automation-reset-mapping') },
+      until: { kind: 'selector', selector: T('automation-payload-preview') },
+      timeoutMs: 30_000,
+      body:
+        '“Reset to suggestions” maps each request field to the confirmed variable whose label matches, saves the pair mapping on the server and rebuilds the review. A required field with no match stays unmapped and keeps Send disabled.',
+    }),
+    guarded({
+      id: 'review-body',
+      title: '4 · Every field has a source',
+      target: T('automation-review-body'),
       placement: 'left',
       targetTimeoutMs: 3_000,
       body:
-        'Preview request builds the exact body without calling out. Send performs one allow-listed HTTP call and records status, latency and a receipt. This tour stops here on purpose: whether to send is a human decision, and the receipt is the evidence.',
+        'Each line is `field ← variable`, or “not sent” when nothing matched; issues carry the server’s reason code. This is the contract check: the body is built from the approved snapshot, not from the live editor.',
     }),
     guarded({
-      id: 'history',
-      title: 'Receipts keep the history',
-      target: T('automation-history-details'),
+      id: 'preview',
+      title: '4 · The tour previews the request',
+      target: T('automation-preview-request'),
       placement: 'left',
       targetTimeoutMs: 3_000,
-      action: { kind: 'open', selector: T('automation-history-details') },
+      action: { kind: 'click', selector: T('automation-preview-request') },
+      until: { kind: 'selector', selector: T('automation-request-preview') },
+      timeoutMs: 30_000,
       body:
-        'Recent dispatches keep the evidence: outcome, status code, latency and timestamp, filterable by succeeded / failed / refused. A refusal is recorded too — nothing is silently retried, and the history only appears once this session has dispatches.',
+        'Preview just built method, URL, headers and body exactly as they would go out — with no HTTP call and no receipt. This is the last safe click; everything below it leaves the service.',
+    }),
+    guarded({
+      id: 'send',
+      title: 'Send stays human',
+      target: T('automation-send'),
+      placement: 'left',
+      targetTimeoutMs: 3_000,
+      body:
+        'Send performs one allow-listed HTTP call and records status, latency and a dispatch id. The tour never presses it: whether a real document leaves the service is a human decision, and that boundary is the product.',
     }),
     guarded({
       id: 'rules',
-      title: 'Rules and delivery tiers',
+      title: 'Rules: which template reaches which downstream',
       target: T('automation-areas'),
       placement: 'left',
       action: { kind: 'click', selector: T('automation-area-rules') },
       until: { kind: 'selector', selector: T('automation-rules') },
       timeoutMs: 15_000,
       body:
-        'A rule pairs one template kind with one connector. New rules start in **shadow**: they compute the request and call nobody. Raising a tier is an explicit, audited change — shadow → needs_review (a person releases the job) → auto_send (the worker sends). This demo workspace ships one shadow rule (`Demo · …`); **Save rule** adds another from the first template + connector.',
-    }),
-    guarded({
-      id: 'rule-list',
-      title: 'Dry-run before you raise a tier',
-      target: T('automation-rule-list'),
-      placement: 'left',
-      targetTimeoutMs: 3_000,
-      body:
-        '“Dry-run on this document” shows the body the rule would build, without sending. Warnings such as a duplicate connector are surfaced here; pausing or disabling a rule keeps its history instead of deleting it.',
+        'A rule pairs one template kind with one connector. New rules start in **shadow**: they compute the request and call nobody. Raising a tier is an explicit, audited change — shadow → needs_review (a person releases the job) → auto_send (the worker sends). This workspace ships one shadow rule (`Demo · …`).',
     }),
     guarded({
       id: 'rule-dry-run',
@@ -148,7 +201,7 @@ export const AUTOMATION_TOUR: Tour = {
       until: { kind: 'selector', selector: T('automation-dry-run-result') },
       timeoutMs: 30_000,
       body:
-        'Dry-run builds the exact request this rule would send for the document in the editor — URL, method, body and every mapping issue — and stops before any call. It is the cheapest review: no receipt is written and the downstream never sees it.',
+        'The tour pressed Dry-run: it builds exactly what this rule would send for the open (approved) document — URL, method, body and mapping issues — and stops before any call. No receipt is written and the downstream never sees it.',
     }),
     guarded({
       id: 'runs',
@@ -159,7 +212,7 @@ export const AUTOMATION_TOUR: Tour = {
       until: { kind: 'selector', selector: T('automation-runs') },
       timeoutMs: 15_000,
       body:
-        'After the final approval the worker turns each matching rule into one job per downstream. The Delivery banner is per open document; when the document has no jobs the list falls back to the newest runs in the workspace, so a real shadow job is visible here. Each job keeps its timeline, and the fallbacks are manual: release a needs_review job, retry a failed one, or cancel one that is still queued.',
+        'After the final approval the worker turns each matching rule into one job per downstream. The Delivery banner is per open document; this document has a real job from the seed, so nothing is mocked here. The fallbacks are manual: release a needs_review job, retry a failed one, or cancel a queued one.',
     }),
     guarded({
       id: 'run-detail',
@@ -171,7 +224,7 @@ export const AUTOMATION_TOUR: Tour = {
       until: { kind: 'selector', selector: T('automation-run-timeline') },
       timeoutMs: 20_000,
       body:
-        'Details opens the job timeline (queued → shadowed, or sent / needs_review). A shadowed job still stores the request it would have sent, so “we only simulated it” is evidence the reviewer can inspect — not a missing step.',
+        'The tour opened Details: queued → shadowed (or sent / needs_review). A shadowed job still stores the request it would have sent, so “we only simulated it” is evidence the reviewer can inspect — not a missing step.',
     }),
     guarded({
       id: 'kill-switch',
@@ -191,7 +244,7 @@ export const AUTOMATION_TOUR: Tour = {
       until: { kind: 'selector', selector: T('automation-sandbox') },
       timeoutMs: 15_000,
       body:
-        'The sandbox keeps templates in localStorage and builds the payload preview in the browser. It is useful for practice and for showing the contract, but nothing here is shared, dispatched or recorded — use Automate for the real path. Autopilot now walks its three sub-tabs so you can see each one without typing.',
+        'The sandbox keeps templates in localStorage and builds the payload preview in the browser. Nothing here is shared, dispatched or recorded — use Automate for the real path. The tour now walks its three sub-tabs.',
     }),
     guarded({
       id: 'sandbox-templates',
@@ -213,7 +266,7 @@ export const AUTOMATION_TOUR: Tour = {
       until: { kind: 'selector', selector: T('automation-sandbox-panel-variables') },
       timeoutMs: 15_000,
       body:
-        'Mark a selection as a variable (right-click, toolbar or Alt+Shift+V). Every occurrence sharing the variable id updates together; same-named ordinary text is untouched, and a deleted required variable is reported as missing rather than dropped.',
+        'Mark a selection as a variable (right-click, toolbar or Alt+Shift+V). Occurrences sharing the variable id update together; same-named ordinary text is untouched, and a deleted required variable is reported as missing rather than dropped.',
     }),
     guarded({
       id: 'sandbox-mapping',
@@ -226,12 +279,25 @@ export const AUTOMATION_TOUR: Tour = {
       body:
         'The OpenAPI spec is parsed in the browser and the payload is built locally: required/enum/type issues make it not_ready, and “Download JSON” writes a local file. The UI says Not sent — there is no network call in the sandbox.',
     }),
+    guarded({
+      id: 'restore-document',
+      title: 'Back to the core demo document',
+      target: T('open-document'),
+      placement: 'bottom',
+      action: { kind: 'selectByText', selector: T('open-document'), includes: HOME_TITLE },
+      until: { kind: 'text', selector: T('document-title'), includes: HOME_TITLE },
+      timeoutMs: 20_000,
+      skipIf: [{ kind: 'text', selector: T('document-title'), includes: HOME_TITLE }],
+      skipNote: 'The core demo document is already open.',
+      body:
+        'The tour switched back so the rest of the demo starts where it did. The automation demo document stays in the switcher with its own delivery state, rules and runs.',
+    }),
     {
       id: 'done',
-      title: 'That is the automation back office',
+      title: 'That is Automation — performed, then explained',
       placement: 'center',
       body:
-        'Template → confirmed fields → downstream contract → one allow-listed call, with rules and runs for the automatic path. If the workbench never appeared, this session lacks `automation.view`: sign in as bankops@atlas-trade.test (or an organisation administrator), then run `?tour=automation` again. `?tour=approval` shows what has to happen before the worker can queue a job.',
+        'The tour selected a template, asked the model for fields, confirmed them, switched to the contract downstream, remapped by label, built the preview — then dry-ran the rule, opened the real job timeline and walked the sandbox. It never pressed Send: that stays a human decision. Reset the demo data before a repeated full run.',
       nextLabel: 'Finish',
     },
   ],

@@ -231,6 +231,24 @@ describe('DocumentHead', () => {
     expect(screen.getByTestId('document-readonly').textContent).toMatch(/approved/i);
   });
 
+  it('extends the same rail to the worker delivery state', () => {
+    render(
+      <DocumentHead
+        facts={facts()}
+        submissionStatus="approved"
+        submission={submission({ status: 'approved', revision: 4 })}
+        deliveryStatus="shadowed"
+      />,
+    );
+
+    const rail = screen.getByTestId('delivery-stepper-compact');
+    expect(rail.querySelectorAll('[data-state]')).toHaveLength(5);
+    expect(rail.querySelector('[data-stage="delivered"]')?.getAttribute('data-state')).toBe('held');
+    expect(screen.getByTestId('document-approval-caption').textContent).toContain(
+      'Approved · Shadowed',
+    );
+  });
+
   it('shows the return reason and keeps the document editable', () => {
     render(
       <DocumentHead

@@ -1,5 +1,9 @@
 下面是**只在网页上点**的逐步 guide（命令行只用于“启动 worker / 重置演示文档”这两个页面外的前置），每一步都写了你应看到的界面反馈。完整版（含排错与负向场景）也在仓库 `DEMO_auto_dispatch.md`。
 
+> 网页导览：`?tour=automation`（Automation workbench，一个导览覆盖全部）。选 **Watch me** 时会在预置演示文档上
+> **真操作**：选模板 → AI 找字段并确认 → 切到契约下游 → Reset mapping → Preview → Rules Dry-run → Runs Details →
+> Sandbox 三个子页签，最后切回原文档；**Send 只讲不点**。需以 bankops 登录。
+
 ---
 
 ## 0.0 一键种子数据（可选，但“导览有内容”需要它）

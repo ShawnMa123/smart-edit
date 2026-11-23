@@ -24,6 +24,8 @@ import {
 } from '../api/conformance';
 import { ApiError } from '../api/errors';
 import { reportFileName, reportToMarkdown } from '../conformanceReport';
+import { AiWaitBox } from './AiWaitBox';
+import { useElapsedMs } from './useElapsedMs';
 
 export interface ConformancePanelProps {
   documentId: string;
@@ -155,6 +157,7 @@ export function ConformancePanel({
   const [configs, setConfigs] = useState<ConformanceConfigSummary[] | null>(null);
   const [configId, setConfigId] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
+  const runningElapsed = useElapsedMs(phase === 'running');
   const [run, setRun] = useState<ConformanceRun | null>(null);
   const [report, setReport] = useState<ConformanceReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -526,14 +529,20 @@ export function ConformancePanel({
       </details>
 
       {phase === 'running' ? (
-        <div className="notice tiny" data-testid="conformance-running">
-          <strong>
-            {STAGE_LABEL[String(run?.progress?.stage ?? run?.stage ?? 'queued')] ?? 'Working'}
-          </strong>
-          {run?.progress?.done != null && run?.progress?.planned != null
-            ? ` · ${String(run.progress.done)}/${String(run.progress.planned)}`
-            : ''}
-        </div>
+        <AiWaitBox
+          testId="conformance-running"
+          title="Running the template audit"
+          message={
+            <>
+              {STAGE_LABEL[String(run?.progress?.stage ?? run?.stage ?? 'queued')] ?? 'Working'}
+              {run?.progress?.done != null && run?.progress?.planned != null
+                ? ` · ${String(run.progress.done)}/${String(run.progress.planned)}`
+                : ' · deterministic checks first, then the model judges each requirement'}
+            </>
+          }
+          hint="Identifiers are redacted before the model call; the report pins this draft revision."
+          elapsedMs={runningElapsed}
+        />
       ) : null}
 
       {phase === 'failed' ? (

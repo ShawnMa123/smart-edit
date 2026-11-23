@@ -9,8 +9,10 @@
 import type { ReactNode } from 'react';
 
 import type { SubmissionSummary } from '../api/approvalTypes';
+import type { DeliveryStatus } from '../api/automationJobs';
 import { approvalStatusMeta } from '../domain/approvalStatus';
 import { TOPBAR_ENTRIES, type WorkspaceModule } from '../workspace/workspaceModules';
+import { DeliveryStepper, deliveryStages } from './DeliveryStepper';
 import { StatusBadge } from './StatusBadge';
 
 /** Configurable product label; a deployment may replace it without touching the layout. */
@@ -250,6 +252,8 @@ export interface DocumentHeadProps {
   submissionStatus?: SubmissionSummary['status'] | 'draft' | string | null;
   /** Latest submission summary; supplies submitted time, revision and latest comment. */
   submission?: SubmissionSummary | null;
+  /** Worker delivery state for the same document; only shown once both approvals landed. */
+  deliveryStatus?: DeliveryStatus | null;
 }
 
 export function DocumentHead({
@@ -257,9 +261,14 @@ export function DocumentHead({
   actions,
   submissionStatus,
   submission,
+  deliveryStatus,
 }: DocumentHeadProps) {
   const status = submissionStatus ?? submission?.status ?? 'draft';
   const statusMeta = approvalStatusMeta(status, submission?.route);
+  const deliveryCaption =
+    statusMeta.key === 'approved'
+      ? (deliveryStages(status, deliveryStatus, submission?.route).at(-1)?.label ?? null)
+      : null;
   const draftLine =
     facts.draftRevision === null ? 'server draft local-only' : `server draft rev ${facts.draftRevision}`;
   const submittedAt = submission?.created_at
@@ -281,6 +290,22 @@ export function DocumentHead({
         <div className="document-title" data-tour="document-title">
           <h1>{facts.title}</h1>
           <StatusBadge status={status} />
+        </div>
+        <div className="document-approval">
+          <DeliveryStepper
+            variant="compact"
+            submissionStatus={status}
+            deliveryStatus={deliveryStatus}
+            route={submission?.route}
+          />
+          {deliveryCaption ? (
+            <span
+              className="document-approval-caption tiny muted"
+              data-testid="document-approval-caption"
+            >
+              {statusMeta.shortLabel} · {deliveryCaption}
+            </span>
+          ) : null}
         </div>
         <div className="meta tiny">
           {facts.versions} captured version{facts.versions === 1 ? '' : 's'} · {facts.characters}{' '}

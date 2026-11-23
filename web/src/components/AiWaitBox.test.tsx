@@ -20,6 +20,8 @@ describe('AiWaitBox', () => {
     const box = screen.getByTestId('ai-wait');
     expect(box.getAttribute('role')).toBe('status');
     expect(box.getAttribute('aria-busy')).toBe('true');
+    expect(box.querySelector('.ai-wait__glyph')).toBeTruthy();
+    expect(box.querySelectorAll('.ai-wait__thinking i')).toHaveLength(3);
     expect(screen.getByText('Asking the statute service')).toBeTruthy();
     expect(screen.getByText('Searching the statute corpus…')).toBeTruthy();
     expect(screen.getByText('2.5s elapsed')).toBeTruthy();
@@ -46,6 +48,26 @@ describe('AiWaitBox', () => {
     expect(screen.getByText('Compose answer').closest('li')?.getAttribute('data-state')).toBe(
       'pending',
     );
+  });
+
+  it('renders a one-line inline status without the card copy', () => {
+    render(
+      <AiWaitBox
+        variant="inline"
+        title="Waiting for the app"
+        message="card only"
+        hint="card only"
+        elapsedMs={1500}
+      />,
+    );
+
+    const box = screen.getByTestId('ai-wait');
+    expect(box.className).toContain('ai-wait--inline');
+    expect(box.querySelector('.ai-wait__glyph')).toBeTruthy();
+    expect(screen.getByText('Waiting for the app')).toBeTruthy();
+    expect(screen.getByText('1.5s elapsed')).toBeTruthy();
+    expect(screen.queryByText('card only')).toBeNull();
+    expect(box.querySelector('.ai-wait__progress')).toBeNull();
   });
 
   it('omits the cancel action when the call cannot be stopped', () => {

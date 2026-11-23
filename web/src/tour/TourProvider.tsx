@@ -24,6 +24,8 @@ import {
 import { createPortal } from 'react-dom';
 
 import { useToast } from '../components/ToastProvider';
+import { AiWaitBox } from '../components/AiWaitBox';
+import { useElapsedMs } from '../components/useElapsedMs';
 import { PresenterPanel } from './PresenterPanel';
 import { LIFECYCLE_IDS } from './catalog';
 import type {
@@ -165,10 +167,14 @@ export function TourProvider({
   const [missing, setMissing] = useState(false);
   const [satisfied, setSatisfied] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  /** Honest wait time shown inside the tooltip while `until` has not been reached yet. */
+  const waitingElapsed = useElapsedMs(phase === 'running' && !satisfied && !missing);
   const [paused, setPaused] = useState(false);
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
+  /** 0–100 of the autopilot reading time left, for the horizontal bar. */
+  const [countdownPct, setCountdownPct] = useState<number | null>(null);
   const [completedIds, setCompletedIds] = useState<string[]>(() =>
     catalog.filter((item) => readCompleted(item)).map((item) => item.id),
   );
@@ -345,6 +351,25 @@ const perform = useCallback(
         return null;
       }
 
+      if (action.kind === 'clickByText') {
+        // Labels are more stable than generated ids, and a list can contain several rows.
+        const candidates = Array.from(
+          document.querySelectorAll<HTMLElement>(action.selector),
+        );
+        const target = candidates.find((item) =>
+          (item.textContent ?? '').includes(action.includes),
+        );
+        if (!target) return `No control matching “${action.includes}” in ${action.selector}.`;
+        if (target instanceof HTMLButtonElement && target.disabled) {
+          return 'That control is disabled right now.';
+        }
+        const box = boxOf(target);
+        setCursor({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+        await sleep(prefersReducedMotion() ? 0 : 300);
+        target.click();
+        return null;
+      }
+
       const element = elementFor(action.selector);
       if (!element) return `I could not find ${action.selector}.`;
       if (action.kind === 'click') {
@@ -361,6 +386,17 @@ const perform = useCallback(
         const select = element as HTMLSelectElement;
         const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
         setter?.call(select, action.value);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return null;
+      }
+      if (action.kind === 'selectByText') {
+        const select = element as HTMLSelectElement;
+        const option = Array.from(select.options).find((item) =>
+          (item.textContent ?? '').includes(action.includes),
+        );
+        if (!option) return `No option matching “${action.includes}” in ${action.selector}.`;
+        const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+        setter?.call(select, option.value);
         select.dispatchEvent(new Event('change', { bubbles: true }));
         return null;
       }
@@ -467,14 +503,17 @@ const perform = useCallback(
   useEffect(() => {
     if (phase !== 'running' || settings.mode !== 'auto' || !satisfied || missing) {
       setCountdown(null);
+      setCountdownPct(null);
       return;
     }
     let remaining = autoDwellMs;
     setCountdown(Math.max(1, Math.ceil(remaining / 1000)));
+    setCountdownPct(100);
     const timer = window.setInterval(() => {
       if (pausedRef.current) return;
       remaining = Math.max(0, remaining - 250);
       setCountdown(Math.max(0, Math.ceil(remaining / 1000)));
+      setCountdownPct(Math.max(0, Math.round((remaining / autoDwellMs) * 100)));
       if (remaining <= 0) {
         window.clearInterval(timer);
         advance();
@@ -589,16 +628,36 @@ const perform = useCallback(
                   ×
                 </button>
               </div>
+              <div className="tour-progress" data-testid="tour-progress" aria-hidden="true">
+                <span style={{ width: `${((index + 1) / active.steps.length) * 100}%` }} />
+              </div>
               <h3 id="tour-step-title">{step.title}</h3>
               <p id="tour-step-body" className="tiny">
                 {step.body}
               </p>
               {settings.mode === 'auto' && satisfied && !missing ? (
-                <p className="tiny muted" data-testid="tour-countdown">
-                  {paused
-                    ? 'Paused — press Resume to continue.'
-                    : `Auto-advance in ${countdown ?? 0}s · press "Next now" to move on.`}
-                </p>
+                <div
+                  className="tour-countdown"
+                  data-testid="tour-countdown"
+                  data-paused={paused ? 'yes' : 'no'}
+                >
+                  <div
+                    className="tour-countdown-bar"
+                    role="progressbar"
+                    aria-label="Autopilot reading time"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={countdownPct ?? 0}
+                    data-testid="tour-countdown-bar"
+                  >
+                    <span style={{ width: `${countdownPct ?? 0}%` }} />
+                  </div>
+                  <p className="tiny muted" aria-hidden="true">
+                    {paused
+                      ? 'Paused — press Resume to continue.'
+                      : `Auto-advance in ${countdown ?? 0}s · press "Next now" to move on.`}
+                  </p>
+                </div>
               ) : null}
               {hint ? (
                 <p className="notice notice--warn tiny" data-testid="tour-hint">
@@ -609,6 +668,18 @@ const perform = useCallback(
                 <p className="notice notice--bad tiny" data-testid="tour-missing">
                   I could not find the target for this step. Retry, or Skip it.
                 </p>
+              ) : null}
+              {!satisfied && !missing && !hint ? (
+                <AiWaitBox
+                  variant="inline"
+                  testId="tour-waiting"
+                  title={
+                    settings.mode === 'auto'
+                      ? 'Waiting for the app to reach this step’s state'
+                      : 'Next unlocks when this step’s state is reached — or press Skip'
+                  }
+                  elapsedMs={waitingElapsed}
+                />
               ) : null}
               <div className="row tour-tip-actions">
                 <button type="button" onClick={back} disabled={index === 0}>
@@ -660,6 +731,14 @@ const launcher =
             >
               <h3 id="tour-modal-title">{active.title}</h3>
               <p className="tiny muted">{active.description}</p>
+              {active.requiresRole ? (
+                <p className="tour-requirement" data-testid="tour-requirement">
+                  <span className="tag tag--warn">{active.requiresRole} only</span>
+                  <span className="tiny muted">
+                    Sign in as {active.requiresRole}; other roles skip with a note.
+                  </span>
+                </p>
+              ) : null}
               {catalog.length > 1 ? (
                 <label className="tiny muted" htmlFor="tour-picker">
                   Tour
@@ -693,9 +772,9 @@ const launcher =
                 </p>
               ) : null}
               <div className="tour-options">
-                <fieldset>
+                <fieldset className="tour-mode-cards">
                   <legend className="tiny muted">Mode</legend>
-                  <label>
+                  <label className="tour-mode-card" data-selected={mode === 'guide'}>
                     <input
                       type="radio"
                       name="tour-mode"
@@ -703,12 +782,15 @@ const launcher =
                       onChange={() => setMode('guide')}
                       data-testid="tour-mode-guide"
                     />
-                    <span>
+                    <span className="tour-mode-icon" aria-hidden="true">
+                      ▷
+                    </span>
+                    <span className="tour-mode-copy">
                       <strong>Guide me</strong>
-                      <small>You click; the tour points at the next control.</small>
+                      <small>You click; Next unlocks when the step’s state is reached.</small>
                     </span>
                   </label>
-                  <label>
+                  <label className="tour-mode-card" data-selected={mode === 'auto'}>
                     <input
                       type="radio"
                       name="tour-mode"
@@ -716,8 +798,13 @@ const launcher =
                       onChange={() => setMode('auto')}
                       data-testid="tour-mode-auto"
                     />
-                    <span>
-                      <strong>Watch me</strong>
+                    <span className="tour-mode-icon" aria-hidden="true">
+                      ◉
+                    </span>
+                    <span className="tour-mode-copy">
+                      <strong>
+                        Watch me <span className="tag tag--ok">Recommended</span>
+                      </strong>
                       <small>
                         Autopilot clicks and types; {Math.round(autoDwellMs / 1000)}s reading time per
                         step.
@@ -726,9 +813,9 @@ const launcher =
                   </label>
                 </fieldset>
 
-                <fieldset>
+                <fieldset className="tour-mode-cards tour-mode-cards--submission">
                   <legend className="tiny muted">Submission step</legend>
-                  <label>
+                  <label className="tour-mode-card" data-selected={approvals === 'manual'}>
                     <input
                       type="radio"
                       name="tour-approvals"
@@ -736,12 +823,15 @@ const launcher =
                       onChange={() => setApprovals('manual')}
                       data-testid="tour-approvals-manual"
                     />
-                    <span>
+                    <span className="tour-mode-icon" aria-hidden="true">
+                      ↪
+                    </span>
+                    <span className="tour-mode-copy">
                       <strong>Hand off to me</strong>
-                      <small>Recommended: you click Submit; the tour continues after.</small>
+                      <small>You click Submit; the tour continues after.</small>
                     </span>
                   </label>
-                  <label>
+                  <label className="tour-mode-card" data-selected={approvals === 'auto'}>
                     <input
                       type="radio"
                       name="tour-approvals"
@@ -749,7 +839,10 @@ const launcher =
                       onChange={() => setApprovals('auto')}
                       data-testid="tour-approvals-auto"
                     />
-                    <span>
+                    <span className="tour-mode-icon" aria-hidden="true">
+                      ✓
+                    </span>
+                    <span className="tour-mode-copy">
                       <strong>Let the tour submit</strong>
                       <small>Demo only: it confirms the dialog; the draft becomes read-only.</small>
                     </span>
