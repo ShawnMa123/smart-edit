@@ -9,6 +9,7 @@
 
 import type {
   AuditFinding,
+  AuditReport,
   FieldValue,
   Finding,
   GateDecision,
@@ -47,12 +48,25 @@ export const NOTE_GATE_NOT_ASKED =
 export interface AuditFindingRow {
   key: string;
   id: string | null;
+  /** The server's finding title / message — the human sentence the row leads with. */
+  headline: string;
   rule: string | null;
+  ruleId: string | null;
+  ruleVersion: string | number | null;
   severity: string;
+  severityLabel: string;
+  severityClass: string;
   gateType: string | null;
+  /** "Blocks" / "Needs human review" / "Advisory" — never the raw machine value. */
+  gateLabel: string;
   targetOperations: string[];
-  message: string;
+  /** `start_approval` -> "Start approval", so the row explains the action in words. */
+  operationLabels: string[];
+  method: string;
   fieldId: string | null;
+  /** The field's business label from the envelope (`保函金额` / "Amount"), when known. */
+  fieldLabel: string | null;
+  message: string;
   evidence: string | null;
 }
 
@@ -88,6 +102,25 @@ export interface AuditSummary {
   serverDigest: string | null;
   gate: GateSummary;
   template: TemplateSummary;
+  /** Where the field values came from (change D8); never inferred from the stage reason alone. */
+  extraction: ExtractionSummary;
+  /** The audit date recorded in the report (change D5); null in older reports. */
+  asOf: string | null;
+}
+
+/** `verification.extraction`, in the units the panel prints. */
+export interface ExtractionSummary {
+  /** `deterministic` / `fixture` / `llm` / `unknown`. */
+  source: string;
+  profileId: string | null;
+  version: string | null;
+  contentSha256: string | null;
+  fieldsFound: number | null;
+  fieldsMissing: number | null;
+  llmFallback: boolean;
+  /** Fields the extractor refused to settle (`notes` contains `extraction_conflict`). */
+  conflictFields: string[];
+  label: string;
 }
 
 /** The customer template that judged this document, or why none did (design D20). */
@@ -184,19 +217,94 @@ export function fieldChecksRan(envelope: RunEnvelope): boolean {
   return stageStatus(envelope, 'extract') === 'done' && stageStatus(envelope, 'normalize') === 'done';
 }
 
-const toAuditFindingRow = (finding: AuditFinding, index: number): AuditFindingRow => ({
-  key: finding.id ?? `${finding.check_id}#${index}`,
-  id: finding.id,
-  rule: finding.rule_id
-    ? `${finding.rule_id}${finding.rule_version === null ? '' : `@${finding.rule_version}`}`
-    : null,
-  severity: finding.severity,
-  gateType: finding.gate_type,
-  targetOperations: finding.target_operations ?? [],
-  message: finding.message,
-  fieldId: finding.field_id,
-  evidence: finding.evidence,
-});
+/** `gate_type` in words. The raw value stays on the row for tests/debugging, never for display. */
+const GATE_LABELS: Record<string, string> = {
+  hard_block: 'Blocks',
+  human_review: 'Needs human review',
+  advisory: 'Advisory',
+};
+
+/** Protected operations in words; an unknown value falls back to Title Case, never to a raw snake_case. */
+const OPERATION_LABELS: Record<string, string> = {
+  save_draft: 'Save draft',
+  submit_version: 'Submit version',
+  start_approval: 'Start approval',
+  formal_export: 'Formal export',
+  handoff: 'Handoff',
+  formal_mapping: 'Formal mapping',
+};
+
+const titleCase = (value: string): string =>
+  value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+
+const operationLabel = (operation: string): string =>
+  OPERATION_LABELS[operation] ?? titleCase(operation);
+
+const fieldLabelFor = (envelope: RunEnvelope, fieldId: string | null): string | null => {
+  if (!fieldId) return null;
+  const entry = envelope.fields?.[fieldId] ?? envelope.extra_fields?.[fieldId];
+  const label = entry?.label?.trim();
+  return label ? label : null;
+};
+
+/**
+ * The rule reference to print. Schema checks carry the schema *hash* as their version, which reads
+ * like a commit id and says nothing to a reviewer — keep the version only for business rules, where
+ * it is a real rule version (`GR-AMOUNT-POSITIVE@1`).
+ */
+const ruleReference = (
+  ruleId: string | null,
+  ruleVersion: string | number | null,
+): string | null => {
+  if (!ruleId) return null;
+  if (ruleId.startsWith('SCHEMA:')) return ruleId;
+  return ruleVersion === null || ruleVersion === undefined ? ruleId : `${ruleId}@${ruleVersion}`;
+};
+
+const toAuditFindingRow = (
+  finding: AuditFinding,
+  envelope: RunEnvelope,
+  index: number,
+): AuditFindingRow => {
+  const token = severityToken(finding.severity);
+  const fieldLabel = fieldLabelFor(envelope, finding.field_id);
+  return {
+    key: finding.id ?? `${finding.check_id}#${index}`,
+    id: finding.id,
+    headline: finding.message,
+    rule: ruleReference(finding.rule_id, finding.rule_version),
+    ruleId: finding.rule_id,
+    ruleVersion: finding.rule_version,
+    severity: finding.severity,
+    severityLabel: token.label,
+    severityClass: token.className,
+    gateType: finding.gate_type,
+    gateLabel: finding.gate_type ? (GATE_LABELS[finding.gate_type] ?? titleCase(finding.gate_type)) : 'No gate',
+    targetOperations: finding.target_operations ?? [],
+    operationLabels: (finding.target_operations ?? []).map(operationLabel),
+    method: finding.method,
+    fieldId: finding.field_id,
+    fieldLabel,
+    message: finding.message,
+    evidence: finding.evidence,
+  };
+};
+
+const GATE_ORDER: Record<string, number> = { hard_block: 0, human_review: 1, advisory: 2 };
+const SEVERITY_ORDER: Record<string, number> = { critical: 0, warn: 1, info: 2 };
+
+/** Blocking findings first, then severity; the plan order is not the reviewer's order. */
+const byUrgency = (a: AuditFindingRow, b: AuditFindingRow): number =>
+  (GATE_ORDER[a.gateType ?? ''] ?? 3) - (GATE_ORDER[b.gateType ?? ''] ?? 3) ||
+  (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3) ||
+  a.headline.localeCompare(b.headline);
+
+const auditFindingRows = (envelope: RunEnvelope, report: AuditReport | null): AuditFindingRow[] =>
+  (report?.findings ?? [])
+    .map((finding, index) => toAuditFindingRow(finding, envelope, index))
+    .sort(byUrgency);
 
 const gateSummary = (envelope: RunEnvelope): GateSummary => {
   const gate: GateDecision | null = envelope.gate ?? null;
@@ -223,6 +331,43 @@ const gateSummary = (envelope: RunEnvelope): GateSummary => {
 };
 
 /**
+ * The extraction provenance block (change D8).
+ *
+ * `source` is copied from the server and never guessed: a run whose extract stage failed has no
+ * provenance, and that is rendered as `unknown` — not as `deterministic` and not as clean.
+ */
+export function extractionSummary(envelope: RunEnvelope): ExtractionSummary {
+  const raw = envelope.verification?.extraction ?? null;
+  const source = raw?.source ?? 'unknown';
+  const conflictFields = Object.values(envelope.fields)
+    .filter((field) => (field.notes ?? []).includes('extraction_conflict'))
+    .map((field) => field.key)
+    .sort();
+  const label =
+    source === 'deterministic'
+      ? raw?.profile_id
+        ? `Deterministic profile · ${raw.profile_id} v${raw.version ?? '?'}`
+        : 'Deterministic profile'
+      : source === 'fixture'
+        ? 'Fixture replay (demo, not this document)'
+        : source === 'llm'
+          ? 'Model extraction'
+          : 'Extraction source not recorded';
+
+  return {
+    source,
+    profileId: raw?.profile_id ?? null,
+    version: raw?.version ?? null,
+    contentSha256: raw?.content_sha256 ?? null,
+    fieldsFound: raw?.fields_found ?? null,
+    fieldsMissing: raw?.fields_missing ?? null,
+    llmFallback: Boolean(raw?.llm_fallback),
+    conflictFields,
+    label,
+  };
+}
+
+/**
  * The rule audit as reported by the server — or "did not run", which is a claim of its own.
  *
  * The server digest is shown for reference and **never** compared with the browser digest: they hash
@@ -231,7 +376,7 @@ const gateSummary = (envelope: RunEnvelope): GateSummary => {
 export function auditSummary(envelope: RunEnvelope): AuditSummary {
   const verification = envelope.verification ?? null;
   const report = verification?.audit ?? null;
-  const findings = (report?.findings ?? []).map(toAuditFindingRow);
+  const findings = auditFindingRows(envelope, report);
 
   return {
     ran: Boolean(report),
@@ -250,6 +395,8 @@ export function auditSummary(envelope: RunEnvelope): AuditSummary {
     serverDigest: report?.snapshot_digest ?? null,
     gate: gateSummary(envelope),
     template: templateSummary(envelope),
+    extraction: extractionSummary(envelope),
+    asOf: report?.as_of ?? verification?.policy?.as_of ?? null,
   };
 }
 
@@ -373,7 +520,9 @@ export function buildAuditView(
     severityCounts[bucket] += 1;
   }
 
-  const usedFixture = Boolean(extract?.reason?.includes('fixture:'));
+  const usedFixture =
+    Boolean(extract?.reason?.includes('fixture:')) ||
+    envelope.verification?.extraction?.source === 'fixture';
 
   return {
     fieldChecks: checksRan ? 'ran' : 'did-not-run',

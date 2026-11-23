@@ -209,9 +209,20 @@ def validate_against_schema(bundle: RuleBundle, schema) -> None:
                 continue
             for field_side, literal_side in (("left", "right"), ("right", "left")):
                 operand, other = expression[field_side], expression[literal_side]
-                if operand.get("kind") != "field" or other.get("kind") != "literal":
+                if operand.get("kind") != "field":
                     continue
                 ftype = schema.fields[operand["field_id"]].value_type
+                if other.get("kind") == "relative_date":
+                    # `relative_date` resolves to a date before comparison, so only a date field is
+                    # type-compatible (design D6).
+                    if ftype != "date":
+                        raise BundleError(
+                            f"{where}: relative_date can only be compared with a date field, not "
+                            f"{operand['field_id']!r} ({ftype})"
+                        )
+                    continue
+                if other.get("kind") != "literal":
+                    continue
                 allowed = LITERAL_COMPATIBILITY[ftype]
                 if other["value_type"] not in allowed:
                     raise BundleError(

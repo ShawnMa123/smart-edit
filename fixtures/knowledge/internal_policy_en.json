@@ -1,0 +1,91 @@
+{
+  "title": "Synthetic Internal Policy (demo)",
+  "version_id": "KV-POLICY-001-EN-v1",
+  "source": {
+    "source_id": "KS-POLICY-001-EN",
+    "source_type": "internal_policy",
+    "publisher": "Synthetic Bank Policy Demo",
+    "version_label": "demo-1",
+    "language": "en",
+    "scope": "bank_internal",
+    "license_reference": "synthetic-demo-internal",
+    "synthetic": true,
+    "jurisdictions": [],
+    "effective_from": "2024-01-01",
+    "effective_to": null
+  },
+  "chunks": [
+    {
+      "chunk_id": "KC-POLICY-001-EN-1",
+      "section": "Approval limits",
+      "title_path": "Internal policy / Approval / Limits",
+      "text": "A guarantee exceeding twelve months or the branch authorisation limit requires escalation to the next approval level; the amount and tenor must come from confirmed fields, not model guesses.",
+      "locator": {
+        "section": "Approval limits"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-EN-2",
+      "section": "Sanctions screening",
+      "title_path": "Internal policy / Compliance / Sanctions screening",
+      "text": "Transactions involving sanctioned countries, regions or parties must first complete formal sanctions screening. A company name in the document does not prove screening has passed; the assistant can only prompt verification.",
+      "locator": {
+        "section": "Sanctions screening"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-EN-3",
+      "section": "Records retention",
+      "title_path": "Internal policy / Records / Retention",
+      "text": "Guarantee versions, approval opinions and audit events are retained under the approved retention policy; ordinary logs must not record full customer text, identity data or hidden model chain-of-thought.",
+      "locator": {
+        "section": "Records retention"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-EN-4",
+      "section": "Approval escalation path",
+      "title_path": "Internal policy / Approval / Escalation",
+      "text": "Over-limit business is escalated by amount and risk: branch, regional approval centre, head office. Escalation opinions and approval evidence must be recorded in the approval workflow and cannot be backfilled later.",
+      "locator": {
+        "section": "Approval escalation path"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-EN-5",
+      "section": "Segregation of duties",
+      "title_path": "Internal policy / Duties / Segregation",
+      "text": "Origination, review, disbursement and accounting roles must be separated; the same person must not complete customer onboarding and guarantee issuance review together. Exceptions require compliance approval and an audit trail.",
+      "locator": {
+        "section": "Segregation of duties"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-EN-6",
+      "section": "Sanctions escalation",
+      "title_path": "Internal policy / Compliance / Sanctions escalation",
+      "text": "If sanctions screening hits or information is insufficient, the business unit must not release the transaction on its own; it must escalate to compliance and follow the sanctions policy. Conclusions and evidence must be archived.",
+      "locator": {
+        "section": "Sanctions escalation"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-EN-7",
+      "section": "Incident reporting",
+      "title_path": "Internal policy / Operational risk / Incident reporting",
+      "text": "Operational errors, over-authorised approvals or customer complaints must be reported to operational risk on the same day, retaining the incident record, impact scope and remediation evidence.",
+      "locator": {
+        "section": "Incident reporting"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-EN-8",
+      "section": "Outsourcing and third parties",
+      "title_path": "Internal policy / Outsourcing / Third parties",
+      "text": "Outsourcing or third-party services require due diligence, a data-security assessment and contract approval; customer data must not be provided to unapproved third parties.",
+      "locator": {
+        "section": "Outsourcing and third parties"
+      }
+    }
+  ]
+}

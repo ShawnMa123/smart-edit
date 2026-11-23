@@ -89,6 +89,9 @@ class TemplatePack:
     declarations: tuple[DeclarationRequirement, ...]
     policy_packs: tuple[str, ...]
     body: str | None
+    # Change `config-driven-audit-extraction` D7: a template may name the extraction profile used to
+    # read the document. Optional, so an existing pack keeps loading unchanged.
+    extraction_profile: str | None = None
 
 
 def _digest(payload: object) -> str:
@@ -211,6 +214,11 @@ def load_template(path: Path) -> TemplatePack:
     clauses = tuple(_clause(raw, where) for raw in payload.get("clauses") or ())
     declarations = tuple(_declaration(raw, where) for raw in payload.get("internal_policy") or ())
     policy_packs = tuple(str(item) for item in payload.get("policy_packs") or ())
+    extraction_profile = payload.get("extraction_profile")
+    if extraction_profile is not None:
+        if not isinstance(extraction_profile, str) or not extraction_profile.strip():
+            raise TemplateError(f"{where}: extraction_profile must be a non-empty profile id")
+        extraction_profile = extraction_profile.strip()
     if not (fields or clauses or declarations):
         raise TemplateError(f"{where}: template declares no expectation at all")
 
@@ -228,6 +236,7 @@ def load_template(path: Path) -> TemplatePack:
         "clauses": [vars(item) for item in clauses],
         "declarations": [vars(item) for item in declarations],
         "policy_packs": list(policy_packs),
+        "extraction_profile": extraction_profile,
         "body": body,
     }
     return TemplatePack(
@@ -245,6 +254,7 @@ def load_template(path: Path) -> TemplatePack:
         declarations=declarations,
         policy_packs=policy_packs,
         body=str(body) if body else None,
+        extraction_profile=extraction_profile,
     )
 
 

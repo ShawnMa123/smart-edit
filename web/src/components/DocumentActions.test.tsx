@@ -15,22 +15,61 @@ describe('DocumentActions', () => {
     }
   });
 
-  it('reports unavailability instead of appearing to succeed', async () => {
+  it('keeps the unavailable actions visible but quiet', () => {
     render(<DocumentActions />);
+
+    for (const action of UNAVAILABLE_ACTIONS) {
+      const button = screen.getByRole('button', {
+        name: new RegExp(`${action.label} · not implemented`),
+      });
+      expect(button.className).toContain('quiet');
+      expect(button.textContent).toContain('Not available');
+      expect(button.textContent).not.toContain('not implemented');
+    }
+  });
+
+  it('offers Comments after Import and reports the click', async () => {
+    const onComments = vi.fn();
+    render(<DocumentActions onComments={onComments} />);
+
+    const comments = screen.getByRole('button', { name: 'Comments' });
+    expect(comments).toBeTruthy();
+    const buttons = screen.getAllByRole('button');
+    const importIndex = buttons.findIndex((button) => button.getAttribute('data-testid') === 'import-file');
+    const commentsIndex = buttons.findIndex((button) => button.getAttribute('data-testid') === 'comments');
+    expect(commentsIndex).toBe(importIndex + 1);
+
+    await userEvent.click(comments);
+    expect(onComments).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not mark formatting as unavailable in the header', () => {
+    render(<DocumentActions />);
+
+    expect(screen.queryByRole('button', { name: /Formatting/ })).toBeNull();
+    expect(UNAVAILABLE_ACTIONS.some((action) => action.id === 'format')).toBe(false);
+  });
+
+  it('reports unavailability instead of appearing to succeed', async () => {
+    const onUnavailableAction = vi.fn();
+    render(<DocumentActions onUnavailableAction={onUnavailableAction} />);
 
     await userEvent.click(screen.getByRole('button', { name: /Export · not implemented/ }));
 
+    expect(onUnavailableAction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'export', label: 'Export' }),
+    );
     expect(screen.getByRole('status').textContent).toContain('Unavailable');
     expect(screen.getByRole('status').textContent).toContain('Export');
     expect(screen.queryByText(/success|done|exported/i)).toBeNull();
   });
 
-  it('explains the reason for the specific action', async () => {
+  it('does not mark approval as unavailable in an authenticated build', () => {
     render(<DocumentActions />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Start approval · not implemented/ }));
-
-    expect(screen.getByRole('status').textContent).toContain('approval workflow');
+    expect(UNAVAILABLE_ACTIONS.some((action) => action.id === 'approve')).toBe(false);
+    expect(screen.queryByRole('button', { name: /Start approval/ })).toBeNull();
+    expect(screen.queryByText(/approval workflow/)).toBeNull();
   });
 
   it('offers import as a real action, not a labelled placeholder', () => {

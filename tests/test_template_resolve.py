@@ -148,9 +148,9 @@ def test_the_resolved_policy_lists_every_pack():
     """11.4 The report can name the template plus each policy pack version."""
     policy = resolve_policy(_pack(), load_bundles())
 
-    assert [pack.pack_id for pack in policy.packs] == ["guarantee-core"]
-    assert policy.packs[0].version == "1.0.0"
-    assert policy.packs[0].source == BUNDLE_PATH.name
+    assert [pack.pack_id for pack in policy.packs] == ["company-guarantee", "guarantee-core"]
+    assert policy.packs[1].version == "1.0.0"
+    assert policy.packs[1].source == BUNDLE_PATH.name
     assert policy.conflicts == ()
     assert policy.reason_codes == ()
 

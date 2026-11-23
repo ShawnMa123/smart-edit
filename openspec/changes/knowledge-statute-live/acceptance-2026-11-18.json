@@ -1,0 +1,135 @@
+{
+  "captured_at": "2026-11-18",
+  "mercatoria": {
+    "base_url": "http://127.0.0.1:18080",
+    "index": "20261114-151703-157038-21cc6c676382"
+  },
+  "processor": "doubao-seed-2-1-lite-260915",
+  "case_0_guarantee_attempt": {
+    "question": "什么是guarantee",
+    "status": "succeeded",
+    "outcome": "insufficient_evidence",
+    "route": "none",
+    "support_level": "insufficient",
+    "processor": "doubao:doubao-seed-2-1-lite-260915",
+    "retrieval": [
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "ok",
+        "retrieved_at": null,
+        "hits": 5
+      }
+    ],
+    "citations": [],
+    "limitations": [
+      "现有证据仅包含独立保函及独立保函纠纷的司法解释条款，未提供普通“guarantee（担保）”的通用定义或贸易规则层面的定义依据，无法覆盖提问所指的“guarantee”的完整概念。",
+      "本次请求未执行联网检索。"
+    ],
+    "statute_egress_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "c76df0d156544ed6"
+      }
+    ]
+  },
+  "case_1_usable": {
+    "question": "独立保函的定义是什么",
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "statute",
+    "support_level": "strong",
+    "processor": "doubao:doubao-seed-2-1-lite-260915",
+    "retrieval": [
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "ok",
+        "retrieved_at": null,
+        "hits": 5
+      }
+    ],
+    "citations": [
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "source_version": "第一条@2020-12-29",
+        "locator": {
+          "chunk_id": "35cc2814f6fa408b",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:1",
+          "article_label": "第一条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "precision": "exact"
+        }
+      }
+    ],
+    "limitations": [
+      "该定义仅来源于《最高人民法院关于审理独立保函纠纷案件若干问题的规定》第一条，可能仅适用于该司法解释所调整的独立保函纠纷场景。"
+    ],
+    "statute_egress_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "9a00123895d696dd"
+      }
+    ]
+  },
+  "case_2_rejected": {
+    "question": "URDG 758 第 20 条对索赔有什么要求？",
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "published",
+    "support_level": "qualified",
+    "processor": "doubao:doubao-seed-2-1-lite-260915",
+    "retrieval": [
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "low_confidence",
+        "retrieved_at": null,
+        "hits": 5
+      },
+      {
+        "layer": "local",
+        "status": "ok",
+        "detail": "statute_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      }
+    ],
+    "citations": [
+      {
+        "source_type": "trade_rule",
+        "title": "合成贸易规则摘要（演示用，非官方原文）",
+        "source_version": "demo-3",
+        "locator": {
+          "section": "URDG 758 索赔",
+          "page": 12
+        }
+      }
+    ],
+    "limitations": [
+      "The cited item is a non-official synthetic summary rather than the full official URDG 758 text.",
+      "The evidence does not specify related document formats, timing, translation, or handling of incomplete claims beyond Article 20's stated requirements.",
+      "法规语料命中 5 条但置信度低，未采用。",
+      "本回答仅基于系统内部来源。"
+    ],
+    "statute_egress_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "0d4e6a8bf3004665"
+      }
+    ]
+  }
+}

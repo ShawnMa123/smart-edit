@@ -41,6 +41,9 @@ DOC_VALUES = {
     "governing_rules": "URDG 758",
 }
 DOC_TEXT = "DEMAND GUARANTEE\n" + "\n".join(f"{key}: {value}" for key, value in DOC_VALUES.items())
+# Fixed audit date: `CO-ISSUE-NOT-PAST` compares `issue_date` with `today`, and a demo must print the
+# same numbers on every day.
+DEMO_AS_OF = "2026-03-12"
 
 
 def _field(key: str, value: str, *, status: str = "extracted") -> dict:
@@ -79,7 +82,12 @@ def _state(*, statuses: dict | None = None, omit: tuple[str, ...] = ()) -> dict:
 
 
 def _audit(label: str, state: dict, *, snapshot_digest: str, current_digest: str | None = None) -> dict:
-    result = audit_state(state, snapshot_digest=snapshot_digest, current_digest=current_digest)
+    result = audit_state(
+        state,
+        snapshot_digest=snapshot_digest,
+        current_digest=current_digest,
+        as_of=DEMO_AS_OF,
+    )
     report, findings = result["report"], result["findings"]
     gates = {
         operation: evaluate_gate(
@@ -125,7 +133,7 @@ def build_report() -> dict:
         ),
     ]
     stale_gate = evaluate_gate(
-        audit_state(_state(), snapshot_digest="digest-clean")["report"],
+        audit_state(_state(), snapshot_digest="digest-clean", as_of=DEMO_AS_OF)["report"],
         operation=START_APPROVAL,
         candidate_digest="digest-after-edit",
     )
@@ -209,11 +217,14 @@ def _template_runs(templates: list) -> list[dict]:
     pack = next((item for item in templates if item.published), None)
     if pack is None:
         return []
-    matched = audit_state(_template_state(), snapshot_digest="digest-template", templates=[pack])
+    matched = audit_state(
+        _template_state(), snapshot_digest="digest-template", templates=[pack], as_of=DEMO_AS_OF
+    )
     ambiguous = audit_state(
         _template_state(),
         snapshot_digest="digest-template",
         templates=[pack, replace(pack, template_id=f"{pack.template_id}-second")],
+        as_of=DEMO_AS_OF,
     )
     return [
         _template_row("template matched", matched),

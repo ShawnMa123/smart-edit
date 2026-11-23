@@ -1,0 +1,11 @@
+{
+  "note": "Synthetic fixture only. No model is called and no external system receives this payload.",
+  "document": {
+    "title": "Demand Guarantee (fixture)",
+    "text": "Amount: USD 500,000.00\n\nThe guarantee expires on 2027-03-31."
+  },
+  "proposal": {
+    "search_text": "USD 500,000.00",
+    "replacement_text": "USD 600,000.00"
+  }
+}

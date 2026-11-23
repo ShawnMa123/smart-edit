@@ -1,0 +1,55 @@
+{
+  "title": "知识助手使用指南（合成演示）",
+  "version_id": "KV-HELP-001-v1",
+  "source": {
+    "source_id": "KS-HELP-001",
+    "source_type": "product_manual",
+    "publisher": "Synthetic Demo Publisher",
+    "version_label": "demo-1",
+    "language": "zh-CN",
+    "scope": "public",
+    "license_reference": "synthetic-demo",
+    "synthetic": true,
+    "jurisdictions": [],
+    "effective_from": "2024-01-01",
+    "effective_to": null
+  },
+  "chunks": [
+    {
+      "chunk_id": "KC-HELP-001-1",
+      "section": "能做什么",
+      "title_path": "使用指南 / 能做什么",
+      "text": "你能做什么：知识助手支持三类问题：产品与操作 FAQ、贸易规则条款解释、当前文档选中文字的解释。回答会给出 Claim 级引用、support_level 和 limitations；证据不足时会明确说明，不能回答时会建议转交。本段是合成演示说明，不是官方产品文档。",
+      "locator": {
+        "section": "能做什么"
+      }
+    },
+    {
+      "chunk_id": "KC-HELP-001-2",
+      "section": "不能做什么",
+      "title_path": "使用指南 / 不能做什么",
+      "text": "这个助手不能做什么：不会修改正文、不执行审批、不提交版本、不访问网络，也不提供法律结论或代替制裁筛查。修改、审批或完整合规审查请求会被转交给对应流程；它不会产生正文或业务副作用。",
+      "locator": {
+        "section": "不能做什么"
+      }
+    },
+    {
+      "chunk_id": "KC-HELP-001-3",
+      "section": "怎么提问",
+      "title_path": "使用指南 / 怎么提问",
+      "text": "怎么提问：请给出规则名称、版本、法域或适用日期；问文档内容时先选中一段文字；一次问一个问题。例如：某贸易规则第 20 条对索赔有什么要求？或：这段文字是什么意思？",
+      "locator": {
+        "section": "怎么提问"
+      }
+    },
+    {
+      "chunk_id": "KC-HELP-001-4",
+      "section": "怎么读回答",
+      "title_path": "使用指南 / 怎么读回答",
+      "text": "回答包含 outcome、support_level、claims、citations 和 limitations。strong 或 qualified 表示支持程度；insufficient_evidence 表示证据不足；needs_handoff 表示请求需要转交。引用卡片只显示获准摘录与定位，不返回完整来源。",
+      "locator": {
+        "section": "怎么读回答"
+      }
+    }
+  ]
+}

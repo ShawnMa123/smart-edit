@@ -1,5 +1,9 @@
 /.pi/
 
+# 部署用的真实环境变量（含数据库/模型密钥），不入库
+/deploy/env.ecs
+/deploy/.env*
+
 # 内部沟通文档，不入库
 /docs/
 /agent-design.md
@@ -27,16 +31,15 @@ runs/
 /.idea/
 /.vscode/
 
-# Agent 3 local retrieval: generated artifacts (corpus/index are source; cache is rebuildable)
-data/regulatory/embedding-cache.db
-data/regulatory/index/*.db.tmp
-data/regulatory/index/*.db-wal
-data/regulatory/index/*.db-shm
-data/embedding-cache.db
+# Cline local tooling (workspace metadata, not part of the application)
+/.cline/
+/.clinerules/
 
-data/regulatory/index/*.db
+AI-Campaign_Note.md
+AI-Campaign-2026-Team04-ECS登录信息.txt
+team04-postgresql.txt
 
-# Raw regulatory corpus is fetched/generated separately; keep only its README in Git.
-data/regulatory/corpus/*
-!data/regulatory/corpus/README.md
-!data/regulatory/corpus/fetch_*.py
+tradeAI_requirementDesign_v2/mercatoria-main.zip
+tradeAI_requirementDesign_v2/mercatoria-main*
+tradeAI_requirementDesign_v2/AI-Campaign-2026-Team04-RagFlowAPI.txt
+tradeAI_requirementDesign_v2/.DS_Store

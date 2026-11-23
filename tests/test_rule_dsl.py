@@ -52,6 +52,32 @@ def test_rejects_invalid_shapes(expression, message):
         validate(expression)
 
 
+def test_accepts_relative_date_operands():
+    expression = {
+        "op": "compare",
+        "left": {"kind": "field", "field_id": "issue_date"},
+        "comparator": "ge",
+        "right": {"kind": "relative_date", "value": "today"},
+    }
+
+    assert validate(expression) == expression
+
+
+@pytest.mark.parametrize(
+    "operand, message",
+    [
+        ({"kind": "relative_date", "value": "yesterday"}, "relative_date value"),
+        ({"kind": "relative_date", "value": "today", "offset": 1}, "relative_date operand"),
+        ({"kind": "relative_date"}, "relative_date operand"),
+    ],
+)
+def test_relative_date_is_restricted_to_today(operand, message):
+    expression = {"op": "compare", "left": FIELD, "comparator": "eq", "right": operand}
+
+    with pytest.raises(RuleEvaluationError, match=message):
+        validate(expression)
+
+
 def test_rejects_regression_through_depth_limit():
     expression: dict = {"op": "exists", "field_id": "a"}
     for _ in range(9):

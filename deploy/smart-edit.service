@@ -1,0 +1,25 @@
+# systemd unit for the smart-edit console API.
+# Installed as /etc/systemd/system/smart-edit.service by deploy/remote-setup.sh.
+#
+# One worker on purpose: run state (RunStore) is process-scoped and the SQLite host store is
+# single-writer, so more workers would split in-memory runs across processes.
+[Unit]
+Description=smart-edit console API (FastAPI/uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/smart-edit
+EnvironmentFile=/opt/smart-edit/.env
+ExecStart=/opt/smart-edit/.venv/bin/uvicorn app.api.main:app \
+    --host 127.0.0.1 --port 8000 --workers 1 \
+    --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

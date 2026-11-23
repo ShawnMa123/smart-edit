@@ -71,27 +71,34 @@ def test_the_shipped_pack_is_healthy():
     assert report["healthy"] is True
     assert report["schema"] == {"version": load_schema().version, "fields": 15}
     assert report["plan"] == {
-        "planned": 51,
+        "planned": 56,
         "schema": 39,
-        "rule": 6,
+        "rule": 11,
         "evidence": 6,
         "template": 0,
     }
     assert report["bundles"] == [
+        {
+            "id": "company-guarantee",
+            "version": "1.0.0",
+            "published": True,
+            "sha256": load_bundle(Path("app/rules/bundles/company-guarantee.yaml")).content_sha256,
+            "rules": 5,
+        },
         {
             "id": "guarantee-core",
             "version": "1.0.0",
             "published": True,
             "sha256": load_bundle(BUNDLE_PATH).content_sha256,
             "rules": 6,
-        }
+        },
     ]
 
 
 def test_every_rule_still_demonstrates_pass_finding_and_needs_input():
     report = doctor.inspect()
 
-    assert len(report["vectors"]) == 6
+    assert len(report["vectors"]) == 11
     for entry in report["vectors"]:
         assert entry["vectors"] >= 3
         assert {"pass", "finding", "needs_input"} <= set(entry["demonstrated"])
@@ -218,7 +225,7 @@ def test_the_shipped_template_is_in_the_health_report():
     assert template["clauses"] == 2
     assert template["declarations"] == 1
     assert template["conflicts"] == 0
-    assert template["plan"] == 58
+    assert template["plan"] == 63
     for field_id in ("currency", "origin_country", "guarantee_amount"):
         assert template["states"][field_id] == ["finding", "needs_input", "pass"]
 

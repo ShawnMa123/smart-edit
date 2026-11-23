@@ -10,6 +10,25 @@ import { DOCUMENT, Workspace } from './support/workspace';
 test('narrow viewport shows one pane plus tabs, and the audit still runs', async ({ page }) => {
   await page.goto('/');
 
+  // The shell layers survive the collapse (workspace-shell / "Narrow viewport ...").
+  await expect(page.locator('.environment-strip')).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+
+  // Same English-only chrome contract on the narrow layout (interface-language).
+  const chrome = await page.evaluate(() => {
+    const parts: string[] = [];
+    ['.topbar', '.environment-strip', '.document-head', '.editor-status'].forEach((selector) => {
+      document.querySelectorAll(selector).forEach((node) => {
+        parts.push((node as HTMLElement).innerText ?? '');
+      });
+    });
+    return parts.join('\n');
+  });
+  expect(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(chrome)).toBe(false);
+
   const tabs = page.getByRole('tablist', { name: 'Workspace panes' });
   await expect(tabs).toBeVisible();
   await expect(page.locator('section[aria-label="Document editor"]')).toBeVisible();
@@ -27,4 +46,20 @@ test('narrow viewport shows one pane plus tabs, and the audit still runs', async
   await page.getByRole('tab', { name: 'AI assistant' }).click();
   await ws.runAudit();
   await expect(ws.result()).toHaveAttribute('data-field-checks', 'ran');
+});
+
+test('narrow viewport keeps module entries reachable from More without horizontal scrolling', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'More' }).click();
+  await expect(page.getByRole('menu', { name: 'More workspace modules' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Approval' }).click();
+  await expect(page.getByRole('dialog', { name: /Approval workflow/ })).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
 });

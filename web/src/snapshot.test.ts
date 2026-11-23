@@ -1,8 +1,29 @@
 /** Task 3.1 — snapshots and their content digest. */
 
-import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 
-import { createSnapshot, digestText, shortDigest } from './snapshot';
+import { describe, expect, it, vi } from 'vitest';
+
+import { createSnapshot, digestText, sha256Hex, shortDigest } from './snapshot';
+
+describe('sha256 fallback (plain http has no crypto.subtle)', () => {
+  const expected = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
+
+  it('matches the platform SHA-256 for ASCII and multi-byte text', () => {
+    for (const text of ['', 'abc', 'Demand Guarantee', '保函金额：USD 500,000.00']) {
+      expect(sha256Hex(text)).toBe(expected(text));
+    }
+  });
+
+  it('digestText uses the fallback when WebCrypto is missing', async () => {
+    vi.stubGlobal('crypto', {});
+    try {
+      expect(await digestText('Demand Guarantee')).toBe(expected('Demand Guarantee'));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
 
 describe('digestText', () => {
   it('is deterministic for identical text', async () => {

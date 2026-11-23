@@ -116,6 +116,58 @@ const PdfGap = Node.create({
   },
 });
 
+/** A document-local variable: an inline atom that renders its value or an explicit placeholder. */
+const VariableReference = Node.create({
+  name: 'variableReference',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  draggable: false,
+  addAttributes() {
+    return {
+      variableId: { default: null },
+      label: { default: 'variable' },
+      valueType: { default: 'string' },
+      required: { default: false },
+      displayValue: { default: null },
+      occurrenceId: { default: null },
+    };
+  },
+  parseHTML: () => [
+    {
+      tag: 'span[data-variable-id]',
+      getAttrs: (element) => ({
+        variableId: element.getAttribute('data-variable-id'),
+        label: element.getAttribute('data-variable-label') ?? 'variable',
+        valueType: element.getAttribute('data-variable-type') ?? 'string',
+        required: element.getAttribute('data-variable-required') === 'true',
+        displayValue: element.getAttribute('data-variable-value'),
+        occurrenceId: element.getAttribute('data-variable-occurrence'),
+      }),
+    },
+  ],
+  renderHTML({ node, HTMLAttributes }) {
+    const value =
+      typeof node.attrs.displayValue === 'string' && node.attrs.displayValue.length > 0
+        ? node.attrs.displayValue
+        : `{{${node.attrs.label}}}`;
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-variable-id': String(node.attrs.variableId ?? ''),
+        'data-variable-label': String(node.attrs.label ?? 'variable'),
+        'data-variable-type': String(node.attrs.valueType ?? 'string'),
+        'data-variable-required': node.attrs.required ? 'true' : 'false',
+        'data-variable-value': node.attrs.displayValue ?? '',
+        'data-variable-occurrence': String(node.attrs.occurrenceId ?? ''),
+        class: 'variable-chip',
+      }),
+      value,
+    ];
+  },
+});
+
 /** Everything ED-02 asks for that the library provides in one place. */
 export const extensions = [
   StarterKit.configure({
@@ -128,6 +180,7 @@ export const extensions = [
   DisplayAttributes,
   PageBreak,
   PdfGap,
+  VariableReference,
 ];
 
 type AnyNode = {

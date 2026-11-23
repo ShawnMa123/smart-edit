@@ -8,6 +8,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // The dev runner streams backend startup and run logs before Vite starts. Vite clears the
+    // terminal by default, which would erase that context; keep it visible.
+    clearScreen: false,
     proxy: {
       '/api': {
         // Overridable so the E2E honesty project can point a second dev server at the no-provider

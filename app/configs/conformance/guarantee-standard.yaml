@@ -1,0 +1,86 @@
+# Calibration config for the template-conformance audit (change: template-conformance-audit).
+#
+# A config is *expectations*, never code: no regex, no script, no prompt text. The server sends the
+# requirements to the Doubao composer and validates every answer against the document text.
+#
+# Two layers read this file:
+#   fields.required     -> deterministic extraction (fields.yaml + extraction_profile); the model
+#                          never decides whether a required field is missing
+#   requirements[]      -> the model judges these one by one, and must quote the document
+config_id: guarantee-standard
+version: 1.0.0
+published: true
+name: Demand guarantee — standard desk check
+document_types: [guarantee]
+language: auto
+description: >-
+  First-line desk check for a demand guarantee: parties, amount, dates, governing rules and the
+  on-demand wording. Advisory only; the deterministic field dictionary stays authoritative for
+  missing data.
+extraction_profile: guarantee-default
+
+fields:
+  required:
+    - guarantee_number
+    - applicant_name
+    - beneficiary_name
+    - guarantee_amount
+    - currency
+    - issue_date
+    - expiry_date
+    - governing_rules
+
+requirements:
+  - id: parties.legal_names
+    title: Applicant and beneficiary are complete legal names
+    level: must
+    check: >-
+      Both parties must be written with their full registered name, including the company suffix
+      (Ltd / Pte Ltd / GmbH / Inc / Co). Abbreviations, aliases, initials or "same as above" are not
+      acceptable.
+    evidence_hint: Header block or the party paragraph
+    suggestion: Use the full name from the registration certificate and record where it came from.
+  - id: rules.urdg_758
+    title: Governing rules are URDG 758
+    level: must
+    check: >-
+      The text must name URDG 758 explicitly ("URDG 758" or "Uniform Rules for Demand Guarantees
+      (URDG) 758"). Any other version, or no rule reference at all, does not conform.
+    evidence_hint: Governing rules / applicable rules line
+    suggestion: Add "This guarantee is subject to URDG 758".
+  - id: amounts.consistency
+    title: Amount and currency are internally consistent
+    level: must
+    check: >-
+      The numeric amount and the amount in words (when present) must agree, and the currency must
+      be the same everywhere it appears.
+    suggestion: Keep one amount and one ISO 4217 currency code throughout the document.
+  - id: dates.validity
+    title: Issue date and expiry date form a valid window
+    level: must
+    check: >-
+      The issue date must not be later than the expiry date, and the expiry date must be after the
+      audit date. A missing or unreadable date does not conform.
+    suggestion: State both dates as YYYY-MM-DD and confirm the expiry with the beneficiary.
+  - id: clauses.on_demand
+    title: Payment basis is on first written demand
+    level: should
+    check: >-
+      The document should state that payment is made on first written demand ("on first written
+      demand", "见索即付", "payable on demand"). Conditions that make payment conditional on the
+      beneficiary proving a breach weaken the instrument.
+    evidence_hint: Payment clause
+    suggestion: Add an on-demand payment clause and remove breach-proof conditions.
+  - id: parties.contactability
+    title: Each party has a reachable address or contact
+    level: info
+    check: >-
+      An address, registered office or contact line is present for the applicant and for the
+      beneficiary, so a demand can be presented.
+    suggestion: Add the registered office of both parties.
+
+generation:
+  max_findings: 12
+  max_quote_chars: 300
+  summary_max_chars: 600
+  max_document_chars: 24000

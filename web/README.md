@@ -25,6 +25,112 @@ npm --prefix web install
 npm --prefix web run dev        # http://localhost:5173
 ```
 
+### Shell layers
+
+Above the three-pane grid the workspace renders three layers (`web/src/components/AppShell.tsx`):
+
+| Layer | Content | Rule |
+|---|---|---|
+| Top bar (`.topbar`) | product mark, `PRODUCT_NAME` (configurable), `Local demo session` | shows **no** person, avatar, organisation or member entry |
+| Environment strip (`.environment-strip`) | synthetic data, fixed snapshot, assistant does not approve, history/templates in this browser | one standing summary; panels keep their own specific statements |
+| Document header (`.document-head`) | breadcrumb `{document section} / {documentId}`, stored title, `Draft` tag, meta line | meta lists only facts the client holds; digest, lock and storage sit behind `Technical details` |
+
+The build has no authentication, so the shell must never look like a signed-in session. Copy that
+lacks a data source is omitted rather than filled with a sample value — for example, the header does
+not show counterparties, a template number or participating organisations, and the breadcrumb uses
+`draft.document_id`.
+
+### Workspace modules
+
+A 58px desktop rail exposes Document, Versions, Approval, Comments, People and Developer. The top
+bar exposes Activity, People, Inbox, Developer and the neutral `Local demo session` entry. The rail
+disappears below the three-pane breakpoint; the same entries remain reachable through the pane
+switcher's `More` menu.
+
+| Entry | Behavior |
+|---|---|
+| Document / Versions | switch the existing content panes; no new backend |
+| Activity | browser-local activity list from `smart-edit:activity:<documentId>`; clear requires confirmation |
+| Inbox | derived from `notifiable` activity; unread count; Mark all read stays local |
+| Developer | read-only implementation map (Available / Partial / Unavailable) |
+| Version compare | select exactly two captured versions; read-only block diff |
+| People / Identity / Approval / Comments | explicit placeholders that name the missing backend capability and render no sample members, organisations, approvers or comments |
+
+The placeholder dialogs make no network request and write no data. `People` and `Identity` must keep
+the shell's no-unauthenticated-identity rule; do not add sample names, avatars or organisations.
+
+The document header exposes `Import file` (real file chooser), `Comments` (explicit placeholder for
+the missing comment service), and `Export` / `Start approval` with a `Not available` tag. Formatting
+is available through the editor toolbar and keyboard shortcuts; the header must not show a stale
+`Formatting · Not available` action.
+
+The editor footer exposes `Release lock`, `Start editing` and `Submit new version`. The lock controls
+call the real document lock APIs; `Submit new version` is a visual placeholder that states shared
+submission is not available, and offers a real `Capture browser-local version` action instead. It
+never claims the document was sent, submitted or approved.
+
+### Demo data mode
+
+`Demo data` is an explicit, default-off switch in the environment strip. It is stored under
+`smart-edit:demo-mode`; when on, the first-batch collaboration surfaces use a separate browser-local
+store at `smart-edit:demo:collaboration:v1`. The banner states that sample users, organisations and
+approvals are demo data, **not real authentication or a real workflow**.
+
+Demo state is isolated from the real activity/version/draft stores. `Reset demo data` restores the
+seeded sample state only; it does not touch real activity, version history or the server draft.
+Turning the switch off restores the honest mode: neutral `Local demo session`, unavailable
+People/Approval/Comments placeholders and the real activity log.
+
+### Activity and notifications
+
+The `Activity` and `Inbox` entries are backed by a browser-local log, not a server audit trail.
+Entries live under `smart-edit:activity:<documentId>` in `localStorage`, are capped at 100, and
+only describe real operations the operator performed in this workspace (import, save, version
+capture/restore, audit, knowledge answer, template apply, export attempt). The log never stores the
+question, document text, citation text, identities or credentials. Clearing the log only removes
+this browser key; it does not touch version history, the draft or any audit result.
+
+Notifications are a derived view of `notifiable` activity entries; opening Inbox marks the local
+entries read and never sends a read receipt to the backend. When storage is unavailable or corrupt,
+the UI says the log is session-only instead of claiming it was saved.
+
+| Kind | Recorded when | Notifiable |
+|---|---|---|
+| `import` | a file import succeeds or fails | yes |
+| `save` | a user-edited draft is saved | no |
+| `conflict` | the server rejects a save with a conflict | yes |
+| `capture` | a version is captured | yes |
+| `restore` | a captured version is loaded as a draft | no |
+| `audit` | an audit starts, completes or fails | start no; result yes |
+| `knowledge` | a knowledge answer completes or fails | yes |
+| `template` | a template is applied to the editor | yes |
+| `export-attempt` | the unavailable Export action is activated | no |
+
+The activity record never stores the question, document text, citation text, identities or
+credentials; it only stores the action label, a short result detail, the timestamp and the local
+read/notification flags.
+
+### Version comparison
+
+`Version compare` selects exactly two browser-local captured versions and renders a read-only block
+diff of their projected text. The dialog shows both labels, capture times and short digests; it
+never creates a version, rewrites history, changes the current draft or asks an AI model for a
+summary. Adjacent removed/added blocks are shown as `changed`. With fewer than two captured
+versions the Compare action explains that two are required.
+
+### Interface language
+
+The interface is **English only** (`interface-language`):
+
+- `web/index.html` declares `lang="en"`, and the document `<title>` is English.
+- Chrome copy — shell, panes, assistant tabs, status band, empty states, notices — is English. The
+  header title comes from `draft.title` (fallback `Untitled document`) and the breadcrumb from
+  `draft.document_id`; no translation gloss and no example reference such as `DG-2026-00417`.
+- `App.tsx` pins the knowledge binding to `locale="en"`, so assistant sessions request `en` and only
+  the English corpus (`fixtures/knowledge/*_en.json`) supplies citations.
+- Document **content** may be any language. `e2e/interface-language.spec.ts` scans the named chrome
+  roots only — never the editor body or citation excerpts — and fails if Chinese characters appear there.
+
 ### Editing the document
 
 The centre pane is a **rich-text editor** (TipTap/ProseMirror), not a textarea: headings, bold/italic/
@@ -38,14 +144,234 @@ text projection, so formatting cannot change a verdict:
 | bullet / numbered list | `- item` / `1. item` |
 | table | one line per row, cells joined with ` | ` |
 
-The projection lives in `src/rich/plainText.ts` and is covered by golden tests; formatting-only edits
-therefore leave the snapshot digest and the audit result unchanged. If the editor cannot start at all,
+The projection lives in `src/rich/projection.ts` (re-exported as `richToPlainText`) and is covered by
+golden tests; formatting-only edits therefore leave the snapshot digest and the audit result unchanged.
+Selection offsets are Unicode code points, not UTF-16 units. If the editor cannot start at all,
 `RichEditor` falls back to a textarea and says why — a blank pane is never the failure mode.
+
+The document is rendered as a **page** (`.paper-wrap > article.paper`): a centred sheet with a page
+header (`DOCUMENT WORKING COPY` plus the stored document id), a serif body and a page footer with the
+captured version count. The page is a container only — `richToPlainText` receives exactly the same
+document, so the projection, character count and digest are unchanged by the presentation.
+
+Above the toolbar, `.editor-status` is the single status band. It shows the snapshot (`snapshot vN` or
+`no captured version`), the server draft (`draft rev N` or `no server draft`), the edit lock
+(`lock: this session` / `lock: unknown`) and the `data-testid="save-state"` message. The band and the
+conflict panel read the same `saveState` value, so they cannot disagree.
+
+### Server draft, autosave and conflicts
+
+The centre pane now has a server-authoritative draft (`/api/documents/*`, local/test only). On first
+load it reads the draft, acquires an edit lock and autosaves 2 seconds after typing with
+`If-Match: "draft-<revision>"`. The status band says `Saving…`, `Saved to server`, `Save failed` or
+`Save conflict`; it never reports `Saved` before the host accepted the write.
+
+A `412 stale_draft` **does not replace the editor**. The local content stays, a recovery draft is
+written to `localStorage` (`smart-edit:recovery:demo-document`), and the conflict panel offers
+`Use server version`, `Overwrite with local content` or `Keep local as recovery draft`. The host
+still rejects automation apply/undo when the draft head moved; they never auto-rebase (the run core is
+covered by API tests, not by the Automation tab UI).
+
+Variables are versioned separately from content: `PUT draft` no longer carries variables, and a
+text-only save preserves the existing variables and `variables_version`. Variable updates use
+`PATCH /documents/{id}/drafts/{draft_id}/variables` with `If-Match: "variables-<version>"`.
+
+### Automation tab (fixture-backed workbench)
+
+The assistant's **Automation · fixture only** tab is a frontend-first workbench with three areas:
+
+- **Template** captures the current imported or edited document as a template snapshot. Before saving,
+  a live preview shows the source (`Imported · deterministic/heuristic/fallback` with its note, or
+  `Edited in this browser`), the draft revision (or `No server draft`), character count, variable
+  summary and the next version; a duplicate name warns that a new version is added instead of
+  overwriting. Captured templates appear as cards with a detail view (source, captured time,
+  character count, variables, 240-character content excerpt), inline rename with validation, and a
+  Two-step delete. Templates are snapshots: later edits to the working document never change them.
+  `Apply to editor` replaces the current document with a template (confirmation when it has content;
+  empty documents apply directly), keeping captured variable values and provenance, then uses the
+  normal autosave path. `Save to template` in Variables & Fill updates an existing template in place
+  (same id/name, version+1, previous snapshot replaced; no history in this build).
+  Storage is browser-local (`localStorage`, `smart-edit:automation-templates`, at most 20, oldest
+  evicted), so the UI says `Saved in this browser — not on the server`; quota/corrupt/unavailable
+  storage degrades to a readable message and, for failed writes, a visibly session-only record.
+- **Variables & Fill** marks a non-empty paragraph/heading selection as a `variableReference` node
+  (right-click, the toolbar button or `Alt+Shift+V`), lists every occurrence and previews the
+  before/after value for each one. Filling updates only nodes with the same `variableId` and never
+  same-named ordinary text; deleting a required variable reports it as missing.
+- **Downstream Mapping** has two sources. `Synthetic fixture` matches a synthetic downstream API
+  template deterministically (for example `application_type = guarantee` with an evidence excerpt),
+  requires an explicit per-field `Confirm`, and renders a JSON payload preview bound to the mock
+  template version and the document digest. `OpenAPI JSON` accepts an uploaded or pasted OpenAPI 3.x
+  JSON document (parsed locally, never uploaded or saved), resolves local `$ref`, lists operations
+  with an `application/json` request body, flattens object properties into dotted paths, suggests
+  variable mappings by label with manual override, and blocks readiness on missing required fields,
+  enum mismatches and number/integer/boolean conversion failures. Synthetic date fields are normalised
+  to `YYYY-MM-DD` before entering the payload: ISO, `YYYY/MM/DD`, `DD/MM/YYYY`, `DD/MM/YY`,
+  `YYYY年MM月DD日` and English month names are accepted; `12/03/27` becomes `2027-03-12` (DD/MM is the
+  default, MM/DD only when the second segment is >12), and invalid calendar dates stay missing. Downstream systems are managed in a
+  collapsible `Manage systems` surface (name, base URL, environment, enabled, non-secret auth
+  type/hint, bound spec) and stored in browser-local `localStorage`, seeded once from mock presets
+  (max 10 systems, spec ≤ 512 KB). Ready payloads can be downloaded as `.json`; `Send (mock)` returns
+  a deterministic 200 `mock_success` or, with `Simulate failure`, a 500 `MOCK_DOWNSTREAM_ERROR`.
+  Receipts always say `Simulated — no network request`; no real send/execute, fetch, credential read
+  or send history exists. YAML, Swagger 2.0, URL fetching, external `$ref`, `oneOf` and `anyOf` are
+  explicitly unsupported.
+
+Synthetic variable fill and fixture mapping are mock-backed (`web/src/automation/mockWorkbench.ts` +
+`fixtures/automation/workbench_demo.json`); template snapshots use the browser-local
+`web/src/automation/templateStore.ts`; downstream systems use
+`web/src/automation/downstreamSystemStore.ts` and `fixtures/automation/downstream_systems.json`;
+OpenAPI JSON is parsed locally by `web/src/automation/openapi.ts`, exported by `payloadExport.ts`,
+and mock-sent by `mockDownstreamSend.ts` without any network request. There is no server template or
+system registry (and no stored credentials), no extract/confirm model, no real API template import
+and no real delivery. Synthetic previews say `Not sent`; mock receipts say
+`Simulated — no network request`. The previous `rewrite/replace_text` fixture run panel no longer owns
+the tab; the run/result/apply/undo contract stays covered by API tests and
+`tests/test_automation_apply.py`. When the editor falls back to a textarea, `{{label}}` placeholders
+are shown and variable actions are disabled.
 
 `Import file` (header) uploads a PDF / DOCX / PNG / JPEG and fills the editor with the text the server
 read out of it: `POST /api/runs` (multipart) → `POST /api/runs/{id}/stages/parse` → read
 `documents[]` from the envelope. Images and scanned PDFs need a local OCR engine
 (`brew install tesseract tesseract-lang`); text-layer PDFs and DOCX do not.
+
+### Assistant tabs
+
+The assistant keeps the reference tab set on one row. Each tab shows a short visible label plus a
+separate capability tag, while its accessible name carries both: `Rule audit`, `Knowledge Q&A`,
+`Automation · fixture only`, `Legal advice · not implemented`. The pattern is `tabLabel()` in
+`AssistantPanel.tsx`; the visible label must stay short enough for four tabs at the 352px pane width,
+and a non-`Full` tag must be accompanied by a limitation statement inside the panel.
+
+### Web search, local RAG and outbound screening
+
+The assistant can combine three evidence layers, and every external call is gated **before** it is
+made. Nothing is enabled by default: with no configuration the assistant still answers from the
+published corpus and the bound snapshot and makes no outbound request.
+
+| Setting | Env | Default | Effect |
+|---|---|---|---|
+| Model provider | `SMART_EDIT_ASSISTANT_MODEL=doubao:<model>` + `SMART_EDIT_ASSISTANT_API_KEY` | empty (fixture composer) | Ark **Responses API** (`POST /responses`, `stream:false`, no tools); output must validate against the Answer schema |
+| Approved processor | `SMART_EDIT_ASSISTANT_PROCESSOR_APPROVED=1` | off | only an approved processor may receive the question + evidence bundle; anything else is refused |
+| General web channel | `SMART_EDIT_ASSISTANT_GENERAL_WEB=1` | off | answers **out-of-scope, non-handoff** questions with exactly one read-only `web_search` tool; results are `general_web`, capped at `qualified` |
+| Web search keywords | `SMART_EDIT_ASSISTANT_WEB_SEARCH_MAX_KEYWORD` | 3 (1–5) | `max_keyword` sent to the provider's search tool |
+| Hidden reasoning | `SMART_EDIT_ASSISTANT_THINKING` | off | Ark `thinking` is disabled for latency; set `1` to let the model reason (10–60s per call) |
+| Web layer | `SMART_EDIT_ASSISTANT_WEB=off\|fixture\|http` (+ `…_WEB_ENDPOINT`) | off | per-run opt-in; `approved_web` keeps only allow-listed domains, `general_web` cites any resolvable link and stays unverified |
+| Local RAG | `SMART_EDIT_ASSISTANT_RAG_ENDPOINT` (+ `…_RAG_API_KEY`) | empty (lexical corpus) | second layer; failures degrade visibly |
+| Egress policy | `SMART_EDIT_ASSISTANT_EGRESS_POLICY` | `app/configs/egress.yaml` | missing/broken file denies every web request |
+
+Rules the implementation keeps:
+
+- **Opt-in per run**: `POST /assistant/sessions/{id}/runs` accepts `web_search: true`; the panel
+  checkbox defaults to off and describes exactly what will and will not leave the service.
+- **Search traffic never carries document content**: selection text, amounts, references,
+  counterparties and identity are denied or redacted (`EgressPolicy`), and every decision is audited
+  (`egress_allowed` / `egress_blocked{reason}`).
+- **Approved processors are the only exception**: an external model may receive the question and the
+  evidence bundle only when it is registered as an approved processor; otherwise the run fails with
+  `EGRESS_BLOCKED` instead of silently falling back to the fixture composer.
+- **Web evidence is bounded**: `approved_web` citations carry `{url, domain, retrieved_at, provider,
+  rank}` and are filtered to the allow-list; `general_web` citations carry the same locator but are
+  **not** filtered by domain — any resolvable link is citable because this channel is explicitly the
+  unverified one. Web-only claims cap `support_level` at `qualified`, rule version/applicability
+  cannot come from the web, and conflicts are kept rather than auto-resolved.
+- **Failures are stated**: a blocked or failed web layer adds a limitation and the UI shows
+  `Web search blocked (<reason>)` or `Web search did not complete`; it never implies live verification.
+- **Fallback to general web**: when an in-scope question ends with `insufficient_evidence` and no
+  published citation, and the operator enabled web search, the assistant falls back to the general
+  channel. The answer is marked `general_web`, carries both "published corpus could not answer" and
+  "unverified third-party content", and is capped at `qualified`.
+- **Two separate model calls**: composing never carries tools; only the general channel attaches
+  `tools: [{type: "web_search", max_keyword: N}]` and only for out-of-scope, non-handoff questions.
+  General citations are grouped under `General web (n)` and always shown with an unverified banner.
+
+Tests: `tests/test_egress_policy.py`, `tests/test_assistant_retrieval_layers.py`,
+`tests/test_assistant_gateway.py`, `tests/test_assistant_settings.py`, plus the panel cases in
+`web/src/components/KnowledgePanel.test.tsx`.
+
+#### Why didn't it search?
+
+`GET /assistant/capabilities` answers that without guessing:
+
+| Field | Meaning |
+|---|---|
+| `model.configured` / `model.label` | a real provider is wired; `false` means the answer is `processor: fixture` |
+| `model.approved_processor` | outbound content may be sent to that provider (`PROCESSOR_APPROVED`) |
+| `layers.approved_web` | the allow-listed web provider is wired (`WEB=fixture\|http`) |
+| `layers.general_web` | the provider's read-only `web_search` tool may run (`GENERAL_WEB=1` + approved processor) |
+| `egress.loaded` / `allowed_domains` | the outbound policy is usable and how many domains it allows |
+| `web.provider` | `off`, `fixture` or `http` |
+
+The panel disables the toggle when both web layers are `false`, and every answer carries
+`route` (`published \| document \| general_web \| handoff \| none`) plus a `web` summary
+(`requested / status / reason / hint`) so “skipped because the server has no provider” is stated in
+the answer instead of being inferred from logs.
+
+### Knowledge Q&A (right pane)
+
+The `Knowledge Q&A` tab is wired to `/api/assistant/*`; `Legal advice` remains labelled
+`not implemented`, while `Automation` is an available fixture-backed workbench. The panel registers an immutable snapshot + session on the first question, sends
+`POST /api/assistant/sessions/{id}/runs` (202), polls `GET /api/assistant/runs/{id}`, and renders the
+reviewed answer: outcome, support level, claims, citations, limitations, clarification questions or the
+handoff target. Citation cards read `GET /api/assistant/messages/{id}/citations/{cid}` (allowed excerpt +
+locator only); feedback is `PUT …/feedback` and replaces the previous rating.
+
+Honesty rules the UI keeps: a `Fixture-backed` banner is always visible (the corpus is synthetic, not
+legal text), no placeholder answers or citations are rendered, a technical failure is not shown as
+`insufficient_evidence`, and an older bound snapshot is called out with a "start a new conversation"
+action. `web/src/api/assistant.ts` is the only module that talks to the assistant API; the contract types
+live in `web/src/api/assistantTypes.ts` and mirror the server DTOs.
+
+The demo corpus is **8 synthetic sources / 72 chunks** (Chinese 36 + English 36: 12 product manual, 12 trade-rule summaries, 8 internal-policy chunks, 4 help-guide chunks per language), all `synthetic: true`. The reproducible evaluation set is **33 questions** and is run with `python scripts/assistant_eval.py`; it measures citation hit, outcome accuracy and clarification accuracy only (no embeddings, reranking or model).
+
+**Statute evidence (`knowledge-statute-retrieval`, opt-in).** With `SMART_EDIT_STATUTE=on` and the
+legal-corpus endpoint + token configured, rule questions are answered from real statute text first.
+Each statute citation shows only checkable facts — `Statute` group, article label, jurisdiction,
+effective date, corpus precision (`exact` / `degraded` / `snapshot`) and whether it was superseded —
+never a relevance score. The service's own diagnostics decide usability: an empty result, a
+low-confidence/low-score hit, an uncovered jurisdiction or a corpus rebuild is reported as *statutes
+not covered* (one short label per outcome), never as "there is no such rule". A non-usable statute leg
+leaves the answer without citations, so the existing general-web channel takes over only when the user
+enabled web search. `python scripts/statute_eval.py` replays 15 recorded outcomes offline and prints
+the decision accuracy, the statute-citation rate and the distribution of unusable reasons; the same
+comparison is printed beside the 33-question baseline by `scripts/assistant_eval.py`.
+
+**Simple ask — `knowledge-simple-ask`.** The panel keeps one text box, one switch and one row of
+jurisdiction chips:
+
+- **Query path**: `POST /v1/retrieve` first (statute corpus). Only when that evidence is unusable does
+  the answer fall through to Doubao web search, and those results stay labelled unverified.
+- **Web switch defaults to on** and is controlled by the deployment
+  (`SMART_EDIT_ASSISTANT_WEB_DEFAULT=on|off`), not by the UI. The panel starts from
+  `capabilities.web.default_on`; once the user toggles it, their choice wins for that mounted panel.
+  Each run sends the effective value explicitly plus `web_search_source` (`user` / `default`), and the
+  run audit records both, so "did this question leave the building, and who decided" is provable.
+- **Jurisdiction chips** come from `capabilities.presets.jurisdictions` (loaded from the knowledge
+  config). When no preset is configured the whole row is hidden — the UI never offers a fabricated
+  list. Clicking a chip narrows statute retrieval; clicking it again clears it.
+- **Presets live in data**: `app/configs/knowledge.sample.json` holds the allowed domains, the
+  redaction rules, the jurisdiction presets and the suggested questions. Point
+  `SMART_EDIT_KNOWLEDGE_CONFIG` at a copy to change them without touching code.
+
+Guardrails on that config: a missing or broken file denies every outbound call; a rule that does not
+compile fails at start-up instead of being skipped; at most 32 rules of at most 512 characters each;
+and the "public rule ids must survive redaction" exemption is fixed in code, so a config can never
+whitelist an amount or a reference.
+
+**Term normalisation and rejected searches (`statute-recall`).** Before retrieval, generic words are
+rewritten into the corpus's controlled terms using `query_expansion` from the same config (for example
+`guarantee` → 独立保函 / 见索即付保函 / demand guarantee). The original wording is kept, the table is
+capped, and the terms actually used are recorded in the run audit. When the statute leg runs but is not
+usable, the answer states the hit count and the reason — even when the internal corpus answered — so a
+reader can always tell "we did not look" from "we looked and rejected it".
+
+On first open the knowledge tab shows an English **Can / Cannot / How** card and up to 3 English suggested
+questions (`What can you do?`, `What documents are required for the application?`,
+`What does URDG 758 article 20 require for claims?`; the selection variant uses
+`What does this passage mean?`). Clicking a suggestion only fills the question and focuses the input; it
+never creates a run. After the first answer the suggestions collapse into `Show examples`. English
+questions retrieve only English sources, Chinese questions only Chinese sources, and capability questions
+are answered from the matching published help guide with a citation.
 
 Failures are listed per file and are never dressed as success — a file with errors gets no "use this
 text" action. The user-facing wording for each code lives in `src/components/ImportReport.tsx`:
@@ -82,6 +408,8 @@ never attempted on placeholder fields.
 ## Checks
 
 ```bash
+.venv/bin/python -m pytest -q                 # Python, incl. document host + automation apply/undo
+.venv/bin/python scripts/automation_demo.py   # fixture proposal -> accept -> apply -> undo (in-memory)
 npm --prefix web run typecheck  # tsc --noEmit
 npm --prefix web run test       # vitest (jsdom); the HTTP e2e is skipped without VITE_E2E=1
 npm --prefix web run build      # emits web/dist/index.html
@@ -111,7 +439,7 @@ for p in 8000 8010 5173 5174; do lsof -nP -iTCP:$p -sTCP:LISTEN -t | xargs -r ki
 
 | Project | Backend | Frontend | Viewport | Covers |
 |---|---|---|---|---|
-| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, unimplemented tabs, three-pane layout |
+| `desktop` | `:8000` with `SMART_EDIT_LLM=fixture:…` | `:5173` | 1440×900 | happy path, stale report, refusals, knowledge Q&A, fixture-backed automation workbench, legal advice panel, three-pane layout |
 | `honesty` | `:8010` with `SMART_EDIT_LLM=''` | `:5174` (`VITE_PROXY_TARGET`) | 1440×900 | "checks did not run", and **no** `/stages/audit` request |
 | `narrow` | `:8000` | `:5173` | iPhone 13 | one pane + tabs below 1366px, audit still reachable |
 
@@ -153,7 +481,16 @@ Without either variable Playwright looks for its own bundled build, which needs 
 
 ## What this build deliberately does not do
 
-Rich-text formatting, file import/OCR, server-side versions/locks/approvals, structural diff, the
-knowledge/automation/legal assistant tabs, semantic checks, template rule packs and regulatory
-coverage. Each is labelled "not implemented in this build" in the UI rather than simulated — see
-`openspec/changes/editor-shell/design.md` Non-Goals and the `Requirements.md` §14 gap table.
+The document host is a **local/test** adapter only: one process, one writer, fake identity, no
+PostgreSQL/Worker/multi-tenant host, and no production deployment. There is still no structural diff,
+real semantic automation model, approved production identity/snapshot/model
+adapters, real models/embeddings/reranking for the local corpus, controlled web access,
+voice/screenshot or export. Statute text comes only from the **opt-in external source** described
+above and is off by default; the built-in corpus stays synthetic, so the knowledge tab keeps saying
+`Fixture-backed` until that source is enabled and configured.
+Automation is available only as a fixture-backed frontend workbench (template capture, variable fill
+and downstream mapping/payload preview) and is labelled `fixture only`; the real run core still exists
+behind the API but no longer owns the tab. Legal remains labelled "not implemented in this build". The
+workbench demonstrates the interaction structure, not a general semantic automation assistant.
+The knowledge tab is explicitly `Fixture-backed` — see `openspec/changes/document-host-foundation/`,
+`openspec/changes/agent-knowledge/` and the `Requirements.md` §14 gap table.

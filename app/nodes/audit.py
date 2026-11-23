@@ -36,12 +36,16 @@ def audit_node(
     bundles=None,
     templates=None,
     template_reference: dict | None = None,
+    as_of: str | None = None,
 ) -> dict:
     """Run one audit over `state` and return the node update.
 
     Template-driven audit is opt-in: pass `template_reference={"template_id": …}` (the stage trigger does
     that when the caller names a template) or `templates=[…]`. With neither, the audit runs on the base
     schema and the published rule packs, and the report says `template_not_requested`.
+
+    `as_of` is the audit date (change D5). `None` means the server's today; the report always echoes
+    the date that was actually used.
     """
     digest = snapshot_digest(state)
     try:
@@ -55,6 +59,7 @@ def audit_node(
             bundles=bundles,
             templates=templates,
             template_reference=template_reference,
+            as_of=as_of,
         )
     except Exception as exc:  # AuditRunError / BundleError / PlanError / SchemaError / …
         return _failed(state, f"audit refused: {exc}")
@@ -89,7 +94,12 @@ def audit_node(
     findings = [
         {**finding, "id": id_by_check.get(finding["check_id"])} for finding in report["findings"]
     ]
-    verification = to_verification(report, issues=issues, findings=findings)
+    verification = to_verification(
+        report,
+        issues=issues,
+        findings=findings,
+        extraction=state.get("_extraction"),
+    )
 
     update = {
         "verification": verification,
@@ -162,6 +172,7 @@ def _trail(state: dict, report: dict, digest: str, emit_entries: list[dict]) -> 
             "assessed": report["coverage"]["assessed"],
             "snapshot_digest": digest,
             "model_calls": 0,
+            "as_of": report.get("as_of"),
             "template_id": template.get("template_id"),
             "template_version": template.get("version"),
             "template_reason": template.get("reason"),

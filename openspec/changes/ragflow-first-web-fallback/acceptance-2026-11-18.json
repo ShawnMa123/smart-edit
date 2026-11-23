@@ -1,0 +1,380 @@
+{
+  "captured_at": "2026-11-18",
+  "mercatoria": {
+    "base_url": "http://127.0.0.1:18080"
+  },
+  "processor": "doubao-seed-2-1-lite-260915",
+  "case_1_rag_hit_used_no_web": {
+    "label": "RAG 命中 → 采用、不联网（真实服务 + 真实模型）",
+    "note": "",
+    "question": "什么是guarantee",
+    "web_search": true,
+    "jurisdictions": [],
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "statute",
+    "retrieval": [
+      {
+        "layer": "web",
+        "status": "skipped",
+        "detail": "web_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      },
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "ok",
+        "retrieved_at": null,
+        "hits": 5
+      }
+    ],
+    "web": {
+      "requested": true,
+      "status": "skipped",
+      "reason": "statute_answered",
+      "hint": "RAG returned results, so the web was not searched."
+    },
+    "citations": [
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "35cc2814f6fa408b",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:1",
+          "article_label": "第一条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "precision": "exact"
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "82dd9df4f894fccf",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:3",
+          "article_label": "第三条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "precision": "exact"
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "1008bee7f0c0b65f",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:5",
+          "article_label": "第五条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "precision": "exact"
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "9f8cfea0efc847d5",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:2",
+          "article_label": "第二条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "precision": "exact"
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "56309cd7c8061a07",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:10",
+          "article_label": "第十条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "precision": "exact"
+        }
+      }
+    ],
+    "limitations": [
+      "本次证据仅覆盖中国最高人民法院关于独立保函的司法解释，未涉及普通担保、一般商事保证、国际贸易通则中的普通guarantee定义及其他司法辖区的相关规则。",
+      "本次请求未执行联网检索。"
+    ],
+    "statute_egress_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "c76df0d156544ed6"
+      }
+    ],
+    "attempts": 2
+  },
+  "case_1b_low_confidence_replay": {
+    "label": "已录制的低置信响应（离线回放）→ 采用并附 caveat",
+    "note": "recorded real response in fixtures/assistant/mercatoria_guarantee_low.json",
+    "question": "什么是guarantee",
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "statute",
+    "request_queries": [
+      "什么是guarantee"
+    ],
+    "retrieval": [
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "low_confidence",
+        "retrieved_at": null,
+        "hits": 5
+      }
+    ],
+    "citations": [
+      {
+        "source_type": "statute",
+        "title": "Regulation (EU) No 952/2013 (Union Customs Code)"
+      },
+      {
+        "source_type": "statute",
+        "title": "Regulation (EU) No 952/2013 (Union Customs Code)"
+      },
+      {
+        "source_type": "statute",
+        "title": "Regulation (EU) No 952/2013 (Union Customs Code)"
+      }
+    ],
+    "limitations": [
+      "法规语料命中 5 条，置信度低，仅供参考。",
+      "本回答仅基于系统内部来源。"
+    ]
+  },
+  "case_2_rag_empty_auto_web": {
+    "label": "RAG 零结果（SG 过滤）→ 自动联网",
+    "note": "",
+    "question": "URDG 758 第 20 条对索赔有什么要求？",
+    "web_search": true,
+    "jurisdictions": [
+      "SG"
+    ],
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "general_web",
+    "retrieval": [
+      {
+        "layer": "web",
+        "status": "ok",
+        "detail": "general_web",
+        "retrieved_at": "2026-11-18T16:16:53.762564+00:00",
+        "hits": null
+      }
+    ],
+    "web": {
+      "requested": true,
+      "status": "ok",
+      "reason": "rag_empty",
+      "hint": null
+    },
+    "citations": [
+      {
+        "source_type": "general_web",
+        "title": "国际商事法庭 | CICC - 见索即付保函统一规则",
+        "locator": {
+          "url": "https://cicc.court.gov.cn/html/1/380/385/12788.html",
+          "domain": "cicc.court.gov.cn",
+          "retrieved_at": "2026-11-18T16:16:53.762564+00:00",
+          "annotation_start": null,
+          "annotation_end": null
+        }
+      },
+      {
+        "source_type": "general_web",
+        "title": "外国法院的止付令未经法定程序在我国被承认与执行不构成保函开立人可主张的不可抗力免责事由——中国葛洲坝集团股份有限公司诉意大利裕信银行股份有限公司上海分行独立保函纠纷案",
+        "locator": {
+          "url": "http://www.sfc.gov.cn/jrfy/gweb/xx_view.jsp?pa=aaWQ9NDQzMwPdcssPdcssz",
+          "domain": "www.sfc.gov.cn",
+          "retrieved_at": "2026-11-18T16:16:53.762564+00:00",
+          "annotation_start": null,
+          "annotation_end": null
+        }
+      },
+      {
+        "source_type": "general_web",
+        "title": "见索即付保函易混淆点剖析",
+        "locator": {
+          "url": "http://www.chinaforex.com.cn/index.php/cms/item-view-id-52031.shtml",
+          "domain": "www.chinaforex.com.cn",
+          "retrieved_at": "2026-11-18T16:16:53.762564+00:00",
+          "annotation_start": null,
+          "annotation_end": null
+        }
+      }
+    ],
+    "limitations": [
+      "检索到的网页未完整展示第20条全部款项（c款、d款等）的逐条原文，以上内容主要来自中文实务解读文章和法院案例引述，非国际商会正式公布的权威英文原文。",
+      "本回答为第三方资料转述，未经国际商会或任何权威机构核实。",
+      "URDG758的实际适用以保函文本及其明确约定为准，保函可对规则内容进行修改或排除。",
+      "该回答来自通用联网检索，属未核验第三方内容，不是已发布来源，也不构成法律意见。",
+      "已发布语料未能回答该问题；以下内容来自通用联网检索（未核验第三方内容），不构成规则依据。"
+    ],
+    "statute_egress_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "0d4e6a8bf3004665"
+      }
+    ],
+    "attempts": 3
+  },
+  "case_3_web_disabled": {
+    "label": "RAG 零结果 + 用户关闭联网 → 不联网并说明",
+    "note": "",
+    "question": "URDG 758 第 20 条对索赔有什么要求？",
+    "web_search": false,
+    "jurisdictions": [
+      "SG"
+    ],
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "published",
+    "retrieval": [
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "zero:no_jurisdiction",
+        "retrieved_at": null,
+        "hits": 0
+      },
+      {
+        "layer": "local",
+        "status": "ok",
+        "detail": "statute_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      }
+    ],
+    "web": {
+      "requested": false,
+      "status": "off",
+      "reason": null,
+      "hint": null
+    },
+    "citations": [
+      {
+        "source_type": "trade_rule",
+        "title": "合成贸易规则摘要（演示用，非官方原文）",
+        "locator": {
+          "section": "URDG 758 索赔",
+          "page": 12
+        }
+      },
+      {
+        "source_type": "trade_rule",
+        "title": "合成贸易规则摘要（演示用，非官方原文）",
+        "locator": {
+          "article": "1-3",
+          "section": "URDG 758 定义与适用",
+          "page": 6
+        }
+      },
+      {
+        "source_type": "trade_rule",
+        "title": "合成贸易规则摘要（演示用，非官方原文）",
+        "locator": {
+          "section": "独立保函原则",
+          "page": 5
+        }
+      }
+    ],
+    "limitations": [
+      "提供的证据为合成贸易规则摘要（演示用，非URDG 758官方原文），相关条款解释仅基于该演示材料，不代表URDG 758正式条文的完整规定。",
+      "现有证据未覆盖URDG 758第20条项下的索赔期限、审单流程、拒付规则、不可抗力处理及保函注销等内容，也未提供该条款的完整原文表述。",
+      "其他关于索赔材料构成、补正要求、退件原因的证据来自合成产品手册，不属于URDG 758第20条的规则内容，未纳入本次回答。",
+      "所请求的法域未被法规语料覆盖。",
+      "本回答仅基于系统内部来源。"
+    ],
+    "statute_egress_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "0d4e6a8bf3004665"
+      }
+    ],
+    "attempts": 2
+  },
+  "case_4_both_empty": {
+    "label": "RAG 零结果 + 联网零结果 → 如实说明",
+    "note": "web tool stub returns no citations (documented for the both-empty case)",
+    "question": "URDG 758 第 20 条对索赔有什么要求？",
+    "web_search": true,
+    "jurisdictions": [
+      "SG"
+    ],
+    "status": "succeeded",
+    "outcome": "insufficient_evidence",
+    "route": "none",
+    "retrieval": [
+      {
+        "layer": "web",
+        "status": "ok",
+        "detail": "general_web",
+        "retrieved_at": "2026-11-18T16:18:08.528972+00:00",
+        "hits": null
+      },
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "zero:no_jurisdiction",
+        "retrieved_at": null,
+        "hits": 0
+      },
+      {
+        "layer": "local",
+        "status": "ok",
+        "detail": "statute_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      }
+    ],
+    "web": {
+      "requested": true,
+      "status": "ok",
+      "reason": "rag_empty",
+      "hint": null
+    },
+    "citations": [],
+    "limitations": [
+      "没有找到足以支持回答的已发布证据；请补充规则版本、法域或选择相关文档片段。",
+      "所请求的法域未被法规语料覆盖。",
+      "该回答来自通用联网检索，属未核验第三方内容，不是已发布来源，也不构成法律意见。",
+      "本次联网结果没有生成可引用来源，因此没有可发布的结论。",
+      "联网搜索未返回可用结果；以上回答基于内部来源。",
+      "知识库检索与联网搜索都没有找到可用证据。"
+    ],
+    "statute_egress_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "0d4e6a8bf3004665"
+      }
+    ],
+    "attempts": 1
+  }
+}

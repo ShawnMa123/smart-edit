@@ -8,19 +8,78 @@
  */
 
 import { EditorContent, useEditorState, type Editor } from '@tiptap/react';
-import { useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 
+import type { AssistantSelection } from '../api/assistantTypes';
+import type { SubmissionStatus } from '../api/approvalTypes';
+import type { LockView } from '../api/documents';
 import { richToPlainText } from '../rich/plainText';
 import { plainTextToDocument, type RichDocument } from '../rich/richDocument';
+import { selectionFromEditor, selectionFromTextarea } from '../rich/selection';
 import { useRichEditor as defaultUseRichEditor } from '../rich/useRichEditor';
+import type { TourEditorApi } from '../tour/types';
 
 export interface RichEditorProps {
   document: RichDocument;
   onChange: (document: RichDocument) => void;
   /** Whether the projected text differs from the last captured version. */
   dirty?: boolean;
+  /** The latest single-block selection, in projected plain-text offsets (knowledge Q&A). */
+  onSelection?: (selection: AssistantSelection | null) => void;
+  /** Server draft state (document-host design D6). */
+  saveState?: 'local' | 'saving' | 'saved' | 'conflict' | 'error';
+  conflict?: { revision: number; sha256: string } | null;
+  recoveryNotice?: string | null;
+  onUseServer?: () => void;
+  onOverwriteLocal?: () => void;
+  onKeepLocal?: () => void;
+  /** Right-click action for turning the current selection into a variable. */
+  onMarkVariable?: (selection: AssistantSelection) => void;
+  /** Real lock actions; App owns the API calls. */
+  onReleaseLock?: () => void | Promise<void>;
+  onStartEditing?: () => void | Promise<void>;
+  /** Explicit Save of the current draft (footer button / Cmd-Ctrl+S). */
+  onSave?: () => void;
+  /** Opens the honest shared-submission placeholder. */
+  onSubmitVersion?: () => void;
+  /** Visible lock-action failure/release notice. */
+  lockNotice?: string | null;
+  /** Approval status; `pending_*`/`approved` make the editor read-only. */
+  submissionStatus?: SubmissionStatus | 'draft';
+  /** Reviewer comment shown after a return. */
+  submissionComment?: string | null;
+  /** Disables Start editing and Submit actions while approval is in flight. */
+  readOnly?: boolean;
+  /** Reports whether the rich surface or the textarea fallback is active (variable actions depend on it). */
+  onModeChange?: (mode: 'rich' | 'fallback') => void;
+  /** Document identity for the page header; never an example reference (design D4). */
+  documentId?: string;
+  /** Captured version count; 0 means no version captured yet. */
+  versions?: number;
+  /** Server draft revision; `null` means there is no server draft. */
+  draftRevision?: number | null;
+  /** Whether this session holds the edit lock (unknown is its own word). */
+  lockHeld?: boolean;
+  /** Focus this top-level block (document-anchor jump); `focusToken` re-applies it. */
+  focusBlock?: number | null;
+  focusToken?: number;
   /** Test seam: a throwing implementation exercises the fallback path. */
   useEditorImpl?: (typeof defaultUseRichEditor);
+  /** Guided-tour bridge: a deliberately tiny surface (clear/focus/insert), never the whole editor. */
+  editorApiRef?: (api: TourEditorApi | null) => void;
+  /** A failed document load: the editor is read-only until the operator retries. */
+  loadError?: string | null;
+  onRetryLoad?: () => void;
+  /** Lock inspector (holder + lease) and the explicit stale-release action. */
+  lockInspected?: boolean;
+  lockInfo?: LockView | null;
+  lockInfoError?: string | null;
+  lockOurs?: boolean;
+  onInspectLock?: () => void;
+  onCloseLockInfo?: () => void;
+  onReleaseStaleLock?: (lockId: string) => void;
+  /** Overrides the Start editing disabled state (a missing lock is fixable by that button). */
+  canStartEditing?: boolean;
 }
 
 interface Tool {
@@ -30,11 +89,14 @@ interface Tool {
   active?: (editor: Editor) => boolean;
 }
 
+export const BLOCK_FORMATS = [
+  { value: 'paragraph', label: 'Paragraph', run: (e: Editor) => e.chain().focus().setParagraph().run() },
+  { value: 'heading-1', label: 'Heading 1', run: (e: Editor) => e.chain().focus().toggleHeading({ level: 1 }).run() },
+  { value: 'heading-2', label: 'Heading 2', run: (e: Editor) => e.chain().focus().toggleHeading({ level: 2 }).run() },
+  { value: 'heading-3', label: 'Heading 3', run: (e: Editor) => e.chain().focus().toggleHeading({ level: 3 }).run() },
+] as const;
+
 export const TOOLS: Tool[] = [
-  { label: '¶', title: 'Paragraph', run: (e) => e.chain().focus().setParagraph().run(), active: (e) => e.isActive('paragraph') },
-  { label: 'H1', title: 'Heading 1', run: (e) => e.chain().focus().toggleHeading({ level: 1 }).run(), active: (e) => e.isActive('heading', { level: 1 }) },
-  { label: 'H2', title: 'Heading 2', run: (e) => e.chain().focus().toggleHeading({ level: 2 }).run(), active: (e) => e.isActive('heading', { level: 2 }) },
-  { label: 'H3', title: 'Heading 3', run: (e) => e.chain().focus().toggleHeading({ level: 3 }).run(), active: (e) => e.isActive('heading', { level: 3 }) },
   { label: 'B', title: 'Bold', run: (e) => e.chain().focus().toggleBold().run(), active: (e) => e.isActive('bold') },
   { label: 'I', title: 'Italic', run: (e) => e.chain().focus().toggleItalic().run(), active: (e) => e.isActive('italic') },
   { label: 'U', title: 'Underline', run: (e) => e.chain().focus().toggleUnderline().run(), active: (e) => e.isActive('underline') },
@@ -55,19 +117,51 @@ export const TABLE_TOOLS: Tool[] = [
   { label: 'H', title: 'Toggle header row', run: (e) => e.chain().focus().toggleHeaderRow().run() },
 ];
 
-function FallbackEditor({ document, onChange, reason }: RichEditorProps & { reason: string }) {
+export const SUBMISSION_STATUS_LABELS: Record<SubmissionStatus | 'draft', string> = {
+  draft: 'Draft',
+  pending_first: 'Pending first approval',
+  pending_second: 'Pending second approval',
+  approved: 'Approved',
+  returned: 'Returned',
+  rejected: 'Rejected',
+};
+
+const statusLabel = (status: SubmissionStatus | 'draft'): string =>
+  SUBMISSION_STATUS_LABELS[status] ?? status;
+
+function FallbackEditor({
+  document,
+  onChange,
+  onSelection,
+  readOnly,
+  reason,
+}: RichEditorProps & { reason: string }) {
+  const text = richToPlainText(document);
+  const hasVariables = /\{\{[^{}]+\}\}/.test(text);
   return (
     <div>
       <p className="notice notice--warn tiny" role="status">
         Rich text is unavailable in this session ({reason}); editing plain text instead.
       </p>
+      <p className="notice tiny" data-testid="fallback-variable-notice">
+        Variable editing needs the rich editor. {hasVariables
+          ? 'Variable placeholders are shown as {{label}}; mark-as-variable and fill are disabled.'
+          : 'Mark-as-variable and fill are disabled here.'}
+      </p>
       <textarea
         className="editor-page"
         aria-label="Document text"
         data-testid="editor-text"
-        value={richToPlainText(document)}
+        value={text}
+        readOnly={readOnly}
         spellCheck={false}
         onChange={(event) => onChange(plainTextToDocument(event.target.value))}
+        onSelect={(event) => {
+          const target = event.currentTarget;
+          onSelection?.(
+            selectionFromTextarea(target.value, target.selectionStart, target.selectionEnd),
+          );
+        }}
         placeholder="Paste or type the document text here, then run the spec audit."
       />
     </div>
@@ -78,38 +172,193 @@ export function RichEditor(props: RichEditorProps) {
   const [failure, setFailure] = useState<string | null>(null);
   let editor: Editor | null = null;
 
+  // The workbench needs to know whether variable actions are possible at all.
+  useEffect(() => {
+    props.onModeChange?.(failure ? 'fallback' : 'rich');
+  }, [failure, props.onModeChange]);
+
   try {
     editor = (props.useEditorImpl ?? defaultUseRichEditor)({
       document: props.document,
       onChange: props.onChange,
+      editable: !props.readOnly,
+      focusBlock: props.focusBlock ?? null,
+      focusToken: props.focusToken ?? 0,
     });
   } catch (error) {
     if (!failure) setFailure(error instanceof Error ? error.message : String(error));
   }
 
+  // Expose a tiny editor bridge for the guided tour (typing goes through TipTap's own commands,
+  // so autosave, locks and conflict handling keep working exactly as for a human edit).
+  const registerEditorApi = props.editorApiRef;
+  useEffect(() => {
+    if (!registerEditorApi) return undefined;
+    if (!editor) {
+      registerEditorApi(null);
+      return undefined;
+    }
+    registerEditorApi({
+      clear: () => {
+        editor?.chain().focus().clearContent(true).run();
+      },
+      focus: () => {
+        editor?.commands.focus();
+      },
+      insertText: (text: string) => {
+        editor?.chain().focus().insertContent(text).run();
+      },
+    });
+    return () => registerEditorApi(null);
+  }, [editor, registerEditorApi]);
+
   if (failure || !editor) {
     return <FallbackEditor {...props} reason={failure ?? 'the editor did not start'} />;
   }
-  return <Surface editor={editor} document={props.document} dirty={props.dirty ?? false} />;
+  return (
+    <Surface
+      editor={editor}
+      document={props.document}
+      dirty={props.dirty ?? false}
+      onSelection={props.onSelection}
+      saveState={props.saveState ?? 'local'}
+      conflict={props.conflict ?? null}
+      recoveryNotice={props.recoveryNotice ?? null}
+      onUseServer={props.onUseServer}
+      onOverwriteLocal={props.onOverwriteLocal}
+      onKeepLocal={props.onKeepLocal}
+      onMarkVariable={props.onMarkVariable}
+      onReleaseLock={props.onReleaseLock}
+      onStartEditing={props.onStartEditing}
+      onSave={props.onSave}
+      onSubmitVersion={props.onSubmitVersion}
+      lockNotice={props.lockNotice ?? null}
+      submissionStatus={props.submissionStatus ?? 'draft'}
+      submissionComment={props.submissionComment ?? null}
+      readOnly={props.readOnly ?? false}
+      documentId={props.documentId}
+      versions={props.versions ?? 0}
+      draftRevision={props.draftRevision ?? null}
+      lockHeld={props.lockHeld ?? false}
+      loadError={props.loadError ?? null}
+      onRetryLoad={props.onRetryLoad}
+      lockInspected={props.lockInspected ?? false}
+      lockInfo={props.lockInfo ?? null}
+      lockInfoError={props.lockInfoError ?? null}
+      lockOurs={props.lockOurs ?? false}
+      onInspectLock={props.onInspectLock}
+      onCloseLockInfo={props.onCloseLockInfo}
+      onReleaseStaleLock={props.onReleaseStaleLock}
+      canStartEditing={props.canStartEditing}
+    />
+  );
 }
 
 function Surface({
   editor,
   document,
   dirty,
+  onSelection,
+  saveState,
+  conflict,
+  recoveryNotice,
+  onUseServer,
+  onOverwriteLocal,
+  onKeepLocal,
+  onMarkVariable,
+  onReleaseLock,
+  onStartEditing,
+  onSave,
+  onSubmitVersion,
+  lockNotice,
+  submissionStatus,
+  submissionComment,
+  readOnly,
+  documentId,
+  versions,
+  draftRevision,
+  lockHeld,
+  loadError,
+  onRetryLoad,
+  lockInspected,
+  lockInfo,
+  lockInfoError,
+  lockOurs,
+  onInspectLock,
+  onCloseLockInfo,
+  onReleaseStaleLock,
+  canStartEditing,
 }: {
   editor: Editor;
   document: RichDocument;
   dirty: boolean;
+  onSelection?: (selection: AssistantSelection | null) => void;
+  saveState: 'local' | 'saving' | 'saved' | 'conflict' | 'error';
+  conflict: { revision: number; sha256: string } | null;
+  recoveryNotice: string | null;
+  onUseServer?: () => void;
+  onOverwriteLocal?: () => void;
+  onKeepLocal?: () => void;
+  onMarkVariable?: (selection: AssistantSelection) => void;
+  onReleaseLock?: () => void | Promise<void>;
+  onStartEditing?: () => void | Promise<void>;
+  onSave?: () => void;
+  onSubmitVersion?: () => void;
+  lockNotice: string | null;
+  submissionStatus?: SubmissionStatus | 'draft';
+  submissionComment?: string | null;
+  readOnly?: boolean;
+  documentId?: string;
+  versions: number;
+  draftRevision: number | null;
+  lockHeld: boolean;
+  loadError?: string | null;
+  onRetryLoad?: () => void;
+  lockInspected?: boolean;
+  lockInfo?: LockView | null;
+  lockInfoError?: string | null;
+  lockOurs?: boolean;
+  onInspectLock?: () => void;
+  onCloseLockInfo?: () => void;
+  onReleaseStaleLock?: (lockId: string) => void;
+  canStartEditing?: boolean;
 }) {
   const [findOpen, setFindOpen] = useState(false);
+  const [variableMenu, setVariableMenu] = useState<{
+    x: number;
+    y: number;
+    selection: AssistantSelection;
+  } | null>(null);
+  const lockExpired = lockInfo
+    ? new Date(lockInfo.lease_until).getTime() <= Date.now()
+    : false;
+
+  // Selection capture is a read-only projection: it never changes the document or the run.
+  useEffect(() => {
+    if (!onSelection) return;
+    const handler = () => onSelection(selectionFromEditor(editor));
+    editor.on('selectionUpdate', handler);
+    return () => {
+      editor.off('selectionUpdate', handler);
+    };
+  }, [editor, onSelection]);
   // Reactive read of the search plugin: `useEditor` alone does not re-render on every transaction.
-  const { total, current } = useEditorState({
+  const { total, current, block } = useEditorState({
     editor,
     selector: ({ editor: instance }) => {
       const storage = (instance.storage as { findAndReplace?: { results?: unknown[]; currentIndex?: number | null } })
         .findAndReplace;
-      return { total: storage?.results?.length ?? 0, current: storage?.currentIndex ?? null };
+      return {
+        total: storage?.results?.length ?? 0,
+        current: storage?.currentIndex ?? null,
+        block: instance.isActive('heading', { level: 1 })
+          ? 'heading-1'
+          : instance.isActive('heading', { level: 2 })
+            ? 'heading-2'
+            : instance.isActive('heading', { level: 3 })
+              ? 'heading-3'
+              : 'paragraph',
+      };
     },
   });
 
@@ -123,8 +372,137 @@ function Surface({
         </span>
       </div>
 
+      {/* One status band, one source of truth (design D5). */}
+      <div className="editor-status" data-testid="editor-status" data-tour="editor-status">
+        <span className="status-chip status-chip--strong">
+          {versions > 0 ? `snapshot v${versions}` : 'no captured version'}
+        </span>
+        <span className="status-chip">
+          {draftRevision === null ? 'no server draft' : `draft rev ${draftRevision}`}
+        </span>
+        <button
+          type="button"
+          className="status-chip status-chip--button"
+          data-testid="lock-chip"
+          data-tour="lock-chip"
+          title="Inspect the edit lock"
+          onClick={onInspectLock}
+          disabled={!onInspectLock}
+        >
+          {lockHeld ? 'lock: this session' : 'lock: unknown'}
+        </button>
+        <span
+          className="status-chip"
+          aria-live="polite"
+          data-testid="save-state"
+          data-tour="save-state"
+          style={{
+            color:
+              saveState === 'conflict' || saveState === 'error'
+                ? 'var(--unsaved)'
+                : saveState === 'saved'
+                  ? 'var(--muted)'
+                  : 'var(--unsaved)',
+          }}
+        >
+          {saveState === 'conflict'
+            ? 'Save conflict — local content is not saved to the server'
+            : saveState === 'saving'
+              ? 'Saving…'
+              : saveState === 'saved'
+                ? 'Saved to server'
+                : saveState === 'error'
+                  ? 'Save failed — local content is still in the editor'
+                  : dirty
+                    ? 'Unsaved changes (local only)'
+                    : 'No server draft available — local only'}
+        </span>
+      </div>
+
+      {loadError ? (
+        <div className="notice notice--bad tiny" role="alert" data-testid="load-error">
+          Could not load this document: {loadError}{' '}
+          {onRetryLoad ? (
+            <button type="button" onClick={onRetryLoad}>
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {lockInspected ? (
+        <div className="lock-panel" role="status" data-testid="lock-panel">
+          <div className="row">
+            <strong className="tiny">Edit lock</strong>
+            <button
+              type="button"
+              className="tiny"
+              onClick={onCloseLockInfo}
+              aria-label="Close lock details"
+            >
+              ×
+            </button>
+          </div>
+          {lockInfoError ? (
+            <p className="tiny">{lockInfoError}</p>
+          ) : lockInfo ? (
+            <>
+              <p className="tiny">
+                Holder: <code>{lockInfo.owner_user_id}</code>
+                {lockOurs ? ' (this session)' : ''}
+              </p>
+              <p className="tiny">
+                Lease until: {new Date(lockInfo.lease_until).toLocaleString()}
+              </p>
+              <p className={lockExpired ? 'tiny notice notice--warn' : 'tiny muted'}>
+                {lockExpired ? 'Lease expired — safe to release.' : 'Lease is active.'}
+              </p>
+            </>
+          ) : (
+            <p className="tiny muted">No active lock on this draft.</p>
+          )}
+          <div className="row">
+            {onInspectLock ? (
+              <button type="button" className="tiny" onClick={onInspectLock}>
+                Refresh
+              </button>
+            ) : null}
+            {lockInfo && lockExpired && !lockOurs && onReleaseStaleLock ? (
+              <button
+                type="button"
+                className="tiny"
+                onClick={() => onReleaseStaleLock(lockInfo.lock_id)}
+                data-testid="release-stale-lock"
+              >
+                Release stale lock
+              </button>
+            ) : null}
+            {!lockHeld && !lockInfo && onStartEditing ? (
+              <button type="button" className="tiny" onClick={() => void onStartEditing()}>
+                Start editing
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className="toolbar" role="toolbar" aria-label="Formatting">
-        {[...TOOLS, ...TABLE_TOOLS].map((tool) => {
+        <select
+          className="toolbar-block-format"
+          aria-label="Paragraph style"
+          value={block}
+          onChange={(event) => {
+            const format = BLOCK_FORMATS.find((item) => item.value === event.target.value);
+            format?.run(editor);
+          }}
+        >
+          {BLOCK_FORMATS.map((format) => (
+            <option key={format.value} value={format.value}>
+              {format.label}
+            </option>
+          ))}
+        </select>
+        {TOOLS.map((tool) => {
           const active = tool.active ? tool.active(editor) : false;
           return (
             <button
@@ -139,6 +517,22 @@ function Surface({
             </button>
           );
         })}
+        <details className="toolbar-menu">
+          <summary>Table</summary>
+          <div className="toolbar-menu-panel">
+            {TABLE_TOOLS.map((tool) => (
+              <button
+                key={tool.title}
+                type="button"
+                title={tool.title}
+                aria-label={tool.title}
+                onClick={() => tool.run(editor)}
+              >
+                {tool.label}
+              </button>
+            ))}
+          </div>
+        </details>
         <button
           type="button"
           title="Find and replace"
@@ -148,17 +542,165 @@ function Surface({
         >
           ⌕
         </button>
+        {onMarkVariable ? (
+          <button
+            type="button"
+            title="Mark selection as variable (Alt+Shift+V)"
+            aria-label="Mark selection as variable"
+            disabled={!selectionFromEditor(editor)}
+            onClick={() => {
+              const selection = selectionFromEditor(editor);
+              if (selection) onMarkVariable(selection);
+            }}
+          >
+            {'⟨var⟩'}
+          </button>
+        ) : null}
       </div>
 
       {findOpen ? <FindPanel editor={editor} total={total} current={current} onClose={() => setFindOpen(false)} /> : null}
 
-      <EditorContent editor={editor} className="editor-page" data-testid="editor-rich" />
+      {conflict ? (
+        <div className="notice notice--warn" role="alert" data-testid="draft-conflict">
+          <strong>Draft conflict.</strong> The server head is revision {conflict.revision}
+          {conflict.sha256 ? ` (${conflict.sha256.slice(0, 12)})` : ''}. Your editor content is
+          unchanged and was not overwritten.
+          {recoveryNotice ? <div className="tiny">{recoveryNotice}</div> : null}
+          <div className="version-actions">
+            <button type="button" onClick={onUseServer}>
+              Use server version
+            </button>
+            <button type="button" onClick={onOverwriteLocal}>
+              Overwrite with local content
+            </button>
+            <button type="button" onClick={onKeepLocal}>
+              Keep local as recovery draft
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="paper-wrap">
+        <article className="paper" aria-label="Document page">
+          <header className="paper-head">
+            <span className="paper-brand">smart-edit / TRADE</span>
+            <span className="paper-ref">
+              DOCUMENT WORKING COPY
+              <br />
+              {documentId ?? 'untitled document'}
+            </span>
+          </header>
+
+          <div
+            data-tour="editor-surface"
+            onContextMenu={(event: MouseEvent<HTMLDivElement>) => {
+          if (!onMarkVariable) return;
+          const selection = selectionFromEditor(editor);
+          if (!selection) return;
+          event.preventDefault();
+          setVariableMenu({ x: event.clientX, y: event.clientY, selection });
+        }}
+        onKeyDown={(event) => {
+          if (!onMarkVariable) return;
+          if (!event.altKey || !event.shiftKey || event.key.toLowerCase() !== 'v') return;
+          const selection = selectionFromEditor(editor);
+          if (!selection) return;
+          event.preventDefault();
+          onMarkVariable(selection);
+        }}
+      >
+        <EditorContent editor={editor} className="editor-page" data-testid="editor-rich" />
+        {variableMenu ? (
+          <div
+            className="variable-context-menu"
+            role="menu"
+            style={{ position: 'fixed', left: variableMenu.x, top: variableMenu.y, zIndex: 20 }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onMarkVariable?.(variableMenu.selection);
+                setVariableMenu(null);
+              }}
+            >
+              Mark as variable
+            </button>
+            <button type="button" role="menuitem" onClick={() => setVariableMenu(null)}>
+              Cancel
+            </button>
+          </div>
+        ) : null}
+          </div>
+
+          <footer className="paper-foot">
+            <span>Working copy · not an executed document</span>
+            <span>
+              {versions > 0 ? `v${versions} captured` : 'no captured version'}
+            </span>
+            <span className="chip" data-testid="approval-status" data-tour="approval-status">
+              Approval: {statusLabel(submissionStatus ?? 'draft')}
+            </span>
+          </footer>
+        </article>
+      </div>
+
+      {lockNotice ? (
+        <p className="notice notice--warn tiny" role="status">
+          {lockNotice}
+        </p>
+      ) : null}
+      {submissionStatus === 'returned' && submissionComment ? (
+        <p className="notice notice--warn tiny" role="status" data-testid="return-reason">
+          Returned: {submissionComment}
+        </p>
+      ) : null}
 
       <div className="editor-footer">
-        <span>{richToPlainText(document).length} characters in the audit text</span>
-        <span aria-live="polite" style={{ color: dirty ? 'var(--unsaved)' : 'var(--muted)' }}>
-          {dirty ? 'Unsaved changes' : 'No unsaved changes'}
-        </span>
+        <div className="editor-footer-copy">
+          <span>{richToPlainText(document).length} characters in the audit text</span>
+          <span className="muted">
+            {readOnly
+              ? 'Approval in progress · the submitted version is read-only'
+              : 'Paper view · the projection above is unchanged'}
+          </span>
+        </div>
+        <div className="editor-footer-actions">
+          <button
+            type="button"
+            disabled={!lockHeld}
+            onClick={() => void onReleaseLock?.()}
+          >
+            Release lock
+          </button>
+          <button
+            type="button"
+            disabled={canStartEditing === undefined ? lockHeld || readOnly : !canStartEditing}
+            onClick={() => void onStartEditing?.()}
+          >
+            Start editing
+          </button>
+          {onSave ? (
+            <button
+              type="button"
+              data-testid="save-draft"
+              title="Save the draft to the server (Cmd/Ctrl+S)"
+              disabled={readOnly || !lockHeld}
+              onClick={onSave}
+            >
+              Save
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="primary"
+            disabled={readOnly}
+            onClick={() => onSubmitVersion?.()}
+            data-tour="submit-version"
+          >
+            Submit new version
+          </button>
+        </div>
       </div>
     </section>
   );

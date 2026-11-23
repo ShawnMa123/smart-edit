@@ -6,6 +6,8 @@ summarise. The node layer (task 6.1) will call exactly this once the frozen-file
 
 from __future__ import annotations
 
+from datetime import date, datetime
+
 from app.audit.bind import ABSENT, AuditValue, bind_fields
 from app.audit.clauses import evaluate_all as evaluate_clauses
 from app.audit.evidence import evaluate_all as evaluate_evidence
@@ -31,16 +33,18 @@ class AuditRunError(RuntimeError):
     """The audit cannot be produced at all (no schema, no bundle, unusable plan)."""
 
 
-def _guarded(unit, evaluate) -> CheckResult:
-    """One crashing evaluator must fail its own unit, not abort the whole audit."""
+def _audit_date(as_of: str | date | None) -> str:
+    """Validate and normalize the audit date; only the boundary may read the clock."""
+    if as_of is None:
+        return date.today().isoformat()
+    if isinstance(as_of, datetime):
+        return as_of.date().isoformat()
+    if isinstance(as_of, date):
+        return as_of.isoformat()
     try:
-        return evaluate()
-    except Exception as exc:  # noqa: BLE001 - deliberately isolates third-party/rule failures
-        return CheckResult(
-            unit.check_id,
-            FAILED,
-            reason_code=f"checker_crashed: {type(exc).__name__}",
-        )
+        return date.fromisoformat(str(as_of)).isoformat()
+    except ValueError:
+        raise AuditRunError(f"as_of {as_of!r} is not an ISO date (YYYY-MM-DD)") from None
 
 
 def audit_state(
@@ -52,16 +56,22 @@ def audit_state(
     templates=None,
     template_reference: dict | None = None,
     current_digest: str | None = None,
+    as_of: str | date | None = None,
 ) -> dict:
     """Audit `state` and return `{"report", "results", "findings", "units", "conflicts", "template"}`.
 
     `snapshot_digest` is required: a report that cannot name the snapshot it audited can never be
     judged stale, and a gate on such a report would be permanently unsure.
 
+    `as_of` fixes the audit date used by `relative_date` operands (change D5). The API passes the
+    caller's value (or the server's "today"); the report echoes exactly what was used, so a replay
+    with the same `as_of` is reproducible.
+
     `templates` defaults to the published packs on disk; pass `[]` to audit the rule bundle alone.
     """
     if not snapshot_digest:
         raise AuditRunError("snapshot_digest is required; the report must name the snapshot it audited")
+    audit_date = _audit_date(as_of)
     base_schema = schema or load_schema()
     bundles = list(bundles) if bundles is not None else load_bundles()
 
@@ -95,7 +105,7 @@ def audit_state(
 
     values = bind_fields(state.get("fields"))
     values.update(bind_fields(state.get("extra_fields")))
-    context = {"schema": schema}
+    context = {"schema": schema, "as_of": audit_date}
     rules = {
         f"RULE:{rule['rule_id']}@{rule['version']}": rule for bundle in bundles for rule in bundle.rules
     }
@@ -160,6 +170,8 @@ def audit_state(
 
     # The template baseline (design D20): which template judged this document, and why that one.
     report["template"] = template_baseline(resolution, policy, template)
+    # Design D5: the audit date is part of the report so a historical run can be replayed.
+    report["as_of"] = audit_date
 
     # The audit's own copy of each finding — this is what the gate reads (`verification.audit`).
     failure = [

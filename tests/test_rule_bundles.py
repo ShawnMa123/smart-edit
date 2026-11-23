@@ -177,7 +177,38 @@ def test_conflicting_rule_versions_are_reported(tmp_path):
 def test_bundle_versions_map_is_reported():
     versions = bundle_versions(load_bundles())
 
-    assert versions == {"guarantee-core": "1.0.0"}
+    assert versions == {"company-guarantee": "1.0.0", "guarantee-core": "1.0.0"}
+
+
+def test_the_company_pack_ships_a_relative_date_rule():
+    """Task 4.1: the company pack's issue-date rule is a closed `relative_date` operand."""
+    bundle = load_bundle(Path("app/rules/bundles/company-guarantee.yaml"))
+
+    assert bundle.bundle_id == "company-guarantee"
+    assert bundle.published is True
+    assert bundle.owner == "Trade Finance Compliance"
+    issue = next(rule for rule in bundle.rules if rule["rule_id"] == "CO-ISSUE-NOT-PAST")
+    assert issue["expression"]["right"] == {"kind": "relative_date", "value": "today"}
+    assert issue["gate_type"] == "hard_block"
+
+
+def test_relative_date_is_refused_on_a_non_date_field(tmp_path):
+    path = _write_bundle(
+        tmp_path,
+        "bad-relative",
+        {
+            "field_id": "guarantee_amount",
+            "expression": {
+                "op": "compare",
+                "left": {"kind": "field", "field_id": "guarantee_amount"},
+                "comparator": "ge",
+                "right": {"kind": "relative_date", "value": "today"},
+            },
+        },
+    )
+
+    with pytest.raises(BundleError, match="relative_date can only be compared with a date field"):
+        validate_against_schema(load_bundle(path), load_schema())
 
 
 def _write_bundle(tmp_path, name: str, rule: dict) -> Path:

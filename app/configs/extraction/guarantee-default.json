@@ -1,0 +1,75 @@
+{
+  "profile_id": "guarantee-default",
+  "version": "1.1.0",
+  "published": true,
+  "document_types": ["guarantee"],
+  "description": "Deterministic field locators for a demand guarantee. Values are found by label/alias inside the parsed blocks; no regular expressions or scripts are accepted.",
+  "fields": {
+    "guarantee_number": {
+      "labels": ["保函编号", "保函号", "GUARANTEE NO", "GUARANTEE NUMBER", "BG NO"],
+      "value_kind": "text",
+      "search": "same_block",
+      "max_chars": 64,
+      "confidence": 0.9
+    },
+    "applicant_name": {
+      "labels": ["申请人", "申请人名称", "APPLICANT", "APPLICANT NAME"],
+      "value_kind": "text",
+      "search": "same_block",
+      "max_chars": 120,
+      "confidence": 0.9
+    },
+    "beneficiary_name": {
+      "labels": ["受益人", "受益人名称", "BENEFICIARY", "BENEFICIARY NAME"],
+      "value_kind": "text",
+      "search": "same_block",
+      "max_chars": 120,
+      "confidence": 0.9
+    },
+    "guarantee_amount": {
+      "labels": ["保函金额", "金额", "GUARANTEE AMOUNT", "AMOUNT", "SUM"],
+      "value_kind": "amount",
+      "search": "same_block",
+      "max_chars": 40,
+      "confidence": 0.95
+    },
+    "currency": {
+      "labels": ["币种", "货币", "CURRENCY", "CCY"],
+      "value_kind": "currency",
+      "search": "same_block",
+      "max_chars": 12,
+      "confidence": 0.95
+    },
+    "issue_date": {
+      "labels": ["开立日期", "出具日期", "ISSUE DATE", "DATE OF ISSUE"],
+      "value_kind": "date",
+      "search": "same_block",
+      "max_chars": 20,
+      "confidence": 0.95
+    },
+    "expiry_date": {
+      "labels": ["到期日", "失效日", "EXPIRY DATE", "EXPIRY", "VALID UNTIL"],
+      "value_kind": "date",
+      "search": "same_or_next_block",
+      "max_chars": 20,
+      "confidence": 0.95
+    },
+    "governing_rules": {
+      "labels": ["适用规则", "适用法律", "GOVERNING RULES", "SUBJECT TO"],
+      "value_kind": "text",
+      "search": "same_block",
+      "max_chars": 80,
+      "confidence": 0.9
+    },
+    "payment_terms": {
+      "labels": ["付款条件", "付款方式", "PAYMENT TERMS", "PAYMENT"],
+      "value_kind": "clause_text",
+      "search": "same_or_next_block",
+      "max_chars": 200,
+      "confidence": 0.9
+    }
+  },
+  "llm_fallback": {
+    "enabled": false
+  }
+}

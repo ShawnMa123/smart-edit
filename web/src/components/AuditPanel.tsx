@@ -22,6 +22,8 @@ import {
   stageStatusToken,
 } from '../tokens';
 import { StatusChip } from './StatusChip';
+import { EmptyState } from './EmptyState';
+import { AiWaitBox } from './AiWaitBox';
 
 export interface AuditPanelProps {
   state: AuditState;
@@ -33,17 +35,8 @@ export interface AuditPanelProps {
   onTemplateChange?: (templateId: string) => void;
   /** Injected clock so the elapsed timer is testable. */
   now?: number;
-  /** Ask one protected operation; the caller refreshes the envelope afterwards. */
-  onAskGate?: (operation: string) => void;
-  /** Append a disposition; the caller re-asks `operation` afterwards. */
-  onDispose?: (
-    findingId: string,
-    disposition: string,
-    reason: string | undefined,
-    operation: string,
-  ) => void;
-  /** Last gate/disposition failure from the caller. */
-  actionError?: string | null;
+  /** True when the editor has no text; the audit cannot start (EMPTY_SUBMISSION server-side). */
+  textEmpty?: boolean;
 }
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
@@ -134,6 +127,30 @@ function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
         </div>
       </div>
 
+      <h3 className="tiny muted">Where the values came from</h3>
+      <div
+        className="notice tiny"
+        role="status"
+        data-testid="extraction-source"
+        data-source={audit.extraction.source}
+      >
+        <div>{audit.extraction.label}</div>
+        <div className="tiny muted">
+          {audit.extraction.fieldsFound === null
+            ? 'Field coverage not recorded for this run'
+            : `${audit.extraction.fieldsFound} fields found · ${
+                audit.extraction.fieldsMissing ?? 0
+              } missing`}
+          {audit.asOf ? ` · audit date ${audit.asOf}` : ''}
+          {audit.extraction.llmFallback ? ' · model fallback used (unconfirmed)' : ''}
+        </div>
+        {audit.extraction.conflictFields.length > 0 ? (
+          <div className="tiny" data-testid="extraction-conflicts">
+            Conflicting values need confirmation: {audit.extraction.conflictFields.join(', ')}
+          </div>
+        ) : null}
+      </div>
+
       <h3 className="tiny muted">Gate</h3>
       <div className="row" data-testid="gate" data-decision={gate.decision} data-asked={String(gate.asked)}>
         <StatusChip token={gateDecisionToken(gate.decision)} />
@@ -151,22 +168,46 @@ function RuleAuditBlock({ audit }: { audit: AuditSummary }) {
       ) : null}
 
       {audit.findings.length > 0 ? (
-        <div>
-          <h3 className="tiny muted">Rule findings (from the audit)</h3>
+        <div className="audit-findings">
+          <h3 className="tiny muted">Audit findings ({audit.findings.length})</h3>
+          <p className="tiny muted">
+            Each finding says what is wrong, which field it points at, and which actions it blocks.
+          </p>
           {audit.findings.map((finding) => (
-            <div className="finding" key={finding.key}>
+            <div
+              className="finding"
+              key={finding.key}
+              data-testid="audit-finding"
+              data-severity={finding.severity}
+            >
               <div className="row">
                 <StatusChip token={severityToken(finding.severity)} />
-                <span className="tiny muted">
-                  {finding.id ?? 'un-numbered'} · {finding.rule ?? 'rule'} · gate: {finding.gateType ?? '—'}
-                  {finding.targetOperations.length > 0
-                    ? ` → ${finding.targetOperations.join(', ')}`
-                    : ''}
-                </span>
+                <strong>{finding.headline}</strong>
+                {finding.id ? <code className="tiny muted">{finding.id}</code> : null}
               </div>
-              <div>{finding.message}</div>
+              {finding.fieldId ? (
+                <div className="tiny muted">
+                  Field:{' '}
+                  {finding.fieldLabel ? `${finding.fieldLabel} ` : ''}
+                  <code>{finding.fieldId}</code>
+                </div>
+              ) : null}
+              <div className="tiny muted">
+                {finding.gateLabel}
+                {finding.operationLabels.length > 0
+                  ? `: ${finding.operationLabels.join(', ')}`
+                  : finding.gateType === 'advisory'
+                    ? ' — does not block an action'
+                    : ''}
+              </div>
+              {finding.rule ? (
+                <div className="tiny muted">
+                  Check: <code>{finding.rule}</code>
+                  {finding.method ? ` · ${finding.method}` : ''}
+                </div>
+              ) : null}
               {finding.evidence ? (
-                <div className="tiny muted">evidence: {finding.evidence}</div>
+                <div className="tiny muted">Evidence: “{finding.evidence}”</div>
               ) : null}
             </div>
           ))}
@@ -240,9 +281,7 @@ export function AuditPanel({
   templateId = '',
   onTemplateChange,
   now,
-  onAskGate,
-  onDispose,
-  actionError = null,
+  textEmpty = false,
 }: AuditPanelProps) {
   const [operation, setOperation] = useState('start_approval');
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -276,11 +315,27 @@ export function AuditPanel({
   if (state.phase === 'idle') {
     return (
       <div>
-        <h3>Run a spec audit</h3>
-        <p className="muted tiny">
-          The audit sends a frozen snapshot of the current text to the normalization stage and reports
-          what those checks found.
-        </p>
+        <EmptyState
+          icon="▤"
+          title="Run a spec audit"
+          hint="A frozen snapshot of the current text is normalized first; the panel then reports the checks that actually ran and names the ones that did not."
+          action={
+            <button
+              type="button"
+              className="primary"
+              onClick={onRun}
+              data-testid="audit-run"
+              disabled={textEmpty}
+            >
+              Run spec audit
+            </button>
+          }
+        />
+        {textEmpty ? (
+          <p className="notice notice--warn tiny" data-testid="audit-empty">
+            Paste or import text into the editor first — the audit needs a non-empty snapshot.
+          </p>
+        ) : null}
         <label className="tiny muted" htmlFor="template-id">
           Customer template (optional — narrows which published pack applies)
         </label>
@@ -292,10 +347,10 @@ export function AuditPanel({
           value={templateId}
           onChange={(event) => onTemplateChange?.(event.target.value)}
         />
-        <button type="button" className="primary" onClick={onRun} data-testid="audit-run">
-          Run spec audit
-        </button>
-        <ScopeBlock />
+        <details className="audit-scope">
+          <summary className="tiny muted">Scope and limits</summary>
+          <ScopeBlock />
+        </details>
       </div>
     );
   }
@@ -304,20 +359,18 @@ export function AuditPanel({
     const elapsed = Math.max(0, (now ?? Date.now()) - state.startedAt);
     return (
       <div>
-        <div className="notice" role="status">
-          <h3>Fixed snapshot captured — running checks</h3>
-          <p className="tiny muted">
-            Auditing snapshot <code>{state.snapshot.digest.slice(0, 12)}</code> · {seconds(elapsed)}{' '}
-            elapsed
-          </p>
-        </div>
-        <button type="button" onClick={onStopWaiting}>
-          Stop waiting
-        </button>
-        <p className="muted tiny">
-          This only stops waiting here; the run may still be finishing on the server, and no
-          conclusion is shown.
-        </p>
+        <AiWaitBox
+          title="Fixed snapshot captured — running checks"
+          message={
+            <>
+              Auditing snapshot <code>{state.snapshot.digest.slice(0, 12)}</code>
+            </>
+          }
+          hint="This only stops waiting here; the run may still be finishing on the server, and no conclusion is shown."
+          elapsedMs={elapsed}
+          onCancel={onStopWaiting}
+          cancelLabel="Stop waiting"
+        />
       </div>
     );
   }
@@ -375,12 +428,12 @@ export function AuditPanel({
         <span className="tiny muted">{view.resultLabel}</span>
       </div>
 
-      <button type="button" onClick={onRun}>
+      <button type="button" onClick={onRun} disabled={textEmpty}>
         Re-audit current snapshot
       </button>
 
       <h3 className="tiny muted">Stages</h3>
-      <ul className="tiny">
+      <ul className="tiny stage-timeline">
         {view.stages.map((row) => (
           <li key={row.stage} data-testid="stage-row" data-stage={row.stage} data-status={row.status}>
             <StatusChip token={stageStatusToken(row.status)} /> <strong>{row.stage}</strong>{' '}

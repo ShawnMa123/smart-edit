@@ -1,0 +1,88 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Trade Intake API", "version": "1.4.0" },
+  "paths": {
+    "/trade/applications": {
+      "post": {
+        "operationId": "createTradeApplication",
+        "summary": "Create a trade application",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TradeRequest" }
+            }
+          }
+        }
+      }
+    },
+    "/trade/{id}": {
+      "get": {
+        "operationId": "getTradeApplication",
+        "summary": "Read a trade application"
+      }
+    },
+    "/trade/preview": {
+      "post": {
+        "operationId": "previewTradeApplication",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": {
+                  "amount": { "type": "number" },
+                  "note": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trade/empty": {
+      "post": {
+        "operationId": "createWithoutJsonBody",
+        "requestBody": {
+          "content": { "text/plain": { "schema": { "type": "string" } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Beneficiary": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "country": { "type": "string", "enum": ["CN", "SG"] }
+        }
+      },
+      "CycleA": {
+        "type": "object",
+        "properties": { "next": { "$ref": "#/components/schemas/CycleB" } }
+      },
+      "CycleB": {
+        "type": "object",
+        "properties": { "back": { "$ref": "#/components/schemas/CycleA" } }
+      },
+      "TradeRequest": {
+        "type": "object",
+        "required": ["application_type", "amount"],
+        "properties": {
+          "application_type": {
+            "type": "string",
+            "enum": ["guarantee", "standby_dc"]
+          },
+          "amount": { "type": "number" },
+          "expiry_date": { "type": "string" },
+          "beneficiary": { "$ref": "#/components/schemas/Beneficiary" },
+          "references": { "type": "array", "items": { "type": "string" } },
+          "structured": { "$ref": "#/components/schemas/CycleA" }
+        }
+      }
+    }
+  }
+}

@@ -4,8 +4,10 @@ import type {
   AuditFinding,
   AuditIssue,
   AuditReport,
+  ExtractionProvenance,
   FieldValue,
   GateDecision,
+  PolicyProvenance,
   RunEnvelope,
   StageReport,
   TemplateBaseline,
@@ -168,7 +170,7 @@ export const findingsEnvelope = (): RunEnvelope =>
     ],
   });
 
-const auditFinding = (over: Partial<AuditFinding> = {}): AuditFinding => ({
+export const auditFinding = (over: Partial<AuditFinding> = {}): AuditFinding => ({
   id: 'B-001',
   check_id: 'SCHEMA:guarantee_amount:required',
   rule_id: 'SCHEMA:guarantee_amount:required',
@@ -206,6 +208,29 @@ export const auditReport = (over: Partial<AuditReport> = {}): AuditReport => ({
   bundle_versions: { 'guarantee-core': '1.0.0' },
   engine_version: '1.0.0',
   findings: [],
+  as_of: '2026-03-12',
+  ...over,
+});
+
+/** `verification.extraction` — where the values came from (change D8). */
+export const extractionProvenance = (
+  over: Partial<ExtractionProvenance> = {},
+): ExtractionProvenance => ({
+  source: 'fixture',
+  profile_id: null,
+  version: null,
+  content_sha256: null,
+  fields_found: 8,
+  fields_missing: 7,
+  llm_fallback: false,
+  ...over,
+});
+
+/** `verification.policy` — which template, packs and audit date judged the document (change D8). */
+export const policyProvenance = (over: Partial<PolicyProvenance> = {}): PolicyProvenance => ({
+  template_id: null,
+  bundles: { 'guarantee-core': '1.0.0' },
+  as_of: '2026-03-12',
   ...over,
 });
 
@@ -220,6 +245,8 @@ export const verification = (over: Partial<VerificationReport> = {}): Verificati
   },
   score: null,
   audit: auditReport(),
+  extraction: extractionProvenance(),
+  policy: policyProvenance(),
   ...over,
 });
 
@@ -269,6 +296,52 @@ export const templatedEnvelope = (over: Partial<RunEnvelope> = {}): RunEnvelope 
     }),
     ...over,
   });
+
+/** A run read by the deterministic profile: values came from this document, not a fixture. */
+export const deterministicEnvelope = (over: Partial<RunEnvelope> = {}): RunEnvelope =>
+  doneEnvelope({
+    stages: [
+      stage({ stage: 'parse' }),
+      stage({
+        stage: 'extract',
+        reason: 'deterministic profile guarantee-default@1.0.0',
+        model_calls: 0,
+      }),
+      stage({ stage: 'normalize' }),
+      stage({ stage: 'audit', agent: 'agent4', produced: 0, model_calls: 0 }),
+    ],
+    verification: verification({
+      extraction: extractionProvenance({
+        source: 'deterministic',
+        profile_id: 'guarantee-default',
+        version: '1.0.0',
+        content_sha256: 'abc123def456',
+        fields_found: 6,
+        fields_missing: 1,
+      }),
+      policy: policyProvenance({
+        bundles: { 'company-guarantee': '1.0.0', 'guarantee-core': '1.0.0' },
+      }),
+    }),
+    ...over,
+  });
+
+/** A deterministic run where one field had two different values and stayed unconfirmed. */
+export const extractionConflictEnvelope = (): RunEnvelope => {
+  const base = deterministicEnvelope();
+  return {
+    ...base,
+    fields: {
+      ...base.fields,
+      guarantee_amount: field({
+        key: 'guarantee_amount',
+        value: '500000.00',
+        status: 'inferred',
+        notes: ['extraction_conflict'],
+      }),
+    },
+  };
+};
 
 /** Two packs match: the audit refuses to choose and must say which ones it saw. */
 export const ambiguousTemplateEnvelope = (): RunEnvelope =>

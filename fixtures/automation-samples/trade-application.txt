@@ -1,0 +1,7 @@
+TRADE APPLICATION
+Application type: guarantee
+Applicant: Atlas Trading Ltd
+Beneficiary: Meridian Exports Pte Ltd
+Amount: USD 250,000.00
+Currency: USD
+Expiry date: 2027-06-30

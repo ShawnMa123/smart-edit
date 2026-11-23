@@ -46,6 +46,51 @@ const MESSAGES: Record<string, string> = {
     'The API is temporarily unavailable, so no conclusion is shown. Try again once the backend is up.',
   HTTP_504:
     'The API gateway timed out before the backend answered, so no conclusion is shown.',
+  // Knowledge assistant codes (knowledge-assistant spec §8).
+  RESOURCE_NOT_FOUND:
+    'This assistant resource does not exist, or it is not visible to you. Nothing about it is shown.',
+  INVALID_REQUEST: 'The assistant request is missing something required, so it was not run.',
+  VALIDATION_ERROR: 'One or more assistant fields are invalid; nothing was created or changed.',
+  IDEMPOTENCY_CONFLICT:
+    'The same idempotency key was reused with a different request, so the retry was refused.',
+  SESSION_BUSY: 'This conversation already has a run in progress. Wait for it or cancel it first.',
+  CONTEXT_NOT_READY: 'The bound document snapshot is not available, so the answer cannot use it.',
+  ANCHOR_MISMATCH:
+    'The selected text no longer matches the bound snapshot. Select the passage again or start a new conversation.',
+  RUN_TERMINAL: 'This run already finished, so it can no longer be cancelled.',
+  REVIEW_FAILED:
+    'The answer failed the citation review, so nothing unsupported was published. Try a narrower question.',
+  ASSISTANT_FAILED:
+    'The knowledge assistant could not complete this run. This is a technical failure, not a statement that no knowledge exists.',
+  RUN_TIMEOUT: 'The assistant run passed its deadline, so it stopped without publishing an answer.',
+  MODEL_OUTPUT_INVALID:
+    'The model reply did not match the required schema after retries, so no conclusion was published. This is a model failure, not a statement that no knowledge exists; ask again.',
+  MODEL_TIMEOUT:
+    'The model did not answer before its timeout, so no conclusion was published. Try again.',
+  PROVIDER_UNAVAILABLE:
+    'The model provider could not be reached, so no conclusion was published. This is a technical failure, not a knowledge gap.',
+  MODEL_REFUSED_EVIDENCE:
+    'The model did not answer from the retrieved evidence and the excerpt fallback could not be applied, so no conclusion was published.',
+  RUN_INTERRUPTED: 'The assistant process restarted while this run was active, so the run ended.',
+  SESSION_MISSING: 'The conversation this run belongs to no longer exists.',
+  HELP_SOURCE_UNAVAILABLE:
+    'The help guide is not loaded in this demo database. Restart with a fresh fixture database or re-import the help source; this is not a statement that no knowledge exists.',
+  // Server-side automation: dispatch refusals. Nothing left the server, and the receipt records why.
+  host_not_allowed:
+    'That downstream host is not on the server allow-list, so nothing was sent. An operator adds hosts to SMART_EDIT_AUTOMATION_ALLOWED_HOSTS.',
+  tls_required:
+    'Plain http is blocked for downstream calls, so nothing was sent. Use an https endpoint, or enable http for a local demo.',
+  secret_missing:
+    'The connector names an environment variable that is empty on the server, so nothing was sent. Set the token and retry.',
+  invalid_target:
+    'The connector address is not usable (missing host or path), so nothing was sent. Edit the connector and retry.',
+  // Document write-back (automation → draft): the editor's own error codes.
+  stale_draft:
+    'The draft changed after this panel read it, so nothing was written back. Reload the draft and run it again.',
+  lock_conflict:
+    'Someone else holds the editing lock, so the draft was not changed. Take the lock and retry.',
+  lock_missing:
+    'The editing lock expired, so the draft was not changed. Click into the editor to re-acquire it.',
 };
 
 export function explainError(code: string): string {

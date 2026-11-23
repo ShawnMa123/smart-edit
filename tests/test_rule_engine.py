@@ -20,6 +20,7 @@ from app.rules.types import (
     PASS,
     RuleEvaluationError,
     Tri,
+    UNABLE_TO_ASSESS,
     Unit,
 )
 
@@ -278,6 +279,59 @@ def test_not_applicable_when_applicability_is_false():
     }
 
     assert evaluate_rule(rule, VALUES).status == NOT_APPLICABLE
+
+
+def test_relative_date_reads_as_of_from_the_context_not_the_clock():
+    """Task 3.2: `today` is resolved from `context["as_of"]`; the engine stays clock-free."""
+    rule = {
+        "rule_id": "GR-ISSUE-NOT-PAST",
+        "version": 1,
+        "title": "Issue date must not be earlier than the audit date",
+        "category": "field",
+        "severity": "critical",
+        "gate_type": "hard_block",
+        "field_id": "issue_date",
+        "expression": {
+            "op": "compare",
+            "left": {"kind": "field", "field_id": "issue_date"},
+            "comparator": "ge",
+            "right": {"kind": "relative_date", "value": "today"},
+        },
+    }
+    context = {"schema": load_schema(), "as_of": "2026-11-19"}
+
+    past = evaluate_rule(rule, {"issue_date": AuditValue("issue_date", CONFIRMED, "2026-11-18")}, context)
+    today = evaluate_rule(rule, {"issue_date": AuditValue("issue_date", CONFIRMED, "2026-11-19")}, context)
+    future = evaluate_rule(rule, {"issue_date": AuditValue("issue_date", CONFIRMED, "2026-12-01")}, context)
+
+    assert past.status == FINDING
+    assert past.finding["evidence"] == "2026-11-18"
+    assert today.status == PASS
+    assert future.status == PASS
+
+
+def test_relative_date_without_as_of_never_passes():
+    """A rule that needs `today` cannot pass when the audit context has no `as_of`."""
+    rule = {
+        "rule_id": "GR-ISSUE-NOT-PAST",
+        "version": 1,
+        "field_id": "issue_date",
+        "expression": {
+            "op": "compare",
+            "left": {"kind": "field", "field_id": "issue_date"},
+            "comparator": "ge",
+            "right": {"kind": "relative_date", "value": "today"},
+        },
+    }
+
+    result = evaluate_rule(
+        rule,
+        {"issue_date": AuditValue("issue_date", CONFIRMED, "2026-11-18")},
+        {"schema": load_schema()},
+    )
+
+    assert result.status == UNABLE_TO_ASSESS
+    assert result.reason_code == "as_of_missing"
 
 
 def test_engine_is_pure():

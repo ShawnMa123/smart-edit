@@ -120,6 +120,9 @@ DOWNGRADING_NOTES = frozenset(
         "span_oversize",
         "merged_across_pages",
         "value_truncated",
+        # Deterministic extraction found two different values for one field (change D4): the field
+        # may reach a human as `inferred`, but no rule may pass on a silently chosen value.
+        "extraction_conflict",
     }
 )
 
@@ -352,6 +355,18 @@ def _normalize_value(ftype: str, raw: str, key: str, fdef: dict, notes: list[str
     return _normalize_string(raw, key)
 
 
+def normalize_field_value(key: str, raw: str, fdef: dict | None) -> tuple[str, list[str]]:
+    """Public entry point for the deterministic extractor (change D2/2.2).
+
+    It is a thin wrapper over `_normalize_value`: amount precision, `date_order`, currency ISO and
+    length handling stay defined in exactly one place. The extractor only locates the raw span.
+    """
+    notes: list[str] = []
+    ftype = (fdef or {}).get("type") or "string"
+    value = _normalize_value(ftype, raw, key, fdef or {}, notes)
+    return value, notes
+
+
 # --------------------------------------------------------------------------
 # §7.4 / §7.5 three-way classification + truncation + `N-` Finding drafts
 # --------------------------------------------------------------------------
@@ -403,6 +418,10 @@ def _build_field(
 ) -> tuple[FieldValue, list[dict], dict | None]:
     """One candidate -> `FieldValue` + trail receipts + (optional) Finding draft."""
     notes: list[str] = []
+    if candidate.get("conflicted") or candidate.get("status") == "unconfirmed":
+        # The extractor refused to pick between two values; classification must keep it out of
+        # `extracted`, so an audit rule sees `unconfirmed` rather than a lucky guess.
+        notes.append("extraction_conflict")
     raw_value = str(candidate.get("raw_value") or "")
     src = dict(candidate.get("_source") or {})
     trail: list[dict] = []

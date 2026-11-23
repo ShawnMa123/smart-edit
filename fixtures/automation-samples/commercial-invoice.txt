@@ -1,0 +1,19 @@
+COMMERCIAL INVOICE AND PAYMENT INSTRUCTION
+
+Invoice No: INV-2026-0451
+Issue Date: 2026-03-14
+Seller: Northbridge Industrial Systems LLC
+Buyer: Sepahan Logistics Co.
+Buyer country: Iran
+Currency: USD
+Invoice amount: USD 486,500.00
+Payment terms: 60 days from bill of lading date
+Incoterm: CIF Bandar Abbas
+Port of loading: Houston
+Port of discharge: Bandar Abbas
+HS code: 8803.30
+Goods: unmanned aerial vehicle components and guidance modules
+
+1. The Seller shall ship the goods described above to the port of discharge stated in this invoice.
+2. Payment shall be made by telegraphic transfer to the Seller's account.
+3. This invoice is governed by the laws of the State of Delaware.

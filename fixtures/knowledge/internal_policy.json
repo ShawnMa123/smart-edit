@@ -1,0 +1,91 @@
+{
+  "title": "合成内部政策（演示用）",
+  "version_id": "KV-POLICY-001-v2",
+  "source": {
+    "source_id": "KS-POLICY-001",
+    "source_type": "internal_policy",
+    "publisher": "Synthetic Bank Policy Demo",
+    "version_label": "demo-2",
+    "language": "zh-CN",
+    "scope": "bank_internal",
+    "license_reference": "synthetic-demo-internal",
+    "synthetic": true,
+    "jurisdictions": [],
+    "effective_from": "2024-01-01",
+    "effective_to": null
+  },
+  "chunks": [
+    {
+      "chunk_id": "KC-POLICY-001-1",
+      "section": "审批上限",
+      "title_path": "内部政策 / 审批 / 上限",
+      "text": "保函期限超过十二个月或金额超过分行授权上限时，需要升级至上一级审批；金额与期限必须来自已确认字段，不能由模型猜测。",
+      "locator": {
+        "section": "审批上限"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-2",
+      "section": "制裁筛查",
+      "title_path": "内部政策 / 合规 / 制裁筛查",
+      "text": "涉及受制裁国家、地区或主体的交易必须先完成正式制裁筛查。文档中的公司名称本身不能证明已通过筛查，知识助手只能提示补充核实。",
+      "locator": {
+        "section": "制裁筛查"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-3",
+      "section": "记录保留",
+      "title_path": "内部政策 / 记录 / 保留",
+      "text": "保函版本、审批意见与审计事件按批准的保留策略保存；普通日志不得记录完整客户正文、身份信息或模型隐式思维链。",
+      "locator": {
+        "section": "记录保留"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-4",
+      "section": "审批升级路径",
+      "title_path": "内部政策 / 审批 / 升级路径",
+      "text": "超权限业务按金额与风险分级升级：分行、区域审批中心、总行；升级意见与审批依据必须记录在审批流中，不能事后补录。",
+      "locator": {
+        "section": "审批升级路径"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-5",
+      "section": "职责分离",
+      "title_path": "内部政策 / 职责 / 分离",
+      "text": "发起、审核、放款与账务处理岗位必须分离；同一人不得同时完成客户准入与保函开立复核，例外必须经合规批准并留痕。",
+      "locator": {
+        "section": "职责分离"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-6",
+      "section": "制裁升级",
+      "title_path": "内部政策 / 合规 / 制裁升级",
+      "text": "制裁筛查命中或信息不足时，业务部门不得自行放行，应升级至合规部门并按制裁政策处理；处理结论与依据必须归档。",
+      "locator": {
+        "section": "制裁升级"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-7",
+      "section": "事件报告",
+      "title_path": "内部政策 / 操作风险 / 事件报告",
+      "text": "发现操作差错、越权审批或客户投诉时，应在当日向操作风险部门报告，并保留事件记录、影响范围与整改证据。",
+      "locator": {
+        "section": "事件报告"
+      }
+    },
+    {
+      "chunk_id": "KC-POLICY-001-8",
+      "section": "外包与第三方",
+      "title_path": "内部政策 / 外包 / 第三方",
+      "text": "涉及外包或第三方服务时，应完成尽职调查、数据安全评估与合同审批；不得将客户资料提供给未批准的第三方。",
+      "locator": {
+        "section": "外包与第三方"
+      }
+    }
+  ]
+}

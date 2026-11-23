@@ -1,0 +1,606 @@
+{
+  "case_1": {
+    "question": "独立保函的定义是什么",
+    "jurisdictions": [],
+    "web_search": true,
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "statute",
+    "retrieval": [
+      {
+        "layer": "web",
+        "status": "skipped",
+        "detail": "web_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      },
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "answered",
+        "retrieved_at": null,
+        "hits": 5
+      }
+    ],
+    "web": {
+      "requested": true,
+      "status": "skipped",
+      "reason": "statute_answered",
+      "hint": "RAG returned results, so the web was not searched."
+    },
+    "citations": [
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "35cc2814f6fa408b",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:1",
+          "article_label": "第一条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "score": 0.885752
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "82dd9df4f894fccf",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:3",
+          "article_label": "第三条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "score": 0.561226
+        }
+      }
+    ],
+    "limitations": [
+      "本次引用的证据仅覆盖中国最高人民法院关于独立保函纠纷的司法解释内容，未涉及WTO规则、其他司法辖区法律或国际独立保函惯例的定义。",
+      "现有证据未包含司法解释中关于“单据”具体范围的第二款规定，因此无法对该部分内容作出说明。",
+      "本次请求未执行联网检索。"
+    ],
+    "statute_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "9a00123895d696dd",
+        "endpoint": "chat"
+      },
+      {
+        "expansions": [
+          "独立保函",
+          "见索即付保函",
+          "demand guarantee"
+        ]
+      }
+    ],
+    "log_lines": [
+      "run queued run=run_d8f244af2beb session=sess_c13dbf5a6385 chars=10 web_search=True selection=False",
+      "run started run=run_d8f244af2beb session=sess_c13dbf5a6385",
+      "run plan run=run_d8f244af2beb intent=trade_rule_explanation language=zh-CN web_search=True",
+      "web layer skipped run=run_d8f244af2beb reason=web_unavailable (no approved web provider)",
+      "retrieval chat run=run_d8f244af2beb status=ok answer_status=answered hits=5",
+      "retrieval run=run_d8f244af2beb local=5 web=0 candidates=5 layers=statute:ok",
+      "run succeeded run=run_d8f244af2beb outcome=answered support=strong route=statute citations=2 synthetic=False duration_ms=6920"
+    ],
+    "attempts": 1
+  },
+  "case_2": {
+    "question": "guarantee",
+    "jurisdictions": [
+      "WTO"
+    ],
+    "web_search": true,
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "statute",
+    "retrieval": [
+      {
+        "layer": "web",
+        "status": "skipped",
+        "detail": "web_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      },
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "partial",
+        "retrieved_at": null,
+        "hits": 5
+      }
+    ],
+    "web": {
+      "requested": true,
+      "status": "skipped",
+      "reason": "statute_answered",
+      "hint": "RAG returned results, so the web was not searched."
+    },
+    "citations": [
+      {
+        "source_type": "statute",
+        "title": "Agreement on Trade Facilitation",
+        "locator": {
+          "chunk_id": "e54bf296e6ddea82",
+          "doc_id": "wto-tfa",
+          "article_id": "wto-tfa:art-11",
+          "article_label": "Article 11",
+          "jurisdiction": "WTO",
+          "effective_from": null,
+          "effective_to": null,
+          "score": 0.936313
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "Agreement on Implementation of Article VII (Customs Valuation)",
+        "locator": {
+          "chunk_id": "99b8ee27bc61947d",
+          "doc_id": "wto-cv",
+          "article_id": "wto-cv:art-13",
+          "article_label": "Article 13",
+          "jurisdiction": "WTO",
+          "effective_from": null,
+          "effective_to": null,
+          "score": 0.932669
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "Agreement on Trade-Related Aspects of Intellectual Property Rights",
+        "locator": {
+          "chunk_id": "b1fbd62896b751ad",
+          "doc_id": "wto-trips",
+          "article_id": "wto-trips:art-53",
+          "article_label": "Article 53",
+          "jurisdiction": "WTO",
+          "effective_from": null,
+          "effective_to": null,
+          "score": 0.867738
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "Agreement on Trade Facilitation",
+        "locator": {
+          "chunk_id": "2dd5794760d515a7",
+          "doc_id": "wto-tfa",
+          "article_id": "wto-tfa:art-7",
+          "article_label": "Article 7",
+          "jurisdiction": "WTO",
+          "effective_from": null,
+          "effective_to": null,
+          "score": 0.818822
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "Agreement on Trade Facilitation",
+        "locator": {
+          "chunk_id": "fd0763b1e52f122f",
+          "doc_id": "wto-tfa",
+          "article_id": "wto-tfa:art-7",
+          "article_label": "Article 7",
+          "jurisdiction": "WTO",
+          "effective_from": null,
+          "effective_to": null,
+          "score": 0.61399
+        }
+      }
+    ],
+    "limitations": [
+      "The provided evidence consists only of partially excerpted provisions from four WTO multilateral trade agreements, covering basic application scenarios and permitted forms of guarantee only.",
+      "The evidence does not include specific rules on guarantee amount calculation, detailed guarantee release procedures, domestic implementing regulations of individual WTO Members, or detailed compliance requirements for guarantees.",
+      "The evidence does not cover any non-WTO domestic trade guarantee rules.",
+      "Web search was skipped for this request.",
+      "The statute service returned a partial answer: its cited evidence does not cover every part of the question.",
+      "This answer relies on internal sources only."
+    ],
+    "statute_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "47032622e20b741b",
+        "endpoint": "chat"
+      },
+      {
+        "expansions": [
+          "独立保函",
+          "见索即付保函",
+          "demand guarantee",
+          "URDG 758"
+        ]
+      }
+    ],
+    "log_lines": [
+      "run queued run=run_9b4a6617bbef session=sess_59b080029463 chars=9 web_search=True selection=False",
+      "run started run=run_9b4a6617bbef session=sess_59b080029463",
+      "run plan run=run_9b4a6617bbef intent=trade_rule_explanation language=en web_search=True",
+      "web layer skipped run=run_9b4a6617bbef reason=web_unavailable (no approved web provider)",
+      "retrieval chat run=run_9b4a6617bbef status=ok answer_status=partial hits=5",
+      "retrieval run=run_9b4a6617bbef local=5 web=0 candidates=5 layers=statute:ok",
+      "run succeeded run=run_9b4a6617bbef outcome=answered support=qualified route=statute citations=5 synthetic=False duration_ms=13739"
+    ],
+    "attempts": 1
+  },
+  "case_3": {
+    "question": "URDG 758 第 20 条对索赔有什么要求？",
+    "jurisdictions": [
+      "SG"
+    ],
+    "note": "web tool stubbed: the model provider was returning 403/429 during acceptance",
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "general_web",
+    "retrieval": [
+      {
+        "layer": "web",
+        "status": "ok",
+        "detail": "general_web",
+        "retrieved_at": "2026-11-19T06:40:55.195190+00:00",
+        "hits": null
+      },
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "unavailable",
+        "retrieved_at": null,
+        "hits": 0
+      },
+      {
+        "layer": "local",
+        "status": "ok",
+        "detail": "statute_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      }
+    ],
+    "web": {
+      "requested": true,
+      "status": "ok",
+      "reason": "rag_empty",
+      "hint": null
+    },
+    "citations": [
+      {
+        "source_type": "general_web",
+        "title": "WTO trade facilitation — guarantee",
+        "locator": {
+          "url": "https://example.org/wto",
+          "domain": "example.org",
+          "retrieved_at": "2026-11-19T06:40:55.195190+00:00",
+          "annotation_start": 0,
+          "annotation_end": 10
+        }
+      }
+    ],
+    "limitations": [
+      "该回答来自通用联网检索，属未核验第三方内容，不是已发布来源，也不构成法律意见。",
+      "已发布语料未能回答该问题；以下内容来自通用联网检索（未核验第三方内容），不构成规则依据。"
+    ]
+  },
+  "case_4": {
+    "question": "URDG 758 第 20 条对索赔有什么要求？",
+    "jurisdictions": [],
+    "web_search": false,
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "published",
+    "retrieval": [
+      {
+        "layer": "statute",
+        "status": "failed",
+        "detail": "timeout",
+        "retrieved_at": null,
+        "hits": 0
+      },
+      {
+        "layer": "local",
+        "status": "ok",
+        "detail": "statute_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      }
+    ],
+    "web": {
+      "requested": false,
+      "status": "off",
+      "reason": null,
+      "hint": null
+    },
+    "citations": [
+      {
+        "source_type": "trade_rule",
+        "title": "合成贸易规则摘要（演示用，非官方原文）",
+        "locator": {
+          "section": "URDG 758 索赔",
+          "page": 12
+        }
+      },
+      {
+        "source_type": "trade_rule",
+        "title": "合成贸易规则摘要（演示用，非官方原文）",
+        "locator": {
+          "article": "1-3",
+          "section": "URDG 758 定义与适用",
+          "page": 6
+        }
+      },
+      {
+        "source_type": "product_manual",
+        "title": "合成产品手册（演示用）",
+        "locator": {
+          "section": "索赔材料"
+        }
+      }
+    ],
+    "limitations": [
+      "知识来源为合成演示语料（fixture-backed），不是真实法规原文。",
+      "仅解释已发布来源，不构成法律意见，也不代表交易合法或可开立。",
+      "法规检索超时，本回答未覆盖法规。",
+      "本回答仅基于系统内部来源。"
+    ],
+    "statute_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "0d4e6a8bf3004665",
+        "endpoint": "chat"
+      }
+    ],
+    "log_lines": [
+      "run queued run=run_ad76db97d5a7 session=sess_5e18cf86945a chars=24 web_search=False selection=False",
+      "run started run=run_ad76db97d5a7 session=sess_5e18cf86945a",
+      "run plan run=run_ad76db97d5a7 intent=trade_rule_explanation language=zh-CN web_search=False",
+      "retrieval chat run=run_ad76db97d5a7 status=failed answer_status=timeout hits=0",
+      "retrieval run=run_ad76db97d5a7 local=8 web=0 candidates=8 layers=statute:failed,local:ok",
+      "run succeeded run=run_ad76db97d5a7 outcome=answered support=strong route=published citations=3 synthetic=True duration_ms=20"
+    ],
+    "attempts": 1,
+    "note": "chat_timeout=0.001, web_search=False, fixture composer: isolates the chat-timeout fallback path"
+  },
+  "case_5": {
+    "question": "独立保函的定义是什么",
+    "jurisdictions": [],
+    "web_search": false,
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "statute",
+    "retrieval": [
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "answered",
+        "retrieved_at": null,
+        "hits": 5
+      }
+    ],
+    "web": {
+      "requested": false,
+      "status": "off",
+      "reason": null,
+      "hint": null
+    },
+    "citations": [
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "35cc2814f6fa408b",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:1",
+          "article_label": "第一条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "score": 0.885752
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "82dd9df4f894fccf",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:3",
+          "article_label": "第三条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "score": 0.561226
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "1008bee7f0c0b65f",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:5",
+          "article_label": "第五条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "score": 0.273757
+        }
+      }
+    ],
+    "limitations": [
+      "法规服务已生成草稿，但豆包未能完成结构化；以下结论直接摘录自法规证据原文。",
+      "仅解释已发布来源，不构成法律意见，也不代表交易合法或可开立。"
+    ],
+    "statute_audit": [
+      {
+        "purpose": "statute",
+        "action": "allow",
+        "reason": "allowed",
+        "policy_version": "2026-11-18.1",
+        "query_digest": "9a00123895d696dd",
+        "endpoint": "chat"
+      },
+      {
+        "expansions": [
+          "独立保函",
+          "见索即付保函",
+          "demand guarantee"
+        ]
+      }
+    ],
+    "log_lines": [
+      "run queued run=run_b591326e7cc0 session=sess_70a574e485f9 chars=10 web_search=False selection=False",
+      "run started run=run_b591326e7cc0 session=sess_70a574e485f9",
+      "run plan run=run_b591326e7cc0 intent=trade_rule_explanation language=zh-CN web_search=False",
+      "retrieval chat run=run_b591326e7cc0 status=ok answer_status=answered hits=5",
+      "retrieval run=run_b591326e7cc0 local=5 web=0 candidates=5 layers=statute:ok",
+      "chat draft could not be structured run=run_b591326e7cc0 code=MODEL_TIMEOUT",
+      "run succeeded run=run_b591326e7cc0 outcome=answered support=qualified route=statute citations=3 synthetic=False duration_ms=1407"
+    ],
+    "attempts": 1,
+    "note": "Doubao forced to raise MODEL_TIMEOUT: quote fallback path"
+  },
+  "case_6": {
+    "question": "提交版本后编辑锁会释放吗？",
+    "jurisdictions": [],
+    "web_search": true,
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "published",
+    "retrieval": [
+      {
+        "layer": "web",
+        "status": "skipped",
+        "detail": "web_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      },
+      {
+        "layer": "local",
+        "status": "ok",
+        "detail": null,
+        "retrieved_at": null,
+        "hits": null
+      }
+    ],
+    "web": {
+      "requested": true,
+      "status": "skipped",
+      "reason": "web_unavailable",
+      "hint": "This server has no web provider configured."
+    },
+    "citations": [
+      {
+        "source_type": "product_manual",
+        "title": "合成产品手册（演示用）",
+        "locator": {
+          "section": "提交与锁"
+        }
+      }
+    ],
+    "limitations": [
+      "仅依据演示用版本为demo-2的合成产品手册内容作答，未涉及其他产品版本的编辑锁释放规则，且该手册为演示用途，内容不代表正式生效的产品规范。",
+      "本次请求未执行联网检索。"
+    ],
+    "statute_audit": [],
+    "log_lines": [
+      "run queued run=run_c9da4997cc5d session=sess_ece5e500b6db chars=13 web_search=True selection=False",
+      "run started run=run_c9da4997cc5d session=sess_ece5e500b6db",
+      "run plan run=run_c9da4997cc5d intent=product_faq language=zh-CN web_search=True",
+      "web layer skipped run=run_c9da4997cc5d reason=web_unavailable (no approved web provider)",
+      "retrieval run=run_c9da4997cc5d local=8 web=0 candidates=8 layers=local:ok",
+      "run succeeded run=run_c9da4997cc5d outcome=answered support=strong route=published citations=1 synthetic=True duration_ms=2995"
+    ],
+    "attempts": 1,
+    "note": "product FAQ: must not call /v1/chat (no statute layer/audit)"
+  },
+  "case_7": {
+    "question": "在wto里，什么是guarantee",
+    "jurisdictions": [],
+    "status": "succeeded",
+    "outcome": "answered",
+    "route": "statute",
+    "retrieval": [
+      {
+        "layer": "web",
+        "status": "skipped",
+        "detail": "web_unavailable",
+        "retrieved_at": null,
+        "hits": null
+      },
+      {
+        "layer": "statute",
+        "status": "ok",
+        "detail": "partial",
+        "retrieved_at": null,
+        "hits": 5
+      }
+    ],
+    "web": {
+      "requested": true,
+      "status": "skipped",
+      "reason": "statute_answered",
+      "hint": "RAG returned results, so the web was not searched."
+    },
+    "citations": [
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "35cc2814f6fa408b",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:1",
+          "article_label": "第一条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "score": 0.835784
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "82dd9df4f894fccf",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:3",
+          "article_label": "第三条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "score": 0.619241
+        }
+      },
+      {
+        "source_type": "statute",
+        "title": "最高人民法院关于审理独立保函纠纷案件若干问题的规定",
+        "locator": {
+          "chunk_id": "1008bee7f0c0b65f",
+          "doc_id": "cn-independent-guarantee-2020",
+          "article_id": "cn-independent-guarantee-2020:5",
+          "article_label": "第五条",
+          "jurisdiction": "CN",
+          "effective_from": "2020-12-29",
+          "effective_to": null,
+          "score": 0.417097
+        }
+      }
+    ],
+    "limitations": [
+      "法规服务已生成草稿，但豆包未能完成结构化；以下结论直接摘录自法规证据原文。",
+      "仅解释已发布来源，不构成法律意见，也不代表交易合法或可开立。",
+      "本次请求未执行联网检索。",
+      "法规服务只给出部分依据，未覆盖问题的全部内容。",
+      "本回答仅基于系统内部来源。"
+    ],
+    "attempts": 1
+  }
+}

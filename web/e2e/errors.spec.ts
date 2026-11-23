@@ -8,7 +8,8 @@ import { Workspace } from './support/workspace';
  */
 test('empty submission is refused and reported as a failed audit', async ({ page }) => {
   const ws = new Workspace(page);
-  await ws.open(); // textarea intentionally left empty
+  await ws.open();
+  await ws.clear(); // a server draft may exist; this test needs an intentionally empty editor
   await ws.runAudit();
 
   const failure = page.getByRole('alert');
@@ -25,21 +26,29 @@ test('empty submission is refused and reported as a failed audit', async ({ page
 });
 
 /**
- * Maps to `editor-shell` / "Selecting an unimplemented tab": visible, labelled, and silent about
- * content — a POC must never render sample answers, findings or citations for a capability it lacks.
+ * Legal advice is implemented in this build (`legal-review`): the tab must say so, render the
+ * statute-advice surface, and still never render an audit result or approval control.
  */
-test('unimplemented assistant tabs are labelled and render no sample output', async ({ page }) => {
+test('the legal tab renders the statute advice surface', async ({ page }) => {
   await page.goto('/');
 
-  const tab = page.getByRole('tab', { name: /Knowledge Q&A/ });
-  await expect(tab).toContainText('not implemented');
+  const tab = page.getByRole('tab', { name: 'Legal advice' });
+  // The status sits in its own tag under the short label (workspace-shell / design D7).
+  await expect(tab.locator('.tab-status')).toHaveText('Full');
+  await expect(tab).toHaveAttribute('aria-label', 'Legal advice');
   await tab.click();
 
-  await expect(page.getByRole('status')).toContainText('is not implemented in this build');
-  await expect(page.getByRole('status')).toContainText(
-    'Only the rule audit and legal advice tabs are wired',
-  );
-  // No fabricated output for a capability this build lacks: no run control, no audit result block.
+  const legalPane = page.locator('aside[aria-label="AI assistant"]');
+  await expect(legalPane.getByLabel('Legal question')).toBeVisible();
+  await expect(legalPane.getByRole('button', { name: 'Ask' })).toBeVisible();
+  await expect(legalPane.getByText('Advisory only — backed by the statute corpus.')).toBeVisible();
+
+  await legalPane.getByRole('tab', { name: 'Rule check' }).click();
+  await expect(legalPane.getByRole('button', { name: 'Amount missing' })).toBeVisible();
+  await expect(legalPane.getByRole('button', { name: 'Amount confirmed' })).toBeVisible();
+  await expect(legalPane.getByRole('button', { name: 'Amount unconfirmed' })).toBeVisible();
+
+  // The legal surface never runs the document audit or approves anything.
   await expect(page.locator('[data-testid="audit-run"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="rule-audit"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="audit-result"]')).toHaveCount(0);

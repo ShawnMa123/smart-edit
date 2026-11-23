@@ -1,0 +1,11 @@
+# Outbound egress policy (knowledge-egress-policy). Missing or broken file = deny every search.
+version: "2026-11-16.1"
+allowed_domains:
+  - iccwbo.org
+  - ecb.europa.eu
+  - bis.org
+  - wto.org
+  - uncitral.un.org
+max_query_chars: 400
+selection_overlap_chars: 40
+extra_sensitive_terms: []

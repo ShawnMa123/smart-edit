@@ -197,7 +197,56 @@ def credibility(report: dict) -> dict:
     }
 
 
-def to_verification(report: dict, *, issues: list[dict], findings: list[dict]) -> dict:
+UNKNOWN_EXTRACTION = {
+    "source": "unknown",
+    "profile_id": None,
+    "version": None,
+    "content_sha256": None,
+    "fields_found": None,
+    "fields_missing": None,
+}
+
+
+def extraction_provenance(raw: dict | None) -> dict:
+    """The `verification.extraction` block (change D8).
+
+    A state that never ran the deterministic extractor is reported as `unknown`, never as
+    `deterministic`: an absent source must not look like a profile-backed extraction.
+    """
+    if not raw:
+        return dict(UNKNOWN_EXTRACTION)
+    return {
+        "source": raw.get("source") or "unknown",
+        "profile_id": raw.get("profile_id"),
+        "version": raw.get("version"),
+        "content_sha256": raw.get("content_sha256"),
+        "fields_found": raw.get("fields_found"),
+        "fields_missing": raw.get("fields_missing"),
+        "llm_fallback": bool(raw.get("llm_fallback", False)),
+    }
+
+
+def policy_provenance(report: dict) -> dict:
+    """The `verification.policy` block (change D8 / task 4.4).
+
+    One report answers "which template, which packs, which audit date" without the client having to
+    re-derive any of it from the audit internals.
+    """
+    template = report.get("template") or {}
+    return {
+        "template_id": template.get("template_id"),
+        "bundles": dict(report.get("bundle_versions") or {}),
+        "as_of": report.get("as_of"),
+    }
+
+
+def to_verification(
+    report: dict,
+    *,
+    issues: list[dict],
+    findings: list[dict],
+    extraction: dict | None = None,
+) -> dict:
     """The `VerificationReport` written on the run (`VerificationReport.audit` is the 0.2 addition)."""
     return {
         "checks": issues,
@@ -205,4 +254,8 @@ def to_verification(report: dict, *, issues: list[dict], findings: list[dict]) -
         "credibility": credibility(report),
         "score": None,
         "audit": {**report, "findings": findings},
+        # Change `config-driven-audit-extraction` D8: where the values came from. Kept next to the
+        # audit so one report explains "value source / rule source / as-of".
+        "extraction": extraction_provenance(extraction),
+        "policy": policy_provenance(report),
     }

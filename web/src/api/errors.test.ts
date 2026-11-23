@@ -44,6 +44,14 @@ describe('explainError', () => {
     expect(message).not.toMatch(/refused the request/i);
   });
 
+  it('distinguishes a model schema failure from a refusal', () => {
+    const message = explainError('MODEL_OUTPUT_INVALID');
+
+    expect(message).toContain('schema');
+    expect(message).toContain('not a statement that no knowledge exists');
+    expect(message).not.toMatch(/refused the request/i);
+  });
+
   it('distinguishes gateway failures from refusals', () => {
     for (const code of ['HTTP_502', 'HTTP_503', 'HTTP_504']) {
       expect(explainError(code)).not.toBe(explainError('REFUSED'));

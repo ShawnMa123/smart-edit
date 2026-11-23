@@ -3,7 +3,7 @@
 import { EditorContent, type Editor } from '@tiptap/react';
 import { act, render, waitFor } from '@testing-library/react';
 import { useEffect, useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { richToPlainText } from './plainText';
 import { plainTextToDocument, type RichDocument } from './richDocument';
@@ -44,5 +44,76 @@ describe('the editor state loop (14.1)', () => {
       expect(richToPlainText(toRichDocument(editor!.getJSON()))).toContain('oneX two'),
     );
     expect(editor!.state.selection.from).toBe(5);
+  });
+});
+
+/**
+ * Regression (deployment, ECS :8082): `editor.setEditable()` emits an update by default, so mounting
+ * the read-write editor reported an empty document as a user edit. `App` then treated the server
+ * draft as "the operator typed first" and overwrote it with empty content on the next save.
+ */
+function MountHarness({
+  onChange,
+  editable,
+}: {
+  onChange: (document: RichDocument) => void;
+  editable?: boolean;
+}) {
+  const editor = useRichEditor({
+    document: plainTextToDocument('server draft body'),
+    onChange,
+    editable,
+  });
+  return <EditorContent editor={editor} />;
+}
+
+describe('mounting the editor (deployment regression)', () => {
+  it('does not report the mount-time editable transaction as a user edit', async () => {
+    const onChange = vi.fn();
+    const { container } = render(<MountHarness onChange={onChange} editable />);
+
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+    // Let any mount transaction land before asserting.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the server document when the editor mounts read-only', async () => {
+    const onChange = vi.fn();
+    const { container } = render(<MountHarness onChange={onChange} editable={false} />);
+
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(container.querySelector('.ProseMirror')?.textContent).toContain('server draft body');
+  });
+});
+
+function FocusHarness({ block, token }: { block: number | null; token: number }) {
+  const editor = useRichEditor({
+    document: plainTextToDocument('one\n\ntwo\n\nthree'),
+    onChange: () => {},
+    focusBlock: block,
+    focusToken: token,
+  });
+  return <EditorContent editor={editor} />;
+}
+
+describe('document-anchor jump ("legal-document-risk-scan")', () => {
+  it('moves the caret into the requested top-level block', async () => {
+    const { container, rerender } = render(<FocusHarness block={null} token={0} />);
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+
+    rerender(<FocusHarness block={2} token={1} />);
+
+    await waitFor(() => {
+      const focused = (container.querySelector('.ProseMirror') as HTMLElement | null)
+        ?.ownerDocument.activeElement;
+      expect(focused?.className ?? '').toContain('ProseMirror');
+    });
   });
 });

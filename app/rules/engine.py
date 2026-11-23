@@ -90,6 +90,17 @@ def _resolve_operand(
             # it as a finding; the rule simply cannot judge it. This is a document problem.
             return None, Tri.UNKNOWN, "value_unparsable"
 
+    if operand["kind"] == "relative_date":
+        # The engine never reads the system clock: `as_of` is fixed by the audit boundary (design
+        # D5), so the same document + as_of always produces the same findings.
+        as_of = (context or {}).get("as_of")
+        if not as_of:
+            return None, Tri.UNKNOWN, "as_of_missing"
+        try:
+            return date.fromisoformat(str(as_of)), Tri.TRUE, None
+        except ValueError:
+            raise RuleEvaluationError(f"audit context as_of {as_of!r} is not an ISO date") from None
+
     kind, raw = operand["value_type"], operand["value"]
     try:
         if kind == "decimal":
