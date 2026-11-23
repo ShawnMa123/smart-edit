@@ -535,6 +535,23 @@ function AppContent() {
   };
 
   /**
+   * Persist whatever the editor holds that the saved draft does not. `false` means unsaved text
+   * exists but could not be written (no draft / no lock / save failed) and the caller must stop.
+   */
+  const flushPendingSave = async (): Promise<boolean> => {
+    if (saveTimer.current !== null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    if (savePromiseRef.current) await savePromiseRef.current;
+    const current = draftRef.current;
+    if (!current) return true;
+    if (!dirty && richToPlainText(richDocRef.current) === current.text) return true;
+    if (!lockRef.current) return false;
+    return persistDraft(richDocRef.current);
+  };
+
+  /**
    * A document scan reads the saved revision, never the editor buffer. Flush the debounced autosave
    * (and any save already in flight) first, so the scan covers what the operator sees instead of an
    * older, possibly empty revision. `null` means nothing could be saved and no scan may start.
@@ -543,19 +560,8 @@ function AppContent() {
     revision: number | null;
     contentSha: string | null;
   } | null> => {
-    if (saveTimer.current !== null) {
-      window.clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
-    if (savePromiseRef.current) await savePromiseRef.current;
-    const current = draftRef.current;
-    if (!current) return null;
-    if (dirty || richToPlainText(richDocRef.current) !== current.text) {
-      // Unsaved text needs the edit lock; a read-only viewer can still scan an unchanged draft.
-      if (!lockRef.current) return null;
-      const saved = await persistDraft(richDocRef.current);
-      if (!saved) return null;
-    }
+    const ok = await flushPendingSave();
+    if (!ok) return null;
     const fresh = draftRef.current;
     return fresh
       ? { revision: fresh.revision, contentSha: fresh.content_sha256 }
@@ -1148,6 +1154,7 @@ function AppContent() {
           revision: facts.draftRevision,
           contentSha: draft?.content_sha256 ?? null,
           dirty,
+          editorCharacters: text.length,
           onBeforeScan: flushDraftForScan,
           onJumpToBlock: handleJumpToBlock,
         }}
@@ -1482,7 +1489,14 @@ function AppContent() {
   };
 
   /** Open one of the workspace's documents in the editor (Approvals -> Open document). */
-  const openDocumentById = (documentId: string) => {
+  const openDocumentById = async (documentId: string) => {
+    // Switching documents used to clear the debounce timer, silently discarding the last keystrokes.
+    if (!(await flushPendingSave())) {
+      setLockNotice(
+        'Your unsaved text could not be saved, so the document was not switched. Fix the save error first.',
+      );
+      return;
+    }
     setActiveModule(null);
     setPane('editor');
     setActiveDocumentId(documentId);
@@ -1494,6 +1508,12 @@ function AppContent() {
   /** Create a fresh draft so the applicant can keep submitting after one document is under review. */
   const handleNewDocument = async () => {
     try {
+      if (!(await flushPendingSave())) {
+        setLockNotice(
+          'Your unsaved text could not be saved, so a new document was not created. Fix the save error first.',
+        );
+        return;
+      }
       const created = await createDocument({
         title: 'Untitled document',
         content: plainTextToDocument(''),
@@ -1718,7 +1738,7 @@ function AppContent() {
                 canCreateDocument={canCreateDocument}
                 documents={documentList}
                 activeDocumentId={activeDocumentId}
-                onOpenDocument={openDocumentById}
+                onOpenDocument={(documentId) => void openDocumentById(documentId)}
                 onUnavailableAction={(action) => {
                   if (action.id === 'export') {
                     recordActivity({

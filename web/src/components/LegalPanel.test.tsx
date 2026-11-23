@@ -298,6 +298,39 @@ describe('LegalPanel · document check', () => {
     expect(client.submitReview).not.toHaveBeenCalled();
   });
 
+  it('names the scanned text and warns when the editor holds different text', async () => {
+    const client = documentClient(
+      makeReport({
+        snapshot: {
+          document_id: 'doc-1',
+          revision: 3,
+          content_sha256: 'abcdef1234567890',
+          characters: 267,
+          preview: 'DEMAND GUARANTEE Guarantee No: BG-2026-00417',
+        },
+      }),
+    );
+    render(
+      <LegalPanel
+        documentId="doc-1"
+        revision={3}
+        contentSha="abcdef1234567890"
+        editorCharacters={156}
+        client={client}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
+
+    await waitFor(() => expect(screen.getByTestId('legal-scanned-snapshot')).toBeTruthy());
+    expect(screen.getByTestId('legal-scanned-snapshot').textContent).toContain('267 characters');
+    expect(screen.getByTestId('legal-scanned-snapshot').textContent).toContain('DEMAND GUARANTEE');
+    expect(screen.getByTestId('legal-scan-mismatch').textContent).toContain(
+      'editor currently has 156',
+    );
+  });
+
   it('does not scan when the pre-scan save fails', async () => {
     const client = documentClient();
     const onBeforeScan = vi.fn().mockResolvedValue(null);

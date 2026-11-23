@@ -149,6 +149,11 @@ export interface ReviewReport {
     document_id?: string;
     revision?: number | null;
     content_sha256?: string | null;
+    document_type?: string | null;
+    /** Characters the scan actually read (the saved draft's canonical text). */
+    characters?: number | null;
+    /** First ~80 characters of the scanned text, so a mismatch with the editor is obvious. */
+    preview?: string | null;
   };
   coverage_summary?: CoverageSummary;
   retrieval?: {

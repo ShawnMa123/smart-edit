@@ -250,6 +250,15 @@ def test_coverage_counts_every_planned_unit_and_stays_internally_consistent():
     assert summary["clauses"] >= 3
 
 
+def test_the_report_names_the_text_it_scanned():
+    """A report must prove which revision and how many characters it read, plus a preview."""
+    report = _scan(text=DOCUMENT)
+
+    assert report.snapshot["revision"] == 1
+    assert report.snapshot["characters"] == len(split_text(DOCUMENT).text)
+    assert report.snapshot["preview"].startswith("DEMAND GUARANTEE")
+
+
 def test_a_composed_finding_carries_evidence_and_a_draft_anchor():
     start = DOCUMENT.index("automatically extended")
     composed = ComposedFinding(

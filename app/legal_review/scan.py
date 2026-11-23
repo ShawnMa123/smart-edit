@@ -344,11 +344,16 @@ def run_document_scan(
         max_clauses=settings.max_clauses,
     )
     document_type = request.business_type or detect_document_type(plan.text)
+    # What the scan actually covered, so the report can prove it read the text the operator sees
+    # (a 267-character guarantee vs. a 156-character sanctions note is visible at a glance).
+    preview = re.sub(r"\s+", " ", plan.text).strip()[:80]
     snapshot_meta = {
         "document_id": snapshot.get("document_id") or request.document_id,
         "revision": snapshot.get("revision"),
         "content_sha256": snapshot.get("content_sha256"),
         "document_type": document_type,
+        "characters": len(plan.text),
+        "preview": preview,
     }
     limitations: list[dict] = []
 

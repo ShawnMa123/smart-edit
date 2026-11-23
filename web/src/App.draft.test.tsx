@@ -296,6 +296,28 @@ describe('autosave', () => {
     await waitFor(() => expect(vi.mocked(saveDraft)).toHaveBeenCalledTimes(1));
     expect(vi.mocked(saveDraft).mock.calls[0][3]).toMatchObject({ text: 'Changed' });
   });
+
+  it('saves pending edits before creating another document', async () => {
+    vi.mocked(getDocument).mockResolvedValue(view());
+    vi.mocked(acquireLock).mockResolvedValue(lock);
+    vi.mocked(saveDraft).mockResolvedValue(
+      view({ revision: 2, etag: 'draft-2', text: 'Changed' }),
+    );
+    vi.mocked(createDocument).mockResolvedValue(
+      view({ document_id: 'doc-new', draft_id: 'draft-new', title: 'Untitled document' }),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(acquireLock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }));
+    fireEvent.click(screen.getByTestId('new-document'));
+
+    await waitFor(() => expect(createDocument).toHaveBeenCalledTimes(1));
+    // The pending debounce is flushed first; otherwise the last keystrokes would be lost when the
+    // editor switches to the new document.
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(saveDraft).mock.calls[0][3]).toMatchObject({ text: 'Changed' });
+  });
 });
 
 describe('legal document scan', () => {

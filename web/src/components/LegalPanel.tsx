@@ -45,6 +45,8 @@ export interface LegalPanelProps {
   contentSha?: string | null;
   /** True while the editor holds changes that have not reached the saved draft yet. */
   dirty?: boolean;
+  /** Characters currently in the editor; a report that read a different length is called out. */
+  editorCharacters?: number | null;
   /**
    * Persist unsaved editor changes and return the revision the scan should pin. A scan reads the
    * saved draft, so without this hook an unsaved draft must not be scanned silently.
@@ -480,6 +482,13 @@ function ReportView({
           {summary.truncated ? ' · truncated' : ''}
         </p>
       ) : null}
+      {report.snapshot?.revision != null || report.snapshot?.characters != null ? (
+        <p className="tiny muted" data-testid="legal-scanned-snapshot">
+          Scanned {report.snapshot?.revision != null ? `rev ${report.snapshot.revision}` : 'the saved draft'}
+          {report.snapshot?.characters != null ? ` · ${report.snapshot.characters} characters` : ''}
+          {report.snapshot?.preview ? ` — “${report.snapshot.preview}”` : ''}
+        </p>
+      ) : null}
       {gate && gate.reasons.length ? (
         <ul className="legal-gate-reasons tiny muted">
           {gate.reasons.map((reason) => (
@@ -529,6 +538,7 @@ export function LegalPanel({
   revision = null,
   contentSha = null,
   dirty = false,
+  editorCharacters = null,
   onBeforeScan,
   client = legalClient,
   options = {},
@@ -676,6 +686,9 @@ export function LegalPanel({
   const stage = run?.progress?.stage ?? run?.stage;
   const scanRevision = pinned?.revision ?? revision;
   const scanContentSha = pinned?.contentSha ?? contentSha;
+  const scannedCharacters = report?.snapshot?.characters ?? null;
+  const charactersMismatch =
+    scannedCharacters != null && editorCharacters != null && scannedCharacters !== editorCharacters;
   const stale =
     report?.snapshot?.revision != null &&
     scanRevision != null &&
@@ -808,6 +821,13 @@ export function LegalPanel({
       {error ? (
         <p className="notice notice--bad tiny" role="alert">
           {error}
+        </p>
+      ) : null}
+
+      {charactersMismatch ? (
+        <p className="notice notice--warn tiny" role="status" data-testid="legal-scan-mismatch">
+          The scan covered {scannedCharacters} characters, but the editor currently has{' '}
+          {editorCharacters}. The scanned text is not what you see — save the draft and scan again.
         </p>
       ) : null}
 
