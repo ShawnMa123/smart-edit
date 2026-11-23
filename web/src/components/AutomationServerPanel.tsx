@@ -976,7 +976,7 @@ export function AutomationServerPanel({
           {suggesting ? (
             <AiWaitBox
               testId="automation-suggest-wait"
-              title="Doubao is reading the template"
+              title="AI is reading the template"
               message="Looking for fields that carry a verbatim quote…"
               hint="Nothing is saved until you confirm; the model never sends by itself."
               elapsedMs={suggestElapsed}
@@ -985,8 +985,12 @@ export function AutomationServerPanel({
           {suggestion ? (
             <div className="legal-findings" data-tour="automation-suggestions">
               <p className="tiny muted">
-                suggested by: {suggestion.suggested_by}
-                {suggestion.model ? ` · ${suggestion.model}` : ''}
+                suggested by:{' '}
+                {suggestion.suggested_by === 'llm'
+                  ? 'AI'
+                  : suggestion.suggested_by === 'merged'
+                    ? 'rules + AI'
+                    : 'rules'}
                 {suggestion.warnings.length ? ` · ${suggestion.warnings.join(' · ')}` : ''}
               </p>
               {suggestedRows.map((item) => (

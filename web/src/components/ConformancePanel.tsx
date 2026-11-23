@@ -83,7 +83,7 @@ const STAGE_LABEL: Record<string, string> = {
   queued: 'Queued',
   snapshot: 'Reading the saved draft',
   deterministic: 'Checking required fields (no model)',
-  model: 'Asking Doubao to judge the checklist',
+  model: 'AI is reviewing the checklist',
   aggregate: 'Assembling the report',
   done: 'Done',
 };
@@ -395,7 +395,7 @@ export function ConformancePanel({
     <section className="conformance" data-testid="conformance-panel" aria-label="Template audit">
       <div className="row">
         <h3>Template audit</h3>
-        <span className="tiny muted">Config-driven · Doubao synthesises · human decides</span>
+        <span className="tiny muted">Config-driven · AI suggests · human decides</span>
       </div>
 
       <p className="tiny muted">
@@ -730,7 +730,7 @@ export function ConformancePanel({
 
           <p className="tiny muted" data-testid="conformance-provenance">
             {report.config.config_id} v{report.config.version} · config{' '}
-            {shortSha(report.config.content_sha256)} · {report.provenance.model ?? 'no model'} ·
+            {shortSha(report.config.content_sha256)} · {report.provenance.model ? 'AI' : 'no AI'} ·
             prompt {report.provenance.prompt_version} · extraction{' '}
             {report.provenance.extraction_status} · {report.provenance.model_calls} model call(s) ·{' '}
             {report.provenance.duration_ms} ms · snapshot{' '}

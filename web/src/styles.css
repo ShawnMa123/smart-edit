@@ -888,16 +888,63 @@ button.primary {
   margin: 0;
   padding-left: 18px;
   font-size: 13px;
+  line-height: 1.65;
+}
+
+.knowledge-claim-citations {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 4px;
+  vertical-align: super;
+}
+
+.knowledge-cite-chip {
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.knowledge-cite-chip:hover {
+  color: inherit;
+  border-color: currentColor;
 }
 
 .knowledge-citations {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 4px;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.knowledge-citations li {
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .knowledge-citations button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.knowledge-cite-number {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .knowledge-citation {

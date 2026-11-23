@@ -183,9 +183,10 @@ describe('ConformancePanel', () => {
     expect(screen.getByTestId('conformance-redaction').textContent).toContain(
       'o•••@example.com',
     );
-    expect(screen.getByTestId('conformance-provenance').textContent).toContain(
-      'doubao:test-model',
-    );
+    const provenance = screen.getByTestId('conformance-provenance').textContent ?? '';
+    expect(provenance).toContain('AI ·');
+    // The UI never names the backend model vendor.
+    expect(provenance).not.toContain('doubao:test-model');
   });
 
   it('marks a report stale when the draft moved on', async () => {

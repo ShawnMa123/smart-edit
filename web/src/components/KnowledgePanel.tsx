@@ -461,7 +461,7 @@ export function KnowledgePanel({
         )}
         {capabilities && !capabilities.model.configured ? (
           <p className="tiny muted">
-            Model: fixture · no external model configured (answers use the local corpus only).
+            AI answers use the local corpus only; no external model is configured.
           </p>
         ) : null}
       </div>
@@ -605,12 +605,15 @@ export function KnowledgePanel({
             </button>
           </div>
           <p className="tiny muted">
-            {detail.source_type} · {detail.source_version}
+            {SOURCE_TYPE_LABEL[detail.source_type] ?? detail.source_type} ·{' '}
+            {detail.source_version}
             {detail.effective_from ? ` · effective from ${detail.effective_from}` : ''}
             {detail.effective_to ? ` · until ${detail.effective_to}` : ''}
           </p>
           <blockquote className="tiny">{detail.excerpt}</blockquote>
-          <p className="tiny muted">Locator: {JSON.stringify(detail.locator)} · excerpt only</p>
+          {locatorText(detail.locator) ? (
+            <p className="tiny muted">{locatorText(detail.locator)} · excerpt only</p>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -624,6 +627,17 @@ const SOURCE_GROUPS = [
   { id: 'general', label: 'General web', types: ['general_web'] },
   { id: 'document', label: 'Document', types: ['document_snapshot', 'attachment'] },
 ] as const;
+
+const SOURCE_TYPE_LABEL: Record<string, string> = {
+  statute: 'Statute',
+  product_manual: 'Published corpus',
+  trade_rule: 'Published corpus',
+  internal_policy: 'Published corpus',
+  approved_web: 'Web (approved)',
+  general_web: 'General web (unverified)',
+  document_snapshot: 'Document',
+  attachment: 'Attachment',
+};
 
 /** Facts a reader can check; never a relevance score (design D3). */
 export function statuteBadge(citation: Citation): string {
@@ -681,6 +695,28 @@ function sourceGroups(citations: Citation[]) {
   }));
 }
 
+const LOCATOR_LABELS: Record<string, string> = {
+  url: 'URL',
+  domain: 'Domain',
+  article_label: 'Article',
+  jurisdiction: 'Jurisdiction',
+  effective_from: 'Effective from',
+  retrieved_at: 'Retrieved',
+  chunk_id: 'Chunk',
+  doc_id: 'Document',
+  node_id: 'Block',
+  start_offset: 'Start',
+  end_offset: 'End',
+};
+
+/** Human-readable locator; never the raw JSON braces the API returns. */
+function locatorText(locator: Record<string, unknown>): string {
+  return Object.entries(locator ?? {})
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .map(([key, value]) => `${LOCATOR_LABELS[key] ?? key}: ${String(value)}`)
+    .join(' · ');
+}
+
 function AnswerView({
   answer,
   feedback,
@@ -692,13 +728,14 @@ function AnswerView({
   onCitation: (citation: Citation) => void;
   onFeedback: (rating: FeedbackRating) => void;
 }) {
+  const citationNumbers = new Map(answer.citations.map((citation, index) => [citation.id, index + 1]));
+  const citationById = new Map(answer.citations.map((citation) => [citation.id, citation]));
   return (
     <div className="knowledge-answer" aria-label="Assistant answer">
       <div className="row">
         <h3>Answer · {answer.outcome}</h3>
         <span className="tiny muted">Support: {answer.support_level}</span>
       </div>
-      <p className="tiny muted">Processor: {answer.processor ?? 'fixture'}</p>
       <p className="tiny muted">{SUPPORT_COPY[answer.support_level]}</p>
 
       {statuteNotice(answer) ? (
@@ -711,10 +748,27 @@ function AnswerView({
         <ul className="knowledge-claims">
           {answer.claims.map((claim) => (
             <li key={claim.id}>
-              <span>{claim.text}</span>{' '}
-              <span className="tiny muted">
-                [{claim.kind}; {claim.citation_ids.length} citation(s)]
-              </span>
+              <span>{claim.text}</span>
+              {claim.citation_ids.length ? (
+                <span className="knowledge-claim-citations">
+                  {claim.citation_ids.map((citationId) => {
+                    const citation = citationById.get(citationId);
+                    const number = citationNumbers.get(citationId);
+                    if (!citation || !number) return null;
+                    return (
+                      <button
+                        key={citationId}
+                        type="button"
+                        className="knowledge-cite-chip"
+                        aria-label={`Open citation ${number}: ${citation.title}`}
+                        onClick={() => onCitation(citation)}
+                      >
+                        {number}
+                      </button>
+                    );
+                  })}
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -751,7 +805,7 @@ function AnswerView({
 
       {answer.citations.length ? (
         <div>
-          <h4>Citations</h4>
+          <h4>Sources</h4>
           <div className="knowledge-source-groups">
             {sourceGroups(answer.citations).map((group) =>
               group.items.length ? (
@@ -759,24 +813,37 @@ function AnswerView({
                   <h5>
                     {group.label} ({group.items.length})
                   </h5>
-                  <div className="knowledge-citations">
+                  <ol className="knowledge-citations">
                     {group.items.map((citation) => (
-                      <button
-                        key={citation.id}
-                        type="button"
-                        aria-label={`Open citation ${citation.title}`}
-                        onClick={() => onCitation(citation)}
-                      >
-                        {citation.title} · {citation.source_version}
-                        {citation.source_type === 'approved_web'
-                          ? ` · ${String(citation.locator.domain ?? 'web')} · retrieved ${String(
-                              citation.locator.retrieved_at ?? 'unknown',
-                            )} · Unverified third-party`
-                          : ''}
-                        {citation.source_type === 'statute' ? statuteBadge(citation) : ''}
-                      </button>
+                      <li key={citation.id}>
+                        <button
+                          type="button"
+                          aria-label={`Open citation ${citation.title}`}
+                          onClick={() => onCitation(citation)}
+                        >
+                          <span className="knowledge-cite-number">
+                            [{citationNumbers.get(citation.id)}]
+                          </span>
+                          <span>{citation.title}</span>
+                          <span className="tiny muted"> · {citation.source_version}</span>
+                        </button>
+                        {citation.source_type === 'approved_web' ? (
+                          <span className="tiny muted">
+                            {' '}
+                            · {String(citation.locator.domain ?? 'web')} · retrieved{' '}
+                            {String(citation.locator.retrieved_at ?? 'unknown')} · Unverified
+                            third-party
+                          </span>
+                        ) : null}
+                        {citation.source_type === 'general_web' ? (
+                          <span className="tiny muted"> · Unverified web source</span>
+                        ) : null}
+                        {citation.source_type === 'statute' ? (
+                          <span className="tiny muted">{statuteBadge(citation)}</span>
+                        ) : null}
+                      </li>
                     ))}
-                  </div>
+                  </ol>
                 </div>
               ) : null,
             )}

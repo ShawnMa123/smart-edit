@@ -681,7 +681,7 @@ export function AutomationWorkbench({
       </div>
       <p className="notice tiny" data-testid="automation-boundary" data-tour="automation-boundary">
         <strong>Automate</strong> is the real path: templates and confirmed variables persist on the
-        server, Doubao suggests variables, the request body follows the downstream contract, and
+        server, AI suggests variables, the request body follows the downstream contract, and
         dispatch makes one allow-listed HTTP call with a replayable receipt. <strong>Sandbox</strong>{' '}
         is a browser-local playground (localStorage, no network). Still not implemented: compare,
         rewrite and voice.

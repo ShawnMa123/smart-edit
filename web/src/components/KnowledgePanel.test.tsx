@@ -513,7 +513,7 @@ describe('web layer opt-in (knowledge-retrieval-layers)', () => {
     expect(screen.getByText('Published corpus (1)')).toBeTruthy();
     expect(screen.getByText('Web (1)')).toBeTruthy();
     expect(screen.getByText(/Unverified third-party/)).toBeTruthy();
-    expect(screen.getByText(/Processor: doubao:seed-1/)).toBeTruthy();
+    expect(screen.queryByText(/Processor:/)).toBeNull();
     expect(screen.getByText(/Stored question: redacted/i)).toBeTruthy();
     expect(screen.queryByText('Document (1)')).toBeNull();
   });
@@ -681,9 +681,10 @@ describe('statute evidence (knowledge-statute-retrieval)', () => {
 
     expect(screen.getByText('Statute (1)')).toBeTruthy();
     const button = screen.getByRole('button', { name: /Open citation 中华人民共和国海关法/i });
-    expect(button.textContent).toContain('CN · effective 2021-04-29 · exact');
-    expect(button.textContent).not.toMatch(/score/i);
-    expect(button.textContent).not.toMatch(/\d\.\d\d/);
+    const row = button.closest('li') as HTMLElement;
+    expect(row.textContent).toContain('CN · effective 2021-04-29 · exact');
+    expect(row.textContent).not.toMatch(/score/i);
+    expect(row.textContent).not.toMatch(/\d\.\d\d/);
   });
 
   it.each([
