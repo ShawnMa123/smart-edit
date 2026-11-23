@@ -316,11 +316,14 @@ describe('LegalPanel · document check', () => {
         revision={3}
         contentSha="abcdef1234567890"
         editorCharacters={156}
+        editorPreview="卖方：Northbridge Arms Trading LLC（美国）"
         client={client}
       />,
     );
 
     await userEvent.click(screen.getByRole('tab', { name: 'Document check' }));
+    expect(screen.getByTestId('legal-editor-target').textContent).toContain('156 characters');
+    expect(screen.getByTestId('legal-editor-target').textContent).toContain('Northbridge');
     await userEvent.click(screen.getByRole('button', { name: 'Scan document' }));
 
     await waitFor(() => expect(screen.getByTestId('legal-scanned-snapshot')).toBeTruthy());

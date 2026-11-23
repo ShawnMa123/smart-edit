@@ -297,6 +297,19 @@ describe('autosave', () => {
     expect(vi.mocked(saveDraft).mock.calls[0][3]).toMatchObject({ text: 'Changed' });
   });
 
+  it('warns before leaving the page with unsaved changes', async () => {
+    vi.mocked(getDocument).mockResolvedValue(view());
+    vi.mocked(acquireLock).mockResolvedValue(lock);
+
+    render(<App />);
+    await waitFor(() => expect(acquireLock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }));
+
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it('saves pending edits before creating another document', async () => {
     vi.mocked(getDocument).mockResolvedValue(view());
     vi.mocked(acquireLock).mockResolvedValue(lock);

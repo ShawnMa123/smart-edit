@@ -47,6 +47,8 @@ export interface LegalPanelProps {
   dirty?: boolean;
   /** Characters currently in the editor; a report that read a different length is called out. */
   editorCharacters?: number | null;
+  /** First ~80 characters of the editor text, so the operator sees what will be scanned. */
+  editorPreview?: string | null;
   /**
    * Persist unsaved editor changes and return the revision the scan should pin. A scan reads the
    * saved draft, so without this hook an unsaved draft must not be scanned silently.
@@ -539,6 +541,7 @@ export function LegalPanel({
   contentSha = null,
   dirty = false,
   editorCharacters = null,
+  editorPreview = null,
   onBeforeScan,
   client = legalClient,
   options = {},
@@ -763,6 +766,12 @@ export function LegalPanel({
             Draft {scanRevision != null ? `rev ${scanRevision}` : 'current revision'}
             {scanContentSha ? ` · ${scanContentSha.slice(0, 12)}…` : ''}
           </p>
+          {editorCharacters != null ? (
+            <p className="tiny muted" data-testid="legal-editor-target">
+              Editor text: {editorCharacters} characters
+              {editorPreview ? ` — “${editorPreview}”` : ''}
+            </p>
+          ) : null}
           {dirty ? (
             <p className="notice notice--warn tiny" role="status" data-testid="legal-dirty">
               {onBeforeScan

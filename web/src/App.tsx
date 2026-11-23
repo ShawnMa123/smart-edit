@@ -196,6 +196,8 @@ function AppContent() {
   /** The editor owns a rich document; everything downstream reads its projection (D2/D3). */
   const [richDoc, setRichDoc] = useState<RichDocument>(() => plainTextToDocument(''));
   const text = useMemo(() => richToPlainText(richDoc), [richDoc]);
+  /** What the operator actually sees, shown next to Scan so the wrong draft cannot be scanned blindly. */
+  const editorPreview = useMemo(() => text.replace(/\s+/g, ' ').trim().slice(0, 80), [text]);
   const [dirty, setDirty] = useState(false);
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
   const [versions, setVersions] = useState<VersionEntry[]>(() => versionStore.list(activeDocumentId));
@@ -620,6 +622,17 @@ function AppContent() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  // The autosave debounce is 2 s; a refresh/close inside that window would lose the text silently.
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   const useServerVersion = async () => {
     let server = conflict?.server;
@@ -1155,6 +1168,7 @@ function AppContent() {
           contentSha: draft?.content_sha256 ?? null,
           dirty,
           editorCharacters: text.length,
+          editorPreview,
           onBeforeScan: flushDraftForScan,
           onJumpToBlock: handleJumpToBlock,
         }}
